@@ -49,6 +49,33 @@ Playwright writes traces, screenshots on failure and attached raw model result e
 
 The controlled-model `playwright.config.cjs` suite tests plumbing and persistence, but is NOT live-model functional acceptance. CI checks live-test syntax, not actual live inference, which must be run locally with an available configured model.
 
+## Quiet Director toolbox: live UI and model acceptance
+
+The revised drawer uses a **+ Actions** menu beside the expanding composer.
+Live tests for the new interface live in
+`tests/live/studio-director-quiet-tools.spec.cjs`. The first test explicitly
+reads a Project snapshot and then uses the real configured model to write and
+persist new Scene records. The second tests a real conversation followed by
+the menu's I/O, New conversation and History/restore controls. Both retain
+raw model responses as evidence.
+
+The existing live suite is also updated to reach scoped Scene revision and
+Coherence through **+ Actions → Revise Scenes**; Read and Project/Scene Write
+share the same explicit destinations and model contracts as before. Open tool
+sheets are closed by shared live helpers before a new conversational turn.
+
+Run the targeted toolbox and revised specialist journeys on the machine with
+the real model configured:
+
+```bash
+npx playwright test tests/live/studio-director-quiet-tools.spec.cjs tests/live/studio-revision.spec.cjs tests/live/studio-specialist.spec.cjs --config=playwright.live.config.cjs --headed
+```
+
+These tests have **no mocked LLM outputs**. CI only syntax-checks them; an
+actual pass requires the configured model endpoint and persisted run evidence.
+The deterministic browser suite verifies the launcher layout, explicit Read,
+Write setup, focus/close behavior and composer expansion separately.
+
 ## Action Advisor: real-model acceptance
 
 The side-channel agent's acceptance tests are in

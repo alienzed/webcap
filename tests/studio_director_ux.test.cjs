@@ -206,15 +206,16 @@ test('field update indicators identify the saved Project, and clear after author
 
 test('routine operation feedback does not leave a separate status card in the chat workbench',()=>{
   const status={classList:{hidden:false,toggle(name,flag){if(name==='hidden')this.hidden=flag;}},dataset:{},textContent:''};
-  const messages=[];
   const scope=vm.createContext({state:{activeMode:'storyboard'},
-    el:()=>status,window:{studioDirectorWorkbench:{setStatus:(text,error)=>messages.push([text,error])}}});
+    el:()=>status,window:{reportConsoleError(){},reportConsoleInfo(){}}});
+  vm.runInContext(part(workbench,'  function status(message, error, showSuccess) {',
+    '  function option('),scope);
+  scope.window.studioDirectorWorkbench={setStatus:scope.status};
   vm.runInContext(part(chat,'  function studioActionStatus(message, error, showPartial) {',
     '  function parseStudioProjectDraft(raw) {'),scope);
   scope.studioActionStatus('Director acknowledged selected fields.',false);
   assert.equal(status.classList.hidden,true);
   assert.equal(status.textContent,'');
-  assert.equal(messages.length,1);
   scope.studioActionStatus('Director read failed.',true);
   assert.equal(status.classList.hidden,false);
   assert.equal(status.textContent,'Director read failed.');

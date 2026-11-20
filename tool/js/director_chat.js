@@ -327,8 +327,8 @@
     var drawer = el('director-chat-drawer');
     drawer.classList.toggle('studio-revision-mode', revision);
     if (revision) {
-      if (drawer.classList.contains('studio-actions-open'))
-        window.studioDirectorWorkbench.closeActions();
+      drawer.classList.remove('studio-actions-open');
+      el('studio-dw-open-tools').setAttribute('aria-expanded','false');
       el('director-chat-title').textContent = 'Revise Scenes';
     }
     el('director-chat-history-toggle').classList.toggle('hidden', revision);
@@ -3696,8 +3696,6 @@
     if (state.open) {
       if (typeof window.setActivityDrawerOpen === 'function') window.setActivityDrawerOpen(false);
       if (typeof window.setInferenceQueueOpen === 'function') window.setInferenceQueueOpen(false);
-    } else if (drawer.classList.contains('studio-actions-open')) {
-      window.studioDirectorWorkbench.closeActions();
     }
 
     drawer.classList.toggle('hidden', !state.open);

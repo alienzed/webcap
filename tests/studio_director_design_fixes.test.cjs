@@ -88,15 +88,16 @@ test('manual Read and Write remain available through the on-demand Studio Action
   assert.match(rail,/\? toggle\(which\) : Promise\.resolve\(\)/);
 });
 
-test('operational errors reveal Advanced and preserve the shared Console detail',()=>{
+test('operational errors remain visible in chat and Console without reopening setup',()=>{
   const nodes={},classes=new Set(),logs=[];
   const el=id=>nodes[id] ||= {dataset:{},attrs:{},classList:{toggle(){},add:x=>classes.add(x)},setAttribute(k,v){this.attrs[k]=v;}};
   const scope=vm.createContext({el,window:{reportConsoleError:(label,error)=>logs.push(error.message),reportConsoleInfo:()=>{}}});
   vm.runInContext(section(rail,'  function status(message, error, showSuccess) {','  function option('),scope);
   scope.status('Draft failed: exact backend error',true);
-  assert.equal(classes.has('studio-actions-open'),true);
-  assert.equal(el('studio-dw-open-tools').attrs['aria-expanded'],'true');
+  assert.equal(classes.has('studio-actions-open'),false);
+  assert.equal(el('studio-dw-open-tools').attrs['aria-expanded'],undefined);
   assert.equal(el('studio-dw-status').textContent,'Draft failed: exact backend error');
+  assert.equal(el('director-studio-action-status').textContent,'Draft failed: exact backend error');
   assert.deepEqual(logs,['Draft failed: exact backend error']);
   scope.status('Saved Scene 1',false,true);
   assert.equal(el('studio-dw-status').textContent,'Saved Scene 1');
@@ -115,8 +116,9 @@ test('Write opens the explicit operation picker without launching a model reques
   node('director-studio-action-launcher').classList.add('hidden');
   const a=rail.indexOf('    function openDirectAction(which) {');
   const b=rail.indexOf("    rail.addEventListener('keydown'",a);
-  const scope=vm.createContext({el:node,document:{addEventListener(){}},lastQuickAction:'write',updateScope(){},showConversationWrite(){availability++;},refreshWrite:async()=>{selected++;}});
-  vm.runInContext(section(rail,'  function toggle(which) {','  function parseProposal(raw) {')+rail.slice(a,b),scope);
+  const scope=vm.createContext({el:node,document:{addEventListener(){}},lastQuickAction:'write',actionPanelVersion:0,updateScope(){},showConversationWrite(){availability++;},refreshWrite:async()=>{selected++;}});
+  vm.runInContext(section(rail,'  function closeActions(focusTarget) {','  function option(')+
+    section(rail,'  function toggle(which) {','  function parseProposal(raw) {')+rail.slice(a,b),scope);
   node('studio-dw-write').onclick=()=>scope.toggle('write');
   node('studio-dw-open-tools').click();
   assert.equal(selected,1,'opening Write populates the explicit operation selector');

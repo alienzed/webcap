@@ -200,7 +200,6 @@
     var id = el('studio-dw-read-project').value, keys = selectedPaths();
     if (!id || !keys.length) { status('Choose a Project and at least one field.', true); return; }
     var readConversationId = window.studioDirectorBridge.readConversationId();
-    var panelVersion = actionPanelVersion;
     el('studio-dw-read-send').disabled = true;
     window.studioDirectorWorkbench.setReadStatus('working','Preparing saved context selection…');
     // Same exact serializer drives the inspector and the outbound LLM message.
@@ -209,13 +208,12 @@
       var payload = readPayload(story, keys);
       el('studio-dw-read-preview-data').textContent = JSON.stringify(payload, null, 2);
       return window.studioDirectorBridge.appendReadSnapshot(payload, readConversationId, story.id).then(function () {
-        status('Read snapshot saved in conversation. No model request sent.', false);
-        if (ownsActionPanel(panelVersion)) {
-          el('studio-dw-read-panel').classList.add('hidden');
-          el('studio-dw-read').setAttribute('aria-expanded', 'false');
-          closeActions('director-chat-input');
-        }
+        status('Read snapshot saved in conversation. No model request sent.', false, true);
+        el('studio-dw-read-panel').classList.add('hidden');
+        el('studio-dw-read').setAttribute('aria-expanded', 'false');
         updateScope();
+        if (el('director-chat-drawer').classList.contains('studio-actions-open'))
+          el('studio-dw-close-actions').click();
       });
     }).catch(function (error) {
       window.studioDirectorWorkbench.setReadStatus('error','Read failed: ' + String(error.message || error));
@@ -675,39 +673,41 @@
     showConversationWrite();
     return refreshWrite().then(showConversationWrite);
   }
-  async function writePrepare() {
+  function writePrepare(options) {
     var bridge = window.studioDirectorBridge;
     var operation = el('studio-dw-write-operation').value;
     var id = el('studio-dw-write-project').value;
-    var panelVersion = actionPanelVersion;
-    var revisingScenes = operation === 'scene-write' && el('studio-dw-scene-mode').value === 'revise';
     if (!bridge.isReady()) {status(bridge.readinessMessage(),true);return;}
     if (operation !== 'new-project' && !id) {status('Choose a destination Project.',true);return;}
+    if (operation === 'scene-write') {
+      if (el('studio-dw-scene-mode').value === 'revise') return prepareBatchScenes(id);
+      var instruction = manualSceneInstruction() ||
+        'Create the Scene(s) we have developed in this Studio conversation.';
+      return bridge.writeNewScene({
+        projectId:id, instruction:instruction, authorRequest:instruction,
+        forceAuthor:true, directSave:true
+      });
+    }
+    if (operation !== 'new-project' && operation !== 'project')
+      throw new Error('Unsupported Studio creative Write goal: ' + operation);
+    var item = projects.find(function (p) {return p.id === id;});
+    var selectedProjectFields = operation === 'project' ? Array.from(
+      el('studio-dw-write-project-fields').querySelectorAll('input:checked')
+    ).map(function (input) {return input.value;}) : [];
+    if (operation === 'project' && !selectedProjectFields.length) {
+      status('Select at least one Project field to revise.',true);
+      return;
+    }
+    return bridge.prepareWrite(operation, id, item && storyName(item),{
+      instruction:manualSceneInstruction(),requestedFields:selectedProjectFields
+    });
+  }
+
+  async function submitWrite() {
+    var panelVersion = actionPanelVersion;
     try {
-      var result;
-      if (revisingScenes) {
-        result = await prepareBatchScenes(id);
-      } else if (operation === 'scene-write') {
-        var instruction = manualSceneInstruction() ||
-          'Create the Scene(s) we have developed in this Studio conversation.';
-        result = await bridge.writeNewScene({
-          projectId:id, instruction:instruction, authorRequest:instruction,
-          forceAuthor:true, directSave:true
-        });
-      } else {
-        var item = projects.find(function (p) {return p.id === id;});
-        var selectedProjectFields = operation === 'project' ? Array.from(
-          el('studio-dw-write-project-fields').querySelectorAll('input:checked')
-        ).map(function (input) {return input.value;}) : [];
-        if (operation === 'project' && !selectedProjectFields.length) {
-          status('Select at least one Project field to revise.',true);
-          return;
-        }
-        result = await bridge.prepareWrite(operation, id, item && storyName(item),{
-          instruction:manualSceneInstruction(),requestedFields:selectedProjectFields
-        });
-      }
-      if (result && (result.story || (revisingScenes && result.saved.length)) &&
+      var result = await writePrepare();
+      if (result && (result.story || (Array.isArray(result.saved) && result.saved.length)) &&
           ownsActionPanel(panelVersion)) closeActions('director-chat-input');
     } catch (error) {
       if (error.saved && ownsActionPanel(panelVersion)) closeActions('director-chat-input');
@@ -1433,7 +1433,6 @@
       });
     },
     setStatus:status,
-    closeActions:closeActions,
     markSavedFields:function(selected,story){
       if (!story || !story.id) throw new Error('Field update feedback needs the saved Project identity.');
       var values=selected.savedFields || selected.fields || selected;
@@ -1550,6 +1549,7 @@
       }).catch(function(error){status('Read preview failed: '+error.message,true);});
     };
     function openDirectAction(which) {
+      actionPanelVersion += 1;
       lastQuickAction = which;
       el('director-chat-drawer').classList.add('studio-actions-open');
       // Keep the original deterministic Read/Write controls and initialization.
@@ -1671,7 +1671,7 @@
     el('studio-dw-read-all').onclick=selectEntireReadProject;
     el('studio-dw-scenes-select-all').onclick=function () {selectWriteScenes(true);};
     el('studio-dw-scenes-select-none').onclick=function () {selectWriteScenes(false);};
-    el('studio-dw-write-prepare').onclick=writePrepare;
+    el('studio-dw-write-prepare').onclick=submitWrite;
     el('studio-dw-scene-apply').onclick=applyScene;
     el('studio-dw-batch-apply').onclick=applyBatchScenes;
     ['studio-dw-batch-close','studio-dw-batch-cancel'].forEach(function (id) {

@@ -1191,6 +1191,6 @@ test('Selected Storyboard Take is visibly distinguished without changing ratings
   const cards=f.nodes['media-explorer-grid'].children;
   assert.match(cards[0].textContent+' '+cards[0].querySelector('.media-explorer-card-sub').textContent,/Selected Take/);
   assert.doesNotMatch(cards[1].querySelector('.media-explorer-card-sub').textContent,/Selected Take/);
-  cards[0].querySelector('.media-explorer-card-open').click({stopPropagation(){},preventDefault(){}});
+  cards[0].click();
   assert.ok(f.nodes['media-explorer-inspector-body'].querySelectorAll('dd').some(node=>node.textContent==='Selected Take'));
 });

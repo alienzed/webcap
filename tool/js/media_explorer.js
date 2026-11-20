@@ -168,7 +168,7 @@
   ];
   var folderShortcutMemory = {}, shortcutMovePending = false;
   function folderShortcutConfig() {
-    var root = String(externalPath || '');
+    var root = isExternal() ? 'external:' + String(externalPath || '') : 'managed';
     var stored = folderShortcutMemory[root];
     if (!stored) {
       try {
@@ -186,7 +186,7 @@
     });
   }
   function saveFolderShortcutConfig(config) {
-    var root = String(externalPath || '');
+    var root = isExternal() ? 'external:' + String(externalPath || '') : 'managed';
     folderShortcutMemory[root] = config;
     try {
       var store = JSON.parse(window.localStorage.getItem('webcap.mediaExplorer.folderShortcuts.v1') || '{}');
@@ -201,22 +201,53 @@
     return folderShortcutConfig().filter(function (entry) {return !!entry.folder;});
   }
   function folderShortcutDestination(entry, chosen) {
-    if (!isExternal() || !externalPath || shortcutMovePending || !entry || !entry.folder || !chosen.length) return;
-    var files = chosen.map(function (item) {return item.relativePath;});
+    if (shortcutMovePending || !entry || !entry.folder || !chosen.length) return;
+    var allExternal = chosen.every(function (item) {return item.source === 'external';});
+    var allGenerate = chosen.every(function (item) {
+      return item.source === 'generate' && item.role === 'generated' && item.storageId;
+    });
+    var allTest = chosen.every(function (item) {
+      return item.source === 'test' && item.ownerFolder && item.storageId;
+    });
+    if (!allExternal && !allGenerate && !allTest) return;
+    var endpoint, payload;
+    if (allExternal) {
+      if (!externalPath) return;
+      endpoint = '/fs/media_explorer/external/move';
+      payload = {path:externalPath,files:chosen.map(function (item) {return item.relativePath;}),destination:entry.folder};
+    } else if (allGenerate) {
+      endpoint = '/fs/media_explorer/generated/copy';
+      payload = {storageIds:Array.from(new Set(chosen.map(function (item) {return item.storageId;}))),destination:entry.folder};
+    } else {
+      endpoint = '/fs/media_explorer/test/copy';
+      payload = {results:chosen.map(function (item) {
+        return {folder:item.ownerFolder,session:item.storageId,mediaFile:item.fileName};
+      }),destination:entry.folder};
+    }
     shortcutMovePending = true;
-    return externalActionStrict('move',{path:externalPath,files:files,destination:entry.folder})
-      .then(function (result) {
+    return fetch(endpoint,{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)
+    }).then(function (res) {return res.json().then(function (body) {
+      if (!res.ok || !body.ok) throw Error(body.error || 'Folder shortcut failed');
+      return body;
+    });}).then(function (result) {
+      if (allExternal) {
         if (el('media-explorer-loupe').open) el('media-explorer-loupe').close();
         refreshExternalFiles();
-        if (result.warning) report(new Error(result.warning));
-      }).catch(report).finally(function () {shortcutMovePending = false;});
+      } else {
+        el('media-explorer-status').dataset.state = 'success';
+        el('media-explorer-status').textContent =
+          'Copied '+(result.copied || []).length+' item(s) to '+entry.label+'. Originals retained.';
+      }
+      if (result.warning) report(new Error(result.warning));
+    }).catch(report).finally(function () {shortcutMovePending = false;});
   }
   function folderShortcutTarget(item) {
-    if (selected.size && selected.has(item.id)) return chosenExternalFiles();
-    return item.source === 'external' ? [item] : [];
+    if (selected.size && selected.has(item.id)) return items.filter(function (entry) {return selected.has(entry.id);});
+    return item ? [item] : [];
   }
   function openFolderShortcutSettings() {
-    if (!isExternal() || !externalPath) return;
+    if (isExternal() && !externalPath) return;
     var host = el('media-explorer-shortcuts-rows');
     host.replaceChildren();
     folderShortcutConfig().forEach(function (entry) {
@@ -749,6 +780,14 @@
         }) : [item]);}});
       actions.push({label:'Edit tags…',run:function () {editMediaTags(item);}});
     }
+    if ((item.source === 'generate' && item.role === 'generated' && item.storageId) ||
+        (item.source === 'test' && item.ownerFolder && item.storageId)) {
+      configuredFolderShortcuts().forEach(function (entry) {
+        actions.push({label:'Copy to '+entry.label+' ('+entry.key.toUpperCase()+')',run:function () {
+          folderShortcutDestination(entry,folderShortcutTarget(item));
+        }});
+      });
+    }
     if (item.source==='external' ||
         (item.source==='generate' && item.role==='generated' && item.storageId) ||
         (item.source==='test' && item.ownerFolder && item.storageId) ||
@@ -935,7 +974,7 @@
     el('media-explorer-external-path-bar').classList.toggle('hidden', !external);
     el('media-explorer-external-navigation').classList.toggle('hidden', !external);
     var shortcutButton = el('media-explorer-shortcuts-open');
-    shortcutButton.disabled = !external || !externalPath;
+    shortcutButton.disabled = external && !externalPath;
     var createFolder = el('media-explorer-new-folder');
     if (createFolder) {
       createFolder.disabled = !externalPath || !external;
@@ -2563,7 +2602,7 @@
     // Preserve the existing 1–5 rating keys and all text-entry shortcuts.
     var cardTarget = event.target.closest('.media-explorer-card');
     var sideTarget = event.target.closest('.media-explorer-side-row');
-    if (isExternal() && !event.ctrlKey && !event.metaKey && !event.altKey &&
+    if (!event.ctrlKey && !event.metaKey && !event.altKey &&
         !event.shiftKey && !el('media-explorer-shortcuts-dialog').open &&
         !el('media-explorer-export-dialog').open &&
         /^[a-z]$/i.test(event.key) &&
@@ -2575,8 +2614,8 @@
         var focusedItem = loupe ? items[active] :
           cardTarget ? items[Number(cardTarget.dataset.index)] :
           items.find(function (entry) {return entry.id === sideTarget.dataset.id;});
-        var targets = selected.size ? chosenExternalFiles() :
-          focusedItem && focusedItem.source === 'external' ? [focusedItem] : [];
+        var targets = selected.size ? items.filter(function (item) {return selected.has(item.id);}) :
+          focusedItem ? [focusedItem] : [];
         if (targets.length) {
           event.preventDefault();
           folderShortcutDestination(match,targets);

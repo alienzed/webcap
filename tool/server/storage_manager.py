@@ -1897,6 +1897,8 @@ def trash_generate(item_id):
     path = _resolve_generate(item_id, require_manifest=True)
     if path.name in _active_generate_job_ids():
         raise RuntimeError("Generation result is still referenced by active Generate work.")
+    from .generate_store import restore_result_media_for_deletion
+    restore_result_media_for_deletion(item_id)
     send2trash(str(path))
     try:
         path.parent.rmdir()
@@ -1959,6 +1961,8 @@ def purge(area, item_id, folder=""):
         job_id = path.name
         if job_id in _active_generate_job_ids():
             raise RuntimeError("Generation result is still referenced by active Generate work.")
+        from .generate_store import restore_result_media_for_deletion
+        restore_result_media_for_deletion(item_id)
         shutil.rmtree(path)
         try:
             path.parent.rmdir()

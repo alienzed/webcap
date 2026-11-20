@@ -261,7 +261,7 @@
     });
     var mode = !el('studio-dw-read-panel').classList.contains('hidden') ? 'Read' :
       !el('studio-dw-write-panel').classList.contains('hidden') ? 'Write' : '';
-    el('studio-dw-heading').textContent = 'Write';
+    el('studio-dw-heading').textContent = mode || 'Director tools';
     el('studio-dw-heading').title = mode === 'Read'
       ? 'Explicit Read · save a snapshot to the conversation'
       : mode === 'Write' ? 'Explicit Write destination · save occurs when the model returns'
@@ -1465,6 +1465,8 @@
       el('studio-dw-write').setAttribute('aria-expanded','false');
       el('studio-dw-open-tools').setAttribute('aria-expanded','false');
       el('director-chat-drawer').classList.remove('studio-actions-open');
+      el('director-studio-actions-menu').classList.add('hidden');
+      el('director-studio-actions-toggle').setAttribute('aria-expanded','false');
       status('', false);
       updateScope();
     }
@@ -1509,13 +1511,13 @@
     function openDirectAction(which) {
       lastQuickAction = which;
       el('director-chat-drawer').classList.add('studio-actions-open');
-      // Opening Write must actually reveal its operation picker. Merely
-      // updating conversation suggestions left the Write panel hidden.
-      if (el('studio-dw-' + which + '-panel').classList.contains('hidden'))
-        el('studio-dw-' + which).click();
+      // Keep the original deterministic Read/Write controls and initialization.
+      var pending = el('studio-dw-' + which + '-panel').classList.contains('hidden')
+        ? toggle(which) : Promise.resolve();
       if (which === 'write') showConversationWrite();
       el('studio-dw-open-tools').setAttribute('aria-expanded','true');
       el('studio-dw-close-actions').focus();
+      return Promise.resolve(pending);
     }
     el('studio-dw-write-ready-launch').onclick=function () {
       var reviewDraft = !pendingCreativeAction || pendingCreativeAction.reviewReady
@@ -1553,8 +1555,58 @@
     el('studio-dw-close-actions').onclick=function () {
       el('director-chat-drawer').classList.remove('studio-actions-open');
       el('studio-dw-open-tools').setAttribute('aria-expanded','false');
-      el('studio-dw-open-tools').focus();
+      var launcher = el('director-studio-actions-toggle');
+      if (!el('director-studio-action-launcher').classList.contains('hidden')) launcher.focus();
+      else el('studio-dw-open-tools').focus();
     };
+    var launcher = el('director-studio-action-launcher');
+    var menu = el('director-studio-actions-menu');
+    var launcherButton = el('director-studio-actions-toggle');
+    function closeMenu() {
+      menu.classList.add('hidden');
+      launcherButton.setAttribute('aria-expanded', 'false');
+    }
+    launcherButton.onclick = function () {
+      var opening = menu.classList.contains('hidden');
+      menu.classList.toggle('hidden', !opening);
+      launcherButton.setAttribute('aria-expanded', opening ? 'true' : 'false');
+      if (opening) menu.querySelector('button').focus();
+    };
+    menu.querySelectorAll('[data-studio-tool]').forEach(function (button) {
+      button.onclick = function () {
+        var tool = button.dataset.studioTool;
+        closeMenu();
+        if (tool === 'read') return openDirectAction('read');
+        if (tool === 'scene' || tool === 'project') {
+          return openDirectAction('write').then(function () {
+            var operation = el('studio-dw-write-operation');
+            operation.value = tool === 'scene' ? 'scene-write' :
+              (el('studio-dw-write-project').value ? 'project' : 'new-project');
+            if (tool === 'scene') el('studio-dw-scene-mode').value = 'create';
+            writeOperationChosen = true;
+            return refreshWrite();
+          });
+        }
+        if (tool === 'history') return el('director-chat-history-toggle').click();
+        if (tool === 'new-chat') return el('director-chat-clear').click();
+        if (tool === 'io') return el('studio-director-inspect').click();
+        if (tool === 'revision') {
+          var mode = el('director-studio-composer-mode-select');
+          mode.value = 'revision';
+          mode.dispatchEvent(new Event('change', {bubbles:true}));
+        }
+      };
+    });
+    document.addEventListener('click', function (event) {
+      if (!launcher.contains(event.target)) closeMenu();
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && !menu.classList.contains('hidden')) {
+        event.preventDefault();
+        closeMenu();
+        launcherButton.focus();
+      }
+    });
     rail.addEventListener('keydown',function(event){
       if(event.key==='Escape' && el('director-chat-drawer').classList.contains('studio-actions-open')) {
         event.preventDefault();

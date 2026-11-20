@@ -435,7 +435,7 @@
     contextButton.classList.toggle('hidden', !studio || studioRevisionActive());
     contextButton.textContent = 'Read Project';
     var contextNote = el('director-studio-context-note');
-    var hasRead = studio && state.modeMessages.storyboard.some(function (message) {
+    var hasRead = studio && currentMessages().some(function (message) {
       return message.role === 'user' && String(message.content || '')
         .includes('[WEBCAP EXPLICIT READ — SAVED SNAPSHOT]');
     });

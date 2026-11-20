@@ -1009,3 +1009,9 @@
   .media-explorer-shortcut-row {grid-template-columns:42px 1fr;row-gap:7px;}
   .media-explorer-shortcut-destination,.media-explorer-shortcut-picker {grid-column:1/-1;}
 }
+
+.media-explorer-tag-suggestions {display:flex;flex-wrap:wrap;gap:7px;margin:8px 0 2px;}
+.media-explorer-tag-suggestions>div {flex:1 0 100%;font-size:13px;opacity:.78;}
+.media-explorer-tag-suggestion {border:1px solid var(--border);border-radius:16px;
+  padding:5px 10px;background:var(--panel);color:var(--text);cursor:pointer;}
+.media-explorer-tag-suggestion:disabled {opacity:.45;cursor:default;}

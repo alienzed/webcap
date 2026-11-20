@@ -6104,6 +6104,7 @@
   }
 
   var promptAssistSession = null;
+  var projectDeepQaDismissed = false;
   function openAssistModal(id) {
     var modal = el(id);
     if (!modal) throw new Error("Studio Assist modal is missing: " + id);
@@ -6283,6 +6284,7 @@
           };
           el("storyboard-prompt-assist-source").textContent = context.prompt;
           el("storyboard-prompt-assist-source-details").open = false;
+          el("storyboard-prompt-assist-completed").classList.add("hidden");
           renderPromptAssistFindings();
           status.textContent = "";
           openAssistModal("storyboard-prompt-assist-modal");
@@ -6359,7 +6361,9 @@
       el("storyboard-prompt-assist-status").textContent = next !== -1
         ? "Correction applied. Continue with the next finding."
         : "All suggested corrections applied.";
-      el("storyboard-prompt-assist-position").focus();
+      el("storyboard-prompt-assist-completed").classList.toggle("hidden", next !== -1);
+      if (!el("storyboard-prompt-assist-modal").classList.contains("hidden"))
+        el(next === -1 ? "storyboard-prompt-assist-done" : "storyboard-prompt-assist-position").focus();
       // The correction is already saved. A library refresh error is separate
       // and must not make a successful Apply look like a failed mutation.
       return refreshLibrary().catch(function (error) { reportError(error); });
@@ -6506,7 +6510,7 @@
     renderProjectDeepQaFindings(record && record.findings || []);
     el("storyboard-project-deep-qa-status").textContent =
       "Findings are advisory and never change saved prompts automatically.";
-    openAssistModal("storyboard-project-deep-qa-modal");
+    if (!projectDeepQaDismissed) openAssistModal("storyboard-project-deep-qa-modal");
   }
 
   function runProjectDeepQa(force) {
@@ -6527,6 +6531,7 @@
     el("storyboard-project-deep-qa-target").textContent =
       String(storyState.story.title || "Current Project");
     status.textContent = "Checking saved Project prompts…";
+    projectDeepQaDismissed = false;
     openAssistModal("storyboard-project-deep-qa-modal");
     setDirectorPending(target, true);
     startDirectorActivity();
@@ -6949,13 +6954,17 @@
     el('storyboard-project-deep-qa-btn').onclick = function () { runProjectDeepQa(false); };
     el('storyboard-project-deep-qa-refresh').onclick = function () { runProjectDeepQa(true); };
     el('storyboard-prompt-assist-close').onclick = function () { closeAssistModal('storyboard-prompt-assist-modal'); };
+    el('storyboard-prompt-assist-done').onclick = function () { closeAssistModal('storyboard-prompt-assist-modal'); };
     el('storyboard-prompt-assist-prev').onclick = function () {
       if (promptAssistSession) showPromptAssistFinding(promptAssistSession.activeFindingIndex - 1);
     };
     el('storyboard-prompt-assist-next').onclick = function () {
       if (promptAssistSession) showPromptAssistFinding(promptAssistSession.activeFindingIndex + 1);
     };
-    el('storyboard-project-deep-qa-close').onclick = function () { closeAssistModal('storyboard-project-deep-qa-modal'); };
+    el('storyboard-project-deep-qa-close').onclick = function () {
+      projectDeepQaDismissed = true;
+      closeAssistModal('storyboard-project-deep-qa-modal');
+    };
     el('storyboard-find-replace-btn').onclick = openProjectReplace;
     el('storyboard-find-replace-find').addEventListener('input', previewProjectReplacement);
     el('storyboard-find-replace-with').addEventListener('input', previewProjectReplacement);

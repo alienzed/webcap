@@ -6098,17 +6098,41 @@
     modal.setAttribute("aria-hidden", "true");
   }
 
+  function syncPromptAssistNavigator() {
+    var findings = promptAssistSession && promptAssistSession.findings || [];
+    var total = findings.length;
+    var position = promptAssistSession && promptAssistSession.activeFindingIndex || 0;
+    var applied = findings.filter(function (finding) { return !!finding.applied; }).length;
+    var discarded = promptAssistSession && promptAssistSession.discardedFindingCount || 0;
+    el("storyboard-prompt-assist-navigator").classList.toggle("hidden", !total);
+    el("storyboard-prompt-assist-position").textContent =
+      total ? "Finding " + (position + 1) + " of " + total : "";
+    el("storyboard-prompt-assist-count").textContent =
+      total ? applied + " of " + total + " applied" +
+        (discarded ? " · " + discarded + " unusable omitted" : "")
+        : discarded ? discarded + " unusable suggestions omitted" : "No corrections suggested";
+    el("storyboard-prompt-assist-prev").disabled =
+      !total || position === 0 || !!(promptAssistSession && promptAssistSession.applying);
+    el("storyboard-prompt-assist-next").disabled =
+      !total || position === total - 1 || !!(promptAssistSession && promptAssistSession.applying);
+  }
+
+  function showPromptAssistFinding(index) {
+    if (!promptAssistSession || promptAssistSession.applying ||
+        index < 0 || index >= promptAssistSession.findings.length) return;
+    promptAssistSession.activeFindingIndex = index;
+    renderPromptAssistFindings();
+    el("storyboard-prompt-assist-findings").closest(".storyboard-assist-content").scrollTop = 0;
+  }
+
   function renderPromptAssistFindings() {
     var host = el("storyboard-prompt-assist-findings");
     var findings = promptAssistSession && promptAssistSession.findings || [];
-    host.innerHTML = "";
-    el("storyboard-prompt-assist-count").textContent = findings.length
-      ? findings.length + " targeted suggestions"
-      : "No corrections suggested";
-    if (promptAssistSession && promptAssistSession.discardedFindingCount) {
-      el("storyboard-prompt-assist-count").textContent +=
-        " · " + promptAssistSession.discardedFindingCount + " unusable model suggestion(s) omitted";
-    }
+    host.replaceChildren();
+    if (promptAssistSession && findings.length)
+      promptAssistSession.activeFindingIndex = Math.max(0, Math.min(
+        Number(promptAssistSession.activeFindingIndex || 0), findings.length - 1));
+    syncPromptAssistNavigator();
     if (!findings.length) {
       var empty = document.createElement("p");
       empty.className = "storyboard-assist-empty";
@@ -6118,51 +6142,65 @@
       host.appendChild(empty);
       return;
     }
-    findings.forEach(function (finding, index) {
-      var card = document.createElement("article");
-      card.className = "storyboard-assist-finding";
-      card.dataset.findingId = finding.id;
-      var main = document.createElement("div");
-      main.className = "storyboard-assist-finding-main";
-      var location = document.createElement("span");
-      location.className = "storyboard-assist-location";
-      location.textContent = finding.location || "Prompt";
-      var problem = document.createElement("p");
-      problem.textContent = finding.problem;
-      var fix = document.createElement("p");
-      fix.textContent = finding.suggestedFix;
-      main.append(location, problem, fix);
-      var patch = document.createElement("div");
-      patch.className = "storyboard-assist-patch";
-      var targetLabel = document.createElement("label");
-      targetLabel.textContent = "Exact prompt text";
-      var target = document.createElement("textarea");
-      target.readOnly = true;
-      target.value = finding.targetText;
-      targetLabel.appendChild(target);
-      var replacementLabel = document.createElement("label");
-      replacementLabel.textContent = "Suggested replacement (editable)";
-      var replacement = document.createElement("textarea");
-      replacement.value = finding.replacementText;
-      replacement.dataset.assistReplacement = "1";
-      replacementLabel.appendChild(replacement);
-      var actions = document.createElement("div");
-      actions.className = "storyboard-assist-patch-actions";
-      var status = document.createElement("span");
-      status.className = "keep-lora-source";
-      status.setAttribute("role", "status");
-      var apply = document.createElement("button");
-      apply.type = "button";
-      apply.className = "review-captions-btn";
-      apply.textContent = "Apply correction";
-      apply.onclick = function () {
-        applyPromptAssistFinding(finding, replacement.value, card, apply, status);
-      };
-      actions.append(status, apply);
-      patch.append(targetLabel, replacementLabel, actions);
-      card.append(main, patch);
-      host.appendChild(card);
+
+    var finding = findings[promptAssistSession.activeFindingIndex];
+    var card = document.createElement("article");
+    card.className = "storyboard-assist-finding";
+    card.dataset.findingId = finding.id;
+    if (finding.applied) card.classList.add("is-applied");
+    var main = document.createElement("div");
+    main.className = "storyboard-assist-finding-main";
+    var location = document.createElement("h3");
+    location.className = "storyboard-assist-location";
+    location.textContent = finding.location || "Scene prompt";
+    var problemLabel = document.createElement("strong");
+    problemLabel.textContent = "Problem";
+    var problem = document.createElement("p");
+    problem.textContent = finding.problem;
+    var fixLabel = document.createElement("strong");
+    fixLabel.textContent = "Suggested correction";
+    var fix = document.createElement("p");
+    fix.textContent = finding.suggestedFix;
+    main.append(location, problemLabel, problem, fixLabel, fix);
+
+    var patch = document.createElement("div");
+    patch.className = "storyboard-assist-patch";
+    var targetLabel = document.createElement("label");
+    targetLabel.textContent = "Exact prompt text";
+    var target = document.createElement("textarea");
+    target.readOnly = true;
+    target.value = finding.targetText;
+    targetLabel.appendChild(target);
+    var replacementLabel = document.createElement("label");
+    replacementLabel.textContent = "Suggested replacement";
+    var replacement = document.createElement("textarea");
+    replacement.value = Object.prototype.hasOwnProperty.call(finding, "draftReplacement")
+      ? finding.draftReplacement : finding.replacementText;
+    replacement.dataset.assistReplacement = "1";
+    replacement.readOnly = !!finding.applied;
+    replacement.addEventListener("input", function () {
+      finding.draftReplacement = replacement.value;
     });
+    replacementLabel.appendChild(replacement);
+
+    var actions = document.createElement("div");
+    actions.className = "storyboard-assist-patch-actions";
+    var status = document.createElement("span");
+    status.className = "storyboard-assist-apply-status";
+    status.setAttribute("role", "status");
+    status.textContent = finding.applied ? "Applied to Scene prompt" : "";
+    var apply = document.createElement("button");
+    apply.type = "button";
+    apply.className = "review-captions-btn";
+    apply.textContent = finding.applied ? "Applied" : "Apply correction";
+    apply.disabled = !!finding.applied || !!promptAssistSession.applying;
+    apply.onclick = function () {
+      applyPromptAssistFinding(finding, replacement.value, card, apply, status);
+    };
+    actions.append(status, apply);
+    patch.append(targetLabel, replacementLabel, actions);
+    card.append(main, patch);
+    host.appendChild(card);
   }
 
   function openPromptAssist(sceneId) {

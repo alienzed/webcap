@@ -1428,7 +1428,7 @@ function sweepLoras(model, folder) {
   }
 
   function resultMediaElement(result, controls) {
-    var src = '/fs/generate/media?path=' + encodeURIComponent(result.mediaPath || '');
+    var src = result.mediaUrl || '/fs/generate/media?path=' + encodeURIComponent(result.mediaPath || '');
     if (result.mediaKind === 'video') {
       var video = document.createElement('video');
       video.controls = !!controls;
@@ -1888,7 +1888,7 @@ function sweepLoras(model, folder) {
 
     var mediaHost = document.createElement('div');
     mediaHost.className = 'generate-result-media';
-    var src = '/fs/generate/media?path=' + encodeURIComponent(result.mediaPath || '');
+    var src = result.mediaUrl || '/fs/generate/media?path=' + encodeURIComponent(result.mediaPath || '');
     if (result.mediaKind === 'video') {
       var video = document.createElement('video');
       video.controls = true;

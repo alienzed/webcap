@@ -1,5 +1,7 @@
 # Media Explorer IA quick-win implementation plan
 
+> **Dated implementation record.** The November 19 phases below describe the earlier tag/collection-only baseline and are kept as historical acceptance evidence. The November 20 Media Explorer shipping baseline additionally supports source-scoped **S Save / D Delete / A Archive / F Favorite** shortcuts, selected-Take visibility, optional prompt-derived tag suggestions, and real Generate media relocation. Generation records retain owner identity when output media is relocated; Tests copy while Storyboard Takes stay project-owned. **Unsorted Generations** also excludes results with an organized destination. See [README](../README.md). The potential ownership overlap between moved Generation files and user Set folders remains an explicit design decision, not an implicitly resolved guarantee.
+
 Per root AGENTS.md: preserve owner-specific state and delete routes, avoid new abstraction and state.
 
 ## Phase 1 — clarify discovery and IA (applied)

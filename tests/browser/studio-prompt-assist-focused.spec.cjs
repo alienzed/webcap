@@ -50,6 +50,13 @@ async function setup(page,request,modelResponse) {
 
 test('Prompt Assist reviews one complete correction at a time and preserves edits while browsing',async({page,request})=>{
   const {project,scene}=await setup(page,request,{findings:suggestions});
+  const initialHistory=await page.locator('.storyboard-scene[data-scene-id="'+scene.id+'"] [data-scene-field="prompt"]').evaluate(editor=>{
+    const api=window.webcapTextareaRevisions;
+    const history=api.history(api.identity(editor));
+    return history && history.versions.slice();
+  });
+  expect(initialHistory).toEqual([source]);
+
   const cards=page.locator('#storyboard-prompt-assist-findings .storyboard-assist-finding');
   const position=page.locator('#storyboard-prompt-assist-position');
   const progress=page.locator('#storyboard-prompt-assist-count');

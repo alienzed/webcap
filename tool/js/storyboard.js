@@ -6010,7 +6010,10 @@
       sceneId: target.sceneId,
       sceneNumber: story && target.sceneId ? story.sceneOrder.indexOf(target.sceneId) + 1 : 0,
       sceneTitle: story && target.sceneId && story.scenes[target.sceneId] ? story.scenes[target.sceneId].title || '' : '',
-      sceneOrder: story ? story.sceneOrder.slice() : []
+      sceneOrder: story ? story.sceneOrder.slice() : [],
+      sceneTitles: story ? story.sceneOrder.map(function (id) {
+        return String(story.scenes[id] && story.scenes[id].title || 'Untitled Scene');
+      }) : []
     };
   }
 

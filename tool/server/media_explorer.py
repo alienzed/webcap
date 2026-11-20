@@ -116,8 +116,26 @@ def discover_generate(limit=500):
         created = int(record.get("createdAt") or 0)
         model = str(record.get("modelId") or "")
         media = str(record.get("mediaPath") or "")
-        output = _item(media, "generated", storage_id, created,
-                       record.get("rating", 0), model)
+        if record.get("organizedMediaPath"):
+            from .generate_store import resolve_owned_result_media
+            try:
+                actual = resolve_owned_result_media(storage_id)
+                output = {
+                    "id": "generate:" + media, "source": "generate",
+                    "storageId": storage_id, "role": "generated",
+                    "mediaKind": _kind(actual), "fileName": actual.name,
+                    "mediaPath": media,
+                    "mediaUrl": "/fs/generate/result/media?storageId=" + quote(storage_id, safe=""),
+                    "relativePath": str(record["organizedMediaPath"]),
+                    "createdAt": created, "rating": record.get("rating", 0),
+                    "model": model, "uses": [], "fileSize": actual.stat().st_size,
+                    "tags": [],
+                }
+            except (ValueError, OSError):
+                output = None
+        else:
+            output = _item(media, "generated", storage_id, created,
+                           record.get("rating", 0), model)
         if output:
             output.update(_record_details(record))
             output["tags"] = record.get("tags") if isinstance(record.get("tags"), list) else []

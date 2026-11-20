@@ -1,6 +1,6 @@
 # WebCap Docs Map
 
-Documentation index updated: 2026-11-18 (Studio Director references reconciled with the current role split, explicit Read/Write source and Action Advisor). Other feature areas and historical plans have not been re-audited line by line.
+Documentation index updated: 2026-11-20. Canonical Studio Director and Media Explorer references were reconciled against current code; older design/phase documents are historical where explicitly labeled. This is not a claim that every specialist document has undergone a line-by-line runtime audit.
 
 This folder mixes three different kinds of documents:
 
@@ -45,6 +45,8 @@ Start here when you need to know what the app does today:
 ## Shipped Feature Notes
 
 - `docs/studio-prompt-assist-project-deep-qa.md` - implemented standalone Scene Prompt Assist and whole-Project Deep QA; the behavior contract also records future efficiency improvements.
+- **Media Explorer (current implementation):** start with `README.md` (section *Media Explorer and Storage*) and `tool/js/media_explorer.js`. `docs/media_explorer_design.md` is the October 17 design baseline; `docs/media_explorer_ia_polish_plan.md` preserves earlier implementation phases, not the complete current shortcut/relocation contract.
+- **Generate Library:** `docs/generate_library.md` is a proposed future Scratch/Saved architecture, not shipped behavior. Existing Generation record ownership and relocation are implemented by `tool/server/generate_store.py`.
 
 These describe implemented features, but they are narrower than `README.md` / `docs/spec.md` and may lag if the UI is rearranged:
 

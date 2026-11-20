@@ -224,6 +224,9 @@
         return {folder:item.ownerFolder,session:item.storageId,mediaFile:item.fileName};
       }),destination:entry.folder};
     }
+    var viewerWasOpen = el('media-explorer-loupe').open;
+    var viewerIndex = active;
+    var movedIds = chosen.map(function (item) {return item.id;});
     shortcutMovePending = true;
     return fetch(endpoint,{
       method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)
@@ -232,11 +235,10 @@
       return body;
     });}).then(function (result) {
       if (allExternal) {
-        if (el('media-explorer-loupe').open) el('media-explorer-loupe').close();
-        refreshExternalFiles();
+        if (viewerWasOpen) load(true,{refreshFilesystem:true,advanceIndex:viewerIndex,movedIds:movedIds});
+        else refreshExternalFiles();
       } else if (allGenerate) {
-        if (el('media-explorer-loupe').open) el('media-explorer-loupe').close();
-        load(true);
+        load(true,viewerWasOpen ? {advanceIndex:viewerIndex,movedIds:movedIds} : {});
       } else {
         el('media-explorer-status').dataset.state = 'success';
         el('media-explorer-status').textContent =
@@ -1855,6 +1857,19 @@
       }
       count(); renderSideList(); updateSelection(); renderMainPreview();
       if (!isExternal()) facets(data.facets);
+      if (options.advanceIndex != null && el('media-explorer-loupe').open) {
+        var next = Math.min(options.advanceIndex, items.length - 1);
+        if (items.length && options.movedIds && options.movedIds.includes(items[next].id)) {
+          next = items.findIndex(function (item, index) {
+            return index > next && !options.movedIds.includes(item.id);
+          });
+          if (next < 0) next = items.findIndex(function (item) {
+            return !options.movedIds.includes(item.id);
+          });
+        }
+        if (next >= 0 && items.length) openLoupe(next);
+        else el('media-explorer-loupe').close();
+      }
       needsLoad = false;
       if (isExternal()) {
         if (!data.complete) {

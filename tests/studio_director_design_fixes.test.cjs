@@ -28,7 +28,7 @@ test('Chat and Director mode initialization use controls present in the app shel
     studioDirectorSelectedScene:()=>null,studioRevisionActive:()=>false,
     availableModes:()=>[],activeContextMode:()=>null,modeAvailable:()=>true,
     persistentMode:()=>true,studioWorkingStoryLabel:()=>'Test Project',
-    storyboardContextPresets:()=>[],syncStudioRevisionUi(){},renderStoryboardAttachmentViewer(){},
+    storyboardContextPresets:()=>[],currentMessages:()=>[],syncStudioRevisionUi(){},renderStoryboardAttachmentViewer(){},
     renderStudioStoryAccess(){},renderStudioOperations(){},renderMessages(){},syncControls(){}
   });
   vm.runInContext(section(chat,'  function syncModeUi() {',
@@ -81,7 +81,7 @@ test('manual Read and Write remain available through the on-demand Advanced pane
   assert.match(css,/\.director-chat-sidebar \{display:none;/);
   assert.match(rail,/function openDirectAction\(which\)/);
   assert.match(rail,/openDirectAction\(lastQuickAction\)/);
-  assert.match(rail,/el\('studio-dw-' \+ which\)\.click\(\)/);
+  assert.match(rail,/\? toggle\(which\) : Promise\.resolve\(\)/);
 });
 
 test('operational errors reveal Advanced and preserve the shared Console detail',()=>{
@@ -103,13 +103,14 @@ test('Write opens the explicit operation picker without launching a model reques
   function node(id) {
     const classes=new Set();
     return nodes[id] ||= {attrs:{},classList:{add:x=>classes.add(x),remove:x=>classes.delete(x),contains:x=>classes.has(x),toggle(x,on){if(on)classes.add(x);else classes.delete(x);}},
-      setAttribute(k,v){this.attrs[k]=v;},focus(){this.focused=true;},click(){this.onclick();}};
+      setAttribute(k,v){this.attrs[k]=v;},focus(){this.focused=true;},click(){this.onclick();},
+      querySelectorAll(){return [];},contains(){return false;}};
   }
   let selected=0, availability=0;
   node('studio-dw-write-panel').classList.add('hidden');
   const a=rail.indexOf('    function openDirectAction(which) {');
   const b=rail.indexOf("    rail.addEventListener('keydown'",a);
-  const scope=vm.createContext({el:node,lastQuickAction:'write',updateScope(){},showConversationWrite(){availability++;},refreshWrite:async()=>{selected++;}});
+  const scope=vm.createContext({el:node,document:{addEventListener(){}},lastQuickAction:'write',updateScope(){},showConversationWrite(){availability++;},refreshWrite:async()=>{selected++;}});
   vm.runInContext(section(rail,'  function toggle(which) {','  function parseProposal(raw) {')+rail.slice(a,b),scope);
   node('studio-dw-write').onclick=()=>scope.toggle('write');
   node('studio-dw-open-tools').click();
@@ -128,7 +129,7 @@ test('Write opens the explicit operation picker without launching a model reques
 test('Read remains explicitly accessible without a standing approval badge',()=>{
   assert.match(html,/id="director-chat-context-approve"/);
   assert.match(rail,/el\('director-chat-context-approve'\)\.onclick=function \(\) \{openDirectAction\('read'\);\}/);
-  assert.match(chat,/contextButton\.textContent = 'Read…'/);
+  assert.match(chat,/contextButton\.textContent = 'Read Project'/);
   assert.doesNotMatch(chat,/studioApprovedRead/);
 });
 

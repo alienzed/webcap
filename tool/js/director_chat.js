@@ -317,6 +317,41 @@
 
   var studioComposerMode = 'conversation';
   var studioRevisionRunning = false;
+  var revisionSceneScopeKey = '';
+  function syncRevisionSceneSelection() {
+    var scope = window.getStudioDirectorNavigation();
+    var ids = scope.sceneOrder || [];
+    var key = JSON.stringify([scope.projectId, ids, scope.sceneTitles || []]);
+    var list = el('director-studio-revision-scenes');
+    if (key !== revisionSceneScopeKey) {
+      revisionSceneScopeKey = key;
+      list.replaceChildren();
+      ids.forEach(function (sceneId, index) {
+        var label = document.createElement('label');
+        var checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = sceneId;
+        checkbox.checked = true;
+        checkbox.className = 'director-studio-revision-scene';
+        checkbox.addEventListener('change', function () {
+          syncStudioRevisionUi();
+          syncControls();
+        });
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode((index + 1) + '. ' +
+          (scope.sceneTitles && scope.sceneTitles[index] || 'Untitled Scene')));
+        list.appendChild(label);
+      });
+    }
+    var boxes = Array.from(list.querySelectorAll('input.director-studio-revision-scene'));
+    var selected = boxes.filter(function (box) { return box.checked; }).length;
+    var all = el('director-studio-revision-all');
+    all.checked = boxes.length > 0 && selected === boxes.length;
+    all.indeterminate = selected > 0 && selected < boxes.length;
+    el('director-studio-revision-selection-count').textContent =
+      selected + ' of ' + boxes.length + ' Scenes selected';
+    return boxes.filter(function (box) { return box.checked; }).map(function (box) { return box.value; });
+  }
   function studioRevisionActive() {
     return state.activeMode === 'storyboard' && studioComposerMode === 'revision';
   }
@@ -347,17 +382,21 @@
     el('studio-director-inspect').classList.toggle('hidden', revision || !studio);
     var preset = el('director-studio-revision-preset').value;
     el('director-studio-revision-fresh-label').classList.toggle('hidden', !revision || preset === 'coherence' || preset === 'visual_direction');
+    el('director-studio-revision-scene-controls').classList.toggle('hidden', !revision || preset === 'coherence');
     var input = el('director-studio-revision-input');
     input.readOnly = preset === 'coherence';
-    input.placeholder = preset === 'visual_direction' ? 'Additional visual direction (optional)' : 'Describe what should be revised across these Scenes.';
+    input.placeholder = preset === 'visual_direction' ? 'Additional visual direction (optional)' :
+      preset ? 'Optional extra direction for this preset.' : 'Describe what should be revised across these Scenes.';
     el('director-chat-composer-hint').textContent = revision
       ? 'Ctrl+Enter to run' : 'Enter to send · Shift+Enter for newline';
     var target = el('director-studio-revision-target');
     target.classList.toggle('hidden', !revision);
     if (revision) {
       var scope = window.getStudioDirectorNavigation();
+      var selected = syncRevisionSceneSelection();
       target.textContent = (scope.projectTitle || 'Current Project') +
-      ' · all ' + (scope.sceneOrder || []).length + ' Scenes';
+        (preset === 'coherence' ? ' · Project-wide coherence' :
+          ' · ' + selected.length + ' of ' + (scope.sceneOrder || []).length + ' Scenes');
     }
   }
   function setStudioComposerMode(mode, preset) {
@@ -375,9 +414,13 @@
     if (!studioRevisionActive() || studioRevisionRunning) return;
     var preset = el('director-studio-revision-preset').value;
     var input = el('director-studio-revision-input');
-    var instruction = input.value.trim();
+    var customInstruction = input.value.trim();
+    var presetInstruction = window.storyboardRevisionPreset(preset);
+    var instruction = presetInstruction ?
+      presetInstruction + (customInstruction ? '\n\nAdditional direction: ' + customInstruction : '') :
+      customInstruction;
     var status = el('director-studio-revision-status');
-    if (!instruction && preset !== 'coherence' && preset !== 'visual_direction') {
+    if (!instruction && !preset) {
       status.textContent = 'Enter a revision instruction or choose a preset.';
       input.focus();
       return;
@@ -387,12 +430,18 @@
       status.textContent = 'Choose a Project with Scenes first.';
       return;
     }
+    var selectedSceneIds = syncRevisionSceneSelection();
+    if (preset !== 'coherence' && !selectedSceneIds.length) {
+      status.textContent = 'Select at least one Scene.';
+      return;
+    }
     studioRevisionRunning = true;
     status.textContent = 'Starting ' + (preset === 'coherence' ? 'coherence review' : 'revision') + '…';
     syncControls();
     Promise.resolve(window.startStudioRevision({
       instruction:instruction,preset:preset,modelId:state.modelId,
       projectId:scope.projectId,
+      selectedSceneIds:preset === 'coherence' ? undefined : selectedSceneIds,
       generateFreshTakes:el('director-studio-revision-fresh').checked
     })).then(function () {
       status.textContent = preset === 'coherence'
@@ -1683,7 +1732,8 @@
     if (send) {
       send.disabled = revising
         ? studioRevisionRunning || !state.modelId ||
-          (!String(revisionInput.value || '').trim() && revisionPreset.value !== 'coherence')
+          (!String(revisionInput.value || '').trim() && !revisionPreset.value) ||
+          (revisionPreset.value !== 'coherence' && !syncRevisionSceneSelection().length)
         : state.pending || state.attachmentPending ||
           (persistentMode(state.activeMode) && !state.sessionReady) || !state.modelId ||
           !String(input && input.value || '').trim();
@@ -1693,6 +1743,12 @@
         : 'Send';
     }
     revisionInput.disabled = studioRevisionRunning;
+    el('director-studio-revision-preset').disabled = studioRevisionRunning;
+    el('director-studio-revision-all').disabled = studioRevisionRunning;
+    el('director-studio-revision-scenes').querySelectorAll('input').forEach(function (checkbox) {
+      checkbox.disabled = studioRevisionRunning;
+    });
+    el('director-studio-revision-fresh').disabled = studioRevisionRunning;
     el('director-studio-composer-mode-select').disabled = studioRevisionRunning;
     if (input) input.disabled = state.pending || (persistentMode(state.activeMode) && !state.sessionReady);
     if (model) model.disabled = state.pending || !state.modelsLoaded;
@@ -3950,9 +4006,16 @@
       setStudioComposerMode(this.value);
     };
     el('director-studio-revision-preset').onchange = function () {
-      var preset = this.value;
-      if (preset) el('director-studio-revision-input').value = window.storyboardRevisionPreset(preset);
       el('director-studio-revision-status').textContent = '';
+      syncStudioRevisionUi();
+      syncControls();
+    };
+    el('director-studio-revision-all').onchange = function () {
+      var checked = this.checked;
+      el('director-studio-revision-scenes').querySelectorAll('input').forEach(function (box) {
+        box.checked = checked;
+      });
+      syncRevisionSceneSelection();
       syncStudioRevisionUi();
       syncControls();
     };

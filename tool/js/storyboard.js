@@ -2053,7 +2053,7 @@
     if (!instruction && passType !== 'visual_direction')
       return Promise.reject(new Error('Enter what should be revised across these Scenes.'));
 
-    if (instruction) sceneRevisionHistory.remember(instruction, sourceInput || el('storyboard-director-tools-instruction'));
+    if (instruction) sceneRevisionHistory.remember(instruction, sourceInput || el('director-studio-revision-input'));
     storyState.story.repairInstruction = instruction || (passType === 'visual_direction' ? 'Visual Direction' : '');
     storyState.story.repairComplete = false;
 
@@ -6010,7 +6010,10 @@
       sceneId: target.sceneId,
       sceneNumber: story && target.sceneId ? story.sceneOrder.indexOf(target.sceneId) + 1 : 0,
       sceneTitle: story && target.sceneId && story.scenes[target.sceneId] ? story.scenes[target.sceneId].title || '' : '',
-      sceneOrder: story ? story.sceneOrder.slice() : []
+      sceneOrder: story ? story.sceneOrder.slice() : [],
+      sceneTitles: story ? story.sceneOrder.map(function (id) {
+        return String(story.scenes[id] && story.scenes[id].title || 'Untitled Scene');
+      }) : []
     };
   }
 
@@ -6088,19 +6091,8 @@
     var button = el('storyboard-director-tools-btn');
     if (button) button.disabled = !directorToolsAvailable();
 
-    var run = el('storyboard-director-tools-run');
-    if (run) run.disabled = !directorToolsAvailable();
     var deepQa = el('storyboard-project-deep-qa-btn');
     if (deepQa) deepQa.disabled = !directorToolsAvailable();
-  }
-
-  function syncDirectorToolsRunLabel() {
-    var preset = el('storyboard-director-tools-preset').value;
-    var coherence = preset === 'coherence';
-    var generateTakes = el('storyboard-director-tools-generate-takes').checked;
-    el('storyboard-director-tools-run').textContent = coherence ? 'Check Coherence' :
-      preset === 'visual_direction' ? (generateTakes ? 'Visual Direction & Generate Takes' : 'Run Visual Direction') :
-      generateTakes ? 'Revise & Generate Takes' : 'Revise Scenes';
   }
 
   var promptAssistSession = null;
@@ -6571,63 +6563,6 @@
     });
   }
 
-  function openDirectorTools() {
-    if (!directorToolsAvailable()) {
-      reportError(new Error('Revise & Generate requires an open Project with Scenes.'));
-      return;
-    }
-    var modal = el('storyboard-director-tools-modal');
-    var input = el('storyboard-director-tools-instruction');
-    var preset = el('storyboard-director-tools-preset');
-    var status = el('storyboard-director-tools-status');
-    if (!modal || !input || !preset || !status) throw new Error('Revise & Generate modal markup is missing.');
-    el('storyboard-director-tools-target').textContent =
-      'Current Project: ' + String(storyState.story.title || storyState.story.name || storyState.story.id) +
-      ' · all ' + storyState.story.sceneOrder.length + ' Scenes';
-    var sceneSelection = el('storyboard-director-tools-scene-selection');
-    sceneSelection.innerHTML = '<label class="storyboard-director-scene-select-all"><input type="checkbox" data-revise-scene-all checked> All Scenes</label>' +
-      storyState.story.sceneOrder.map(function (sceneId, index) {
-        var scene = storyState.story.scenes[sceneId] || {};
-        return '<label><input type="checkbox" data-revise-scene="' + escapeHtml(sceneId) + '" checked> ' +
-          (index + 1) + '. ' + escapeHtml(scene.title || 'Untitled Scene') + '</label>';
-      }).join('');
-    var allToggle = sceneSelection.querySelector('[data-revise-scene-all]');
-    allToggle.onchange = function () {
-      sceneSelection.querySelectorAll('[data-revise-scene]').forEach(function (input) {
-        input.checked = allToggle.checked;
-      });
-      allToggle.indeterminate = false;
-    };
-    sceneSelection.querySelectorAll('[data-revise-scene]').forEach(function (input) {
-      input.onchange = function () {
-        var boxes = Array.from(sceneSelection.querySelectorAll('[data-revise-scene]'));
-        allToggle.checked = boxes.every(function (box) { return box.checked; });
-        allToggle.indeterminate = boxes.some(function (box) { return box.checked; }) && !allToggle.checked;
-      };
-    });
-    preset.value = '';
-    input.value = '';
-    var instructionLabel = document.querySelector('label[for="storyboard-director-tools-instruction"]');
-    if (instructionLabel) instructionLabel.textContent = 'Additional direction (optional for presets)';
-    input.placeholder = 'Describe your revision, or add optional direction to a preset.';
-    sceneRevisionHistory.reset(input);
-    input.readOnly = false;
-    el('storyboard-director-tools-generate-takes').closest('label').classList.remove('hidden');
-    el('storyboard-director-tools-generate-takes').checked = false;
-    syncDirectorToolsRunLabel();
-    status.textContent = '';
-    modal.classList.remove('hidden');
-    modal.setAttribute('aria-hidden', 'false');
-    input.focus();
-  }
-
-  function closeDirectorTools() {
-    var modal = el('storyboard-director-tools-modal');
-    if (!modal) return;
-    modal.classList.add('hidden');
-    modal.setAttribute('aria-hidden', 'true');
-  }
-
   function showCoherenceReview(storyId, scenes, modelId) {
     var changed = scenes.filter(function (scene) {
       return scene.originalPrompt.trim() !== scene.prompt.trim();
@@ -6721,7 +6656,7 @@
     dialog.showModal();
   }
 
-  function runDirectorToolsCoherence(modelOverride, fromComposer) {
+  function runDirectorToolsCoherence(modelOverride) {
     var storyId = storyState.story && storyState.story.id;
     var modelId = modelOverride || storyState.director.modelId;
     var target = {kind: 'repair', storyId: storyId};
@@ -6729,14 +6664,13 @@
     if (!modelId) return Promise.reject(new Error('Choose a Director model first.'));
     if (directorTargetBlocked(target))
       return Promise.reject(new Error('This Project already has Director work pending.'));
-    var run = el(fromComposer ? 'director-chat-send' : 'storyboard-director-tools-run');
-    var status = el(fromComposer ? 'director-studio-revision-status' : 'storyboard-director-tools-status');
+    var run = el('director-chat-send');
+    var status = el('director-studio-revision-status');
     run.disabled = true;
     status.textContent = 'Starting Project coherence review…';
     return flushPendingSaves().then(function () {
       setDirectorPending(target, true);
       startDirectorActivity();
-      if (!fromComposer) closeDirectorTools();
       return directorRequest({
         storyId: storyId, operation: 'check_coherence_sequence', model: modelId
       });
@@ -6745,7 +6679,7 @@
       return consumeDirectorJob(result.jobId);
     }).catch(function (error) {
       reportError(error);
-      if (fromComposer) throw error;
+      throw error;
     }).finally(function () {
       setDirectorPending(target, false);
       finishDirectorActivity();
@@ -6753,53 +6687,6 @@
       syncDirectorToolsUi();
     });
   }
-
-  function runDirectorToolsRevision() {
-    if (el('storyboard-director-tools-preset').value === 'coherence') {
-      runDirectorToolsCoherence().catch(reportError);
-      return;
-    }
-    var input = el('storyboard-director-tools-instruction');
-    var run = el('storyboard-director-tools-run');
-    var status = el('storyboard-director-tools-status');
-    if (!input || !run || !status) throw new Error('Director Tools modal markup is missing.');
-    var generateFreshTakes = el('storyboard-director-tools-generate-takes').checked;
-    var preset = el('storyboard-director-tools-preset').value;
-    var instruction = String(input.value || '').trim() || (DIRECTOR_PASS_PRESETS[preset] && DIRECTOR_PASS_PRESETS[preset].instruction) || '';
-    if (!instruction && !preset) {
-      status.textContent = 'Choose a revision approach or enter an instruction.';
-      input.focus();
-      return;
-    }
-    run.disabled = true;
-    status.textContent = 'Starting revision…';
-    var storyId = storyState.story && storyState.story.id;
-    var target = { kind: 'repair', storyId: storyId };
-    var selectedSceneIds = Array.from(el('storyboard-director-tools-scene-selection').querySelectorAll('[data-revise-scene]:checked'))
-      .map(function (input) { return input.dataset.reviseScene; });
-    if (!selectedSceneIds.length) {
-      status.textContent = 'Select at least one Scene.';
-      run.disabled = false;
-      return;
-    }
-    var continuityContext = el('storyboard-director-tools-preset').value === 'continuity';
-    var revision = reviseScenes(
-      instruction, storyState.director.modelId, generateFreshTakes,
-      continuityContext, el('storyboard-director-tools-instruction'),
-      selectedSceneIds, preset === 'visual_direction' ? 'visual_direction' : 'standard'
-    );
-    // The target is registered synchronously once the operation has started.
-    // Dismiss the input modal now so its activity card is not obscured.
-    var started = directorTargetPending(target);
-    if (started) closeDirectorTools();
-    revision.catch(function (err) {
-      if (!started) status.textContent = String(err && err.message ? err.message : err);
-      reportError(err);
-    }).finally(function () {
-      syncDirectorToolsUi();
-    });
-  }
-
 
   // The Studio composer supplies inputs; Storyboard owns revision execution,
   // activity, incremental saves, take generation and coherence review.
@@ -6810,10 +6697,10 @@
     if (!options || !options.modelId) return Promise.reject(new Error('Choose a Director model.'));
     if (!storyState.story || storyState.story.id !== options.projectId)
       return Promise.reject(new Error('Revision destination changed. Reopen Revise Scenes.'));
-    if (options.preset === 'coherence') return runDirectorToolsCoherence(options.modelId, true);
+    if (options.preset === 'coherence') return runDirectorToolsCoherence(options.modelId);
     return reviseScenesWithOptions(options.instruction, options.modelId,
       options.generateFreshTakes === true, options.preset === 'continuity',
-      el('director-studio-revision-input'), null,
+      el('director-studio-revision-input'), options.selectedSceneIds,
       options.preset === 'visual_direction' ? 'visual_direction' : 'standard');
   };
 
@@ -6933,7 +6820,6 @@
     sceneRefineHistory = createSessionPromptHistory();
     sceneRevisionHistory = createSessionPromptHistory();
     sceneCreationHistory = createSessionPromptHistory();
-    sceneRevisionHistory.bind(el('storyboard-director-tools-instruction'));
     sceneRevisionHistory.bind(el('director-studio-revision-input'));
     sceneCreationHistory.bind(el('storyboard-scene-creation-instruction'));
 
@@ -6975,29 +6861,6 @@
     el('storyboard-scene-creation-close').onclick = closeSceneCreation;
     el('storyboard-scene-creation-cancel').onclick = closeSceneCreation;
     el('storyboard-scene-creation-run').onclick = runSceneCreation;
-    el('storyboard-director-tools-close').onclick = closeDirectorTools;
-    el('storyboard-director-tools-cancel').onclick = closeDirectorTools;
-    el('storyboard-director-tools-preset').onchange = function () {
-      var input = el('storyboard-director-tools-instruction');
-      if (!input) return;
-      if (this.value === 'continuity') input.value = DIRECTOR_PASS_PRESETS.continuity.instruction;
-      if (this.value === 'coherence') input.value = DIRECTOR_PASS_PRESETS.coherence.instruction;
-      if (this.value === 'visual_direction') input.value = '';
-      var visualDirection = this.value === 'visual_direction';
-      var instructionLabel = document.querySelector('label[for="storyboard-director-tools-instruction"]');
-      if (instructionLabel) instructionLabel.textContent = 'Additional direction (optional for presets)';
-      input.placeholder = visualDirection ? 'Optional direction for this Visual Direction pass.' :
-        this.value ? 'Optional instructions to refine this preset.' : 'Describe what should be revised across these Scenes.';
-      sceneRevisionHistory.reset(input);
-      var coherence = this.value === 'coherence';
-      syncDirectorToolsRunLabel();
-      var fresh = el('storyboard-director-tools-generate-takes').closest('label');
-      if (fresh) fresh.classList.toggle('hidden', coherence);
-      input.readOnly = coherence;
-      input.focus();
-    };
-    el('storyboard-director-tools-generate-takes').onchange = syncDirectorToolsRunLabel;
-    el('storyboard-director-tools-run').onclick = runDirectorToolsRevision;
     el('storyboard-expand-concept-btn').onclick = expandConcept;
     el('storyboard-restore-concept-btn').onclick = restorePreviousConcept;
     el('storyboard-develop-btn').onclick = developStory;

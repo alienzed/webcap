@@ -2213,9 +2213,16 @@
                             <option value="visual_direction">Visual Direction</option>
                             <option value="coherence">Check Project coherence</option>
                         </select>
+                        <div id="director-studio-revision-scene-controls" class="director-studio-revision-scene-controls">
+                            <div class="director-studio-revision-scene-heading">
+                                <label for="director-studio-revision-all"><input id="director-studio-revision-all" type="checkbox" checked> All Scenes</label>
+                                <span id="director-studio-revision-selection-count" role="status"></span>
+                            </div>
+                            <div id="director-studio-revision-scenes" class="director-studio-revision-scenes" role="group" aria-label="Scenes to revise"></div>
+                        </div>
                         <label id="director-studio-revision-fresh-label" title="Queues new Takes after revision; existing Takes remain."><input id="director-studio-revision-fresh" type="checkbox"> Generate fresh Takes</label>
-                        <label for="director-studio-revision-input" class="director-studio-revision-instruction-label">Revision instruction</label>
-                        <textarea id="director-studio-revision-input" data-no-revision-history="true" rows="6" placeholder="Describe what should be revised across these Scenes."></textarea>
+                        <label for="director-studio-revision-input" class="director-studio-revision-instruction-label">Revision direction (optional for presets)</label>
+                        <textarea id="director-studio-revision-input" data-no-revision-history="true" rows="4" placeholder="Describe what should be revised across these Scenes."></textarea>
                         <p id="director-studio-revision-status" role="status" aria-live="polite"></p>
                     </div>
                     <textarea id="director-chat-input" rows="6" placeholder="Ask the model anything…"></textarea>
@@ -2926,51 +2933,11 @@
                 </div>
             </section>
         </div>
-        <div id="storyboard-director-tools-modal" class="keep-lora-modal hidden" aria-hidden="true" data-escape-close-id="storyboard-director-tools-close">
-            <section class="keep-lora-dialog storyboard-director-tools-dialog" role="dialog" aria-modal="true" aria-labelledby="storyboard-director-tools-title">
-                <header class="keep-lora-header">
-                    <div>
-                        <h2 id="storyboard-director-tools-title">Revise Scenes</h2>
-                        <p id="storyboard-director-tools-target" class="keep-lora-source">Current Project · all Scenes</p>
-                    </div>
-                    <button id="storyboard-director-tools-close" type="button" class="training-review-modal-close" aria-label="Close Revise Scenes">&times;</button>
-                </header>
-                <div class="keep-lora-content">
-                    <div class="keep-lora-field">
-                        <div class="storyboard-director-header storyboard-director-model-tools">
-                            <label for="storyboard-director-model">Director model</label>
-                            <select id="storyboard-director-model" aria-label="Storyboard Director model"><option value="">Director unavailable</option></select><label class="storyboard-thinking-toggle hidden" title="Thinking"><input id="storyboard-director-thinking" type="checkbox" aria-label="Thinking"><span aria-hidden="true">🧠</span></label>
-                            <button id="storyboard-director-refresh" type="button" class="refresh-btn-square director-model-refresh-btn" title="Refresh Director models" aria-label="Refresh Director models">&#8635;</button>
-                        </div>
-                    </div>
-                    <div class="keep-lora-field">
-                        <label for="storyboard-director-tools-preset">Revision approach</label>
-                        <select id="storyboard-director-tools-preset">
-                            <option value="">Custom revision</option>
-                            <option value="continuity">Continuity pass</option>
-                            <option value="visual_direction">Visual Direction</option>
-                            <option value="coherence">Check Project coherence</option>
-                        </select>
-                    </div>
-                    <div class="keep-lora-field">
-                        <label>Apply to Scenes</label>
-                        <div id="storyboard-director-tools-scene-selection" class="storyboard-director-tools-scene-selection"></div>
-                    </div>
-                    <div class="keep-lora-field">
-                        <div class="storyboard-director-tools-instruction-heading">
-                            <label for="storyboard-director-tools-instruction">Additional direction (optional for presets)</label>
-                            <label class="storyboard-director-tools-fresh-takes" title="After successful revision, queues new Takes only for Scenes whose prompts changed; existing Takes are kept."><input id="storyboard-director-tools-generate-takes" type="checkbox"> Generate fresh Takes</label>
-                        </div>
-                        <textarea id="storyboard-director-tools-instruction" rows="4" placeholder="Describe your revision, or add optional direction to a preset."></textarea>
-                    </div>
-                    <p class="keep-lora-source">Revised Scene prompts save directly as the run progresses. Existing Takes are preserved.</p>
-                    <div id="storyboard-director-tools-status" class="training-history-summary" aria-live="polite"></div>
-                </div>
-                <footer class="keep-lora-footer">
-                    <button id="storyboard-director-tools-cancel" type="button" class="review-captions-btn">Cancel</button>
-                    <button id="storyboard-director-tools-run" type="button" class="training-btn">Revise Scenes</button>
-                </footer>
-            </section>
+        <!-- Retain Storyboard-owned model controls used by non-Director operations. -->
+        <div id="storyboard-director-model-controls" class="hidden" aria-hidden="true">
+            <select id="storyboard-director-model" aria-label="Storyboard Director model"><option value="">Director unavailable</option></select>
+            <label class="storyboard-thinking-toggle hidden" title="Thinking"><input id="storyboard-director-thinking" type="checkbox" aria-label="Thinking"><span aria-hidden="true">🧠</span></label>
+            <button id="storyboard-director-refresh" type="button" class="refresh-btn-square director-model-refresh-btn" title="Refresh Director models" aria-label="Refresh Director models">&#8635;</button>
         </div>
         <div id="training-run-delete-modal" class="keep-lora-modal hidden" aria-hidden="true">
             <section class="keep-lora-dialog" role="dialog" aria-modal="true" aria-labelledby="training-run-delete-title" aria-describedby="training-run-delete-warning" style="max-width:600px">

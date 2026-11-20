@@ -6813,7 +6813,7 @@
     if (options.preset === 'coherence') return runDirectorToolsCoherence(options.modelId, true);
     return reviseScenesWithOptions(options.instruction, options.modelId,
       options.generateFreshTakes === true, options.preset === 'continuity',
-      el('director-studio-revision-input'), null,
+      el('director-studio-revision-input'), options.selectedSceneIds,
       options.preset === 'visual_direction' ? 'visual_direction' : 'standard');
   };
 

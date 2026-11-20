@@ -429,7 +429,7 @@ def test_storyboard_provenance_keeps_exact_scene_take_and_reference_uses(monkeyp
     assert len(items) == 1
     assert items[0]["roles"] == ["generated", "reference"]
     assert items[0]["uses"] == [
-        {"storageId": "scene-one", "role": "take-1", "source": "storyboard", "label": "First", "takeId": "take-1"},
+        {"storageId": "scene-one", "role": "take-1", "source": "storyboard", "label": "First", "takeId": "take-1", "selected": False},
         {"storageId": "scene-two", "role": "visual", "source": "storyboard", "label": "Second"},
     ]
 
@@ -557,7 +557,7 @@ def test_copy_generated_result_into_set_preserves_source(monkeypatch, tmp_path):
     monkeypatch.setattr(external_exports.app_config, "FS_ROOT", tmp_path)
     monkeypatch.setattr(generate_store, "load_result",
                         lambda storage_id: {"mediaPath": "generations/day/run/frame.png"})
-    monkeypatch.setattr(generate_store, "resolve_result_media", lambda media_path: source)
+    monkeypatch.setattr(generate_store, "resolve_owned_result_media", lambda storage_id: source)
     result = external_exports.copy_generated_media({
         "storageIds": ["day/run"], "destination": "sets"})
     assert result["ok"] and result["copied"][0]["name"] == "frame.png"

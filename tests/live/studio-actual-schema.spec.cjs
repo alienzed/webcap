@@ -108,6 +108,14 @@ test('LIVE creative partnership — chat recommends staging, explicit Write auth
     'Preserve the night porter, paper crane, railway station doorway and rain-slick blue twilight.';
   await writeLive(page,{projectId:project.id,operation:'scene-write',sceneMode:'create',instruction});
   await expect.poll(async()=>(await story(page,project.id)).sceneOrder.length,{timeout:60000}).toBeGreaterThan(0);
+  await expect(page.locator('#director-chat-drawer')).not.toHaveClass(/studio-actions-open/);
+  await page.locator('#director-studio-actions-toggle').click();
+  await page.locator('[data-studio-tool="io"]').click();
+  await expect(page.locator('#studio-director-io-dialog')).toBeVisible();
+  await expect(page.locator('#studio-director-io-request')).toBeVisible();
+  await expect(page.locator('#studio-director-io-request-messages')).toContainText('paper crane');
+  await expect(page.locator('dialog[open]')).toHaveCount(1);
+  await page.locator('#studio-director-io-close').click();
   const saved=await story(page,project.id);
   const writeReceipt=observed.jobs.at(-1),writeRequest=observed.requests.at(-1);
   await evidence(info,'live-creative-scene-write',{model,instruction,request:writeRequest,

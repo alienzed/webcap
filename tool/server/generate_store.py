@@ -313,7 +313,11 @@ def result_for_job(job_id):
             continue
         if isinstance(payload, dict) and str(payload.get("jobId") or "") == wanted:
             media_name = Path(str(payload.get("mediaPath") or "")).name
-            if not media_name or not (manifest.parent / media_name).is_file():
+            if not media_name:
+                continue
+            try:
+                resolve_owned_result_media(manifest.parent.parent.name + "/" + manifest.parent.name)
+            except (ValueError, OSError):
                 continue
             return _listed_result_payload(manifest, payload)
     return None
@@ -359,6 +363,8 @@ def _listed_result_payload(manifest, payload):
         )
     listed["references"] = normalized_references
     listed["storageId"] = manifest.parent.parent.name + "/" + manifest.parent.name
+    if listed.get("organizedMediaPath"):
+        listed["mediaUrl"] = "/fs/generate/result/media?storageId=" + listed["storageId"]
     state = read_folder_state(directory / ".webcap_state.json")
     tags_by_media = state.get("curation_tags_by_media")
     tags_by_media = tags_by_media if isinstance(tags_by_media, dict) else {}
@@ -370,6 +376,77 @@ def _listed_result_payload(manifest, payload):
     except (TypeError, ValueError):
         listed["rating"] = 0
     return listed
+
+
+
+def resolve_owned_result_media(storage_id):
+    """Resolve a result through its own manifest, including its organized location."""
+    result_dir = _result_directory(storage_id)
+    payload = json.loads((result_dir / MANIFEST_NAME).read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("Generation manifest is invalid.")
+    organized = str(payload.get("organizedMediaPath") or "").strip()
+    if organized:
+        root = Path(app_config.FS_ROOT).resolve()
+        candidate = (root / organized).resolve()
+        if not candidate.is_relative_to(root) or not candidate.is_file():
+            raise FileNotFoundError("Organized generation media is unavailable.")
+        return candidate
+    return resolve_result_media(payload.get("mediaPath"))
+
+
+def relocate_result_media(storage_id, destination):
+    """Move only the output; preserve the stable generation manifest and references."""
+    from .external_exports import _safe_destination_dir, _unique_path
+    directory = _result_directory(storage_id)
+    manifest = directory / MANIFEST_NAME
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or not payload.get("mediaPath"):
+        raise ValueError("Generation manifest is invalid.")
+    target_dir = _safe_destination_dir(destination)
+    if not target_dir.is_dir():
+        raise ValueError("Destination folder does not exist.")
+    if target_dir.is_relative_to(app_config.output_root().resolve()):
+        raise ValueError("Choose a regular media folder outside the producer storage root.")
+    from .storage_manager import _active_generate_job_ids
+    if directory.name in _active_generate_job_ids():
+        raise RuntimeError("Generation is still active.")
+    source = resolve_owned_result_media(storage_id)
+    root = Path(app_config.FS_ROOT).resolve()
+    original_name = Path(str(payload["mediaPath"])).name
+    destination_name = directory.name + "-" + original_name
+    target = _unique_path(target_dir, destination_name)
+    shutil.move(str(source), str(target))
+    updated = dict(payload)
+    updated["organizedMediaPath"] = target.relative_to(root).as_posix()
+    try:
+        _atomic_write_json(manifest, updated)
+    except Exception:
+        shutil.move(str(target), str(source))
+        raise
+    return {"ok": True, "storageId": storage_id,
+            "location": updated["organizedMediaPath"], "moved": 1}
+
+
+def restore_result_media_for_deletion(storage_id):
+    """Bring an organized file back under its owner before trashing the owner bundle."""
+    directory = _result_directory(storage_id)
+    manifest = directory / MANIFEST_NAME
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or not payload.get("organizedMediaPath"):
+        return
+    source = resolve_owned_result_media(storage_id)
+    original = directory / Path(str(payload.get("mediaPath") or "")).name
+    if original.exists():
+        raise RuntimeError("Generation owner already contains an output; cannot reconcile organized media.")
+    shutil.move(str(source), str(original))
+    updated = dict(payload)
+    del updated["organizedMediaPath"]
+    try:
+        _atomic_write_json(manifest, updated)
+    except Exception:
+        shutil.move(str(original), str(source))
+        raise
 
 
 def rate_result(storage_id, rating):
@@ -401,8 +478,9 @@ def tag_result(storage_id, tags):
     if not isinstance(payload, dict):
         raise ValueError("Generation manifest is invalid.")
     media_name = Path(str(payload.get("mediaPath") or "")).name
-    if not media_name or not (directory / media_name).is_file():
+    if not media_name:
         raise FileNotFoundError("Generation output is unavailable.")
+    resolve_owned_result_media(storage_id)
     normalized = set_media_curation_tags(directory / ".webcap_state.json", media_name, tags)
     return {"storageId": str(storage_id or "").strip().replace("\\", "/"),
             "mediaKey": media_name, "tags": normalized}

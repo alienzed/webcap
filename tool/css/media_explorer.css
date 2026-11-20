@@ -978,3 +978,14 @@
 @media(max-width:760px) {
   .media-explorer-workspace .media-explorer-saved-views {order:3;flex:1 1 100%;}
 }
+
+/* Explorer folder-role mappings reuse the existing action dialog style. */
+#media-explorer-shortcuts-dialog { max-width:min(720px,94vw); }
+#media-explorer-shortcuts-dialog form { display:grid;gap:12px; }
+#media-explorer-shortcuts-rows { display:grid;gap:8px; }
+.media-explorer-shortcut-row { display:grid;grid-template-columns:55px minmax(110px,1fr) minmax(150px,2fr);gap:8px; }
+.media-explorer-shortcut-row input { min-width:0;width:100%;box-sizing:border-box; }
+@media(max-width:600px) {
+  .media-explorer-shortcut-row { grid-template-columns:45px minmax(80px,1fr); }
+  .media-explorer-shortcut-row input:last-child { grid-column:1/-1; }
+}

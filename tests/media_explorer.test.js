@@ -96,7 +96,10 @@ function fixture(hash = '#/media') {
     querySelectorAll: selector => selector.includes('[data-explorer-mode]') ? modeButtons :
       selector.includes('[data-media-role]') ? buttons.filter(b => 'mediaRole' in b.dataset) :
       selector.includes('[data-media-source]') ? buttons.filter(b => 'mediaSource' in b.dataset) : buttons };
-  const window = { location: {hash}, prompt: () => 'child', confirm: () => true, reportConsoleError: (source, error) => errors.push(error), syncApplicationShellContext() {}, syncShellLocationRoute() {} };
+  const stored = new Map();
+  const window = { location: {hash}, prompt: () => 'child', confirm: () => true,
+    localStorage:{getItem:key=>stored.get(key)||null,setItem:(key,value)=>stored.set(key,value)},
+    reportConsoleError: (source, error) => errors.push(error), syncApplicationShellContext() {}, syncShellLocationRoute() {} };
   for (const owner of ['Generate', 'TestBench', 'Storyboard', 'Storage']) window['close' + owner + 'Activity'] = () => closed.push(owner);
   vm.runInNewContext(fs.readFileSync('tool/js/media_explorer.js', 'utf8'), {
     document, window, console, URLSearchParams, AbortController, Set, Map, setTimeout, clearTimeout,
@@ -1009,4 +1012,207 @@ test('Saved Unsorted view restores the optional triage filter without changing o
   assert.equal(restored.get('source'), 'generate');
   assert.equal(restored.get('curation'), 'unsorted');
   assert.equal(restored.get('full'), '1');
+});
+
+
+test('Folder shortcut configuration is root-scoped and does not move anything on setup', async () => {
+  const f = fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], []);
+  f.buttons.find(button => button.dataset.mediaSource === 'external').click();
+  f.nodes['media-explorer-external-path'].value = '/sample-library';
+  f.nodes['media-explorer-open-path'].click();
+  await f.settle(f.pending.at(-1), [], true, {folders:['Inbox','Keepers'],revision:1});
+  const settings=f.nodes['media-explorer-shortcuts-open'];
+  assert.equal(settings.disabled,false);
+  settings.click();
+  const dialog=f.nodes['media-explorer-shortcuts-dialog'];
+  assert.equal(dialog.open,true);
+  const rows=f.nodes['media-explorer-shortcuts-rows'].children;
+  assert.deepEqual(rows.map(row=>row.children[0].value),['S','D','A','F']);
+  rows[0].children[2].value='Inbox';
+  rows[1].children[2].value='Keepers';
+  f.nodes['media-explorer-shortcuts-form'].emit('submit',{preventDefault(){}});
+  assert.equal(dialog.open,false);
+  const stored=JSON.parse(f.window.localStorage.getItem('webcap.mediaExplorer.folderShortcuts.v1'));
+  assert.equal(stored['external:/sample-library'][0].folder,'Inbox');
+  assert.equal(stored['external:/sample-library'][1].folder,'Keepers');
+  assert.equal(f.pending.filter(request=>request.url.includes('/move')).length,0);
+});
+
+test('S / D / A / F move selected external files using existing move API, without confirmation', async () => {
+  const f = fixture();
+  let confirms=0;
+  f.window.confirm=()=>{confirms++;return true;};
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], []);
+  f.buttons.find(button => button.dataset.mediaSource === 'external').click();
+  f.nodes['media-explorer-external-path'].value='/sample-library';
+  f.nodes['media-explorer-open-path'].click();
+  const originals=[
+    {id:'external:one',source:'external',relativePath:'one.mp4',fileName:'one.mp4',mediaKind:'video',rating:null,tags:[]},
+    {id:'external:two',source:'external',relativePath:'two.mp4',fileName:'two.mp4',mediaKind:'video',rating:null,tags:[]}
+  ];
+  await f.settle(f.pending.at(-1),originals,true,{folders:[],revision:1});
+  f.nodes['media-explorer-shortcuts-open'].click();
+  const rows=f.nodes['media-explorer-shortcuts-rows'].children;
+  rows[0].children[2].value='Inbox';
+  f.nodes['media-explorer-shortcuts-form'].emit('submit',{preventDefault(){}});
+  const cards=f.nodes['media-explorer-grid'].children;
+  cards[0].querySelector('.media-explorer-card-open').click({stopPropagation(){},preventDefault(){}});
+  const before=f.pending.length;
+  f.key(cards[0].querySelector('.media-explorer-card-open'),'s');
+  assert.equal(f.pending.length,before+1);
+  const move=f.pending.at(-1);
+  assert.equal(move.url,'/fs/media_explorer/external/move');
+  assert.deepEqual(JSON.parse(move.options.body),{path:'/sample-library',files:['one.mp4'],destination:'Inbox'});
+  assert.equal(confirms,0);
+  await f.settle(move,[],true);
+  assert.ok(f.pending.at(-1).url.startsWith('/fs/media_explorer/external?'));
+});
+
+test('Folder shortcut editing rejects duplicate keys and path traversal before saving', async () => {
+  const f=fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0],[]);
+  f.buttons.find(button=>button.dataset.mediaSource==='external').click();
+  f.nodes['media-explorer-external-path'].value='/sample-library';
+  f.nodes['media-explorer-open-path'].click();
+  await f.settle(f.pending.at(-1),[],true,{folders:[],revision:1});
+  f.nodes['media-explorer-shortcuts-open'].click();
+  const rows=f.nodes['media-explorer-shortcuts-rows'].children;
+  rows[1].children[0].value='S';
+  rows[0].children[2].value='../escape';
+  f.nodes['media-explorer-shortcuts-form'].emit('submit',{preventDefault(){}});
+  assert.equal(f.nodes['media-explorer-shortcuts-dialog'].open,true);
+  assert.match(f.nodes['media-explorer-shortcuts-status'].textContent,/distinct letter keys/);
+  assert.equal(f.window.localStorage.getItem('webcap.mediaExplorer.folderShortcuts.v1'),null);
+});
+
+test('Delete uses existing external Trash action and confirmation',async()=>{
+  const f=fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0],[]);
+  f.buttons.find(button=>button.dataset.mediaSource==='external').click();
+  f.nodes['media-explorer-external-path'].value='/sample-library';
+  f.nodes['media-explorer-open-path'].click();
+  await f.settle(f.pending.at(-1),[
+    {id:'external:one',source:'external',relativePath:'one.mp4',fileName:'one.mp4',
+      mediaKind:'video',rating:null,tags:[]}
+  ],true,{folders:[],revision:1});
+  const card=f.nodes['media-explorer-grid'].children[0];
+  f.key(card.querySelector('.media-explorer-card-open'),'Delete');
+  const req=f.pending.at(-1);
+  assert.equal(req.url,'/fs/media_explorer/external/trash');
+  assert.deepEqual(JSON.parse(req.options.body),{
+    path:'/sample-library',files:['one.mp4'],destination:''
+  });
+});
+
+test('Delete does not offer to Trash Test results through an unrelated owner',async()=>{
+  const f=fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0],[{
+    id:'test:one',source:'test',relativePath:'one.mp4',fileName:'one.mp4',
+    mediaKind:'video',storageId:'session',ownerFolder:'set',rating:null,tags:[]
+  }]);
+  const card=f.nodes['media-explorer-grid'].children[0];
+  const n=f.pending.length;
+  f.key(card.querySelector('.media-explorer-card-open'),'Delete');
+  assert.equal(f.pending.length,n);
+});
+
+test('Generator shortcut moves via owner-preserving API and retains record identity', async()=>{
+  const f=fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0],[{...media('render'),storageId:'2026/render'}]);
+  f.nodes['media-explorer-shortcuts-open'].click();
+  assert.equal(f.nodes['media-explorer-shortcuts-dialog'].open,true);
+  f.nodes['media-explorer-shortcuts-rows'].children[0].children[2].value='Media/Keepers';
+  f.nodes['media-explorer-shortcuts-form'].emit('submit',{preventDefault(){}});
+  const card=f.nodes['media-explorer-grid'].children[0];
+  const count=f.pending.length;
+  f.key(card.querySelector('.media-explorer-card-open'),'s');
+  assert.equal(f.pending.length,count+1);
+  const request=f.pending.at(-1);
+  assert.equal(request.url,'/fs/generate/result/move');
+  assert.deepEqual(JSON.parse(request.options.body),{
+    storageIds:['2026/render'],destination:'Media/Keepers'
+  });
+  await f.settle(request,[],true,{moved:1,results:[{location:'Media/Keepers/render.mp4'}]});
+  assert.ok(f.pending.at(-1).url.startsWith('/fs/media_explorer?'));
+});
+
+test('Test shortcut copies results while leaving their session files and records in place',async()=>{
+  const f=fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0],[{
+    id:'test:one',source:'test',mediaKind:'video',fileName:'one.mp4',
+    storageId:'session',ownerFolder:'set',role:'generated',rating:null,tags:[]
+  }]);
+  f.nodes['media-explorer-shortcuts-open'].click();
+  f.nodes['media-explorer-shortcuts-rows'].children[1].children[2].value='Media/Keepers';
+  f.nodes['media-explorer-shortcuts-form'].emit('submit',{preventDefault(){}});
+  const card=f.nodes['media-explorer-grid'].children[0];
+  f.key(card.querySelector('.media-explorer-card-open'),'d');
+  assert.equal(f.pending.at(-1).url,'/fs/media_explorer/test/copy');
+  assert.deepEqual(JSON.parse(f.pending.at(-1).options.body),{
+    results:[{folder:'set',session:'session',mediaFile:'one.mp4'}],destination:'Media/Keepers'
+  });
+});
+
+test('Storyboard Takes do not get folder shortcut actions',async()=>{
+  const f=fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0],[{
+    id:'storyboard:take',source:'storyboard',mediaKind:'video',fileName:'take.mp4',
+    storageId:'project',role:'generated',rating:null,tags:[]
+  }]);
+  f.nodes['media-explorer-shortcuts-open'].click();
+  f.nodes['media-explorer-shortcuts-rows'].children[0].children[2].value='Media/Keepers';
+  f.nodes['media-explorer-shortcuts-form'].emit('submit',{preventDefault(){}});
+  const card=f.nodes['media-explorer-grid'].children[0];
+  const n=f.pending.length;
+  f.key(card.querySelector('.media-explorer-card-open'),'s');
+  assert.equal(f.pending.length,n);
+});
+
+test('Selected Storyboard Take is visibly distinguished without changing ratings or shortcuts',async()=>{
+  const f=fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0],[
+    {id:'story:take-one',source:'storyboard',mediaKind:'video',fileName:'one.mp4',
+      role:'generated',storageId:'story-a',selectedTake:true,rating:null,tags:[],
+      contextLabel:'Story / Scene'},
+    {id:'story:take-two',source:'storyboard',mediaKind:'video',fileName:'two.mp4',
+      role:'generated',storageId:'story-a',selectedTake:false,rating:null,tags:[],
+      contextLabel:'Story / Scene'}
+  ]);
+  const cards=f.nodes['media-explorer-grid'].children;
+  assert.match(cards[0].textContent+' '+cards[0].querySelector('.media-explorer-card-sub').textContent,/Selected Take/);
+  assert.doesNotMatch(cards[1].querySelector('.media-explorer-card-sub').textContent,/Selected Take/);
+  cards[0].click();
+  assert.ok(f.nodes['media-explorer-inspector-body'].querySelectorAll('dd').some(node=>node.textContent==='Selected Take'));
+});
+
+test('Fullscreen keyboard sorting advances to next unsorted Generation without closing viewer', async()=>{
+  const f=fixture();
+  f.window.openMediaExplorerActivity();
+  const first={...media('render-a'),storageId:'2026/render-a'};
+  const next={...media('render-b'),storageId:'2026/render-b'};
+  await f.settle(f.pending[0],[first,next]);
+  f.nodes['media-explorer-shortcuts-open'].click();
+  f.nodes['media-explorer-shortcuts-rows'].children[0].children[2].value='Keepers';
+  f.nodes['media-explorer-shortcuts-form'].emit('submit',{preventDefault(){}});
+  f.nodes['media-explorer-grid'].children[0].emit('dblclick');
+  assert.equal(f.nodes['media-explorer-loupe'].open,true);
+  f.key(f.nodes['media-explorer-loupe'],'s');
+  const request=f.pending.at(-1);
+  assert.equal(request.url,'/fs/generate/result/move');
+  await f.settle(request,[],true,{moved:1});
+  const refreshed=f.pending.at(-1);
+  assert.match(refreshed.url,/^\/fs\/media_explorer\?/);
+  await f.settle(refreshed,[next]);
+  assert.equal(f.nodes['media-explorer-loupe'].open,true);
+  assert.match(f.nodes['media-explorer-loupe-name'].textContent,/render-b/);
 });

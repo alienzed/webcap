@@ -3052,6 +3052,39 @@ def generate_result_tags_route():
         return jsonify({"ok": False, "error": str(exc)}), 500
 
 
+@app.route("/fs/generate/result/move", methods=["POST"])
+def generate_result_move_route():
+    try:
+        from .generate_store import relocate_result_media
+        data = request.get_json(silent=True) or {}
+        storage_ids = data.get("storageIds")
+        if not isinstance(storage_ids, list) or not storage_ids or len(storage_ids) != len(set(map(str, storage_ids))):
+            raise ValueError("Select one or more unique Generation results.")
+        relocated = []
+        for storage_id in storage_ids:
+            try:
+                relocated.append(relocate_result_media(storage_id, data.get("destination")))
+            except Exception as exc:
+                raise RuntimeError("Moved " + str(len(relocated)) + "/" + str(len(storage_ids)) +
+                                   " results; remaining move failed: " + str(exc)) from exc
+        return jsonify({"ok": True, "moved": len(relocated), "results": relocated})
+    except (ValueError, OSError, RuntimeError) as exc:
+        app.logger.exception("GENERATE RESULT MOVE FAILED")
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/generate/result/media", methods=["GET"])
+def generate_result_owned_media_route():
+    try:
+        from .generate_store import resolve_owned_result_media
+        media_path = resolve_owned_result_media(request.args.get("storageId", ""))
+        return send_from_directory(str(media_path.parent), media_path.name)
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except (ValueError, OSError, RuntimeError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/generate/media", methods=["GET"])
 def generate_media_route():
     try:

@@ -116,11 +116,31 @@ def discover_generate(limit=500):
         created = int(record.get("createdAt") or 0)
         model = str(record.get("modelId") or "")
         media = str(record.get("mediaPath") or "")
-        output = _item(media, "generated", storage_id, created,
-                       record.get("rating", 0), model)
+        if record.get("organizedMediaPath"):
+            from .generate_store import resolve_owned_result_media
+            try:
+                actual = resolve_owned_result_media(storage_id)
+                output = {
+                    "id": "generate:" + media, "source": "generate",
+                    "storageId": storage_id, "role": "generated",
+                    "mediaKind": _kind(actual), "fileName": actual.name,
+                    "mediaPath": media,
+                    "mediaUrl": "/fs/generate/result/media?storageId=" + quote(storage_id, safe=""),
+                    "relativePath": str(record["organizedMediaPath"]),
+                    "ownerFolder": Path(str(record["organizedMediaPath"])).parent.as_posix(),
+                    "createdAt": created, "rating": record.get("rating", 0),
+                    "model": model, "uses": [], "fileSize": actual.stat().st_size,
+                    "tags": [],
+                }
+            except (ValueError, OSError):
+                output = None
+        else:
+            output = _item(media, "generated", storage_id, created,
+                           record.get("rating", 0), model)
         if output:
             output.update(_record_details(record))
             output["tags"] = record.get("tags") if isinstance(record.get("tags"), list) else []
+            output["organizedMediaPath"] = record.get("organizedMediaPath") or ""
             output["contextLabel"] = storage_id
             items[output["id"]] = output
         references = record.get("references") or {}
@@ -369,8 +389,10 @@ def discover_storyboards():
                 use = {"storageId": str(scene_id), "role": label, "source": "storyboard", "label": str(scene.get("title") or scene_id)}
                 if role != "reference":
                     use["takeId"] = label
+                    use["selected"] = str(scene.get("selectedTakeId") or "") == str(label)
                 if identity in found:
                     found[identity]["uses"].append(use)
+                    if use.get("selected"): found[identity]["selectedTake"] = True
                     if role not in found[identity]["roles"]:
                         found[identity]["roles"].append(role)
                     continue
@@ -387,6 +409,7 @@ def discover_storyboards():
                     "contextLabel": str(story.get("title") or story_id) + " / " + str(scene.get("title") or scene_id),
                     "roles": [role], "fileSize": file.stat().st_size,
                     "uses": [use],
+                    "selectedTake": bool(use.get("selected")),
                 }
                 if role != "reference":
                     found[identity]["rating"] = entry.get("rating")
@@ -476,7 +499,8 @@ def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", f
         # Only Generate results participate; references are never an unsorted render.
         results = [item for item in results if item["source"] == "generate"
                    and item["role"] == "generated"
-                   and not item.get("rating") and not item.get("tags")]
+                   and not item.get("rating") and not item.get("tags")
+                   and not item.get("organizedMediaPath")]
     if rating:
         if rating == "unrated":
             results = [item for item in results if not item.get("rating")]

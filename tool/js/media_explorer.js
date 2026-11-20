@@ -157,6 +157,150 @@
       return body;
     });});
   }
+
+  // Folder roles are ordinary destinations, not media states. Each external root
+  // has independent, browser-local preferences; no folders are created implicitly.
+  var folderShortcutDefaults = [
+    {key:'s',label:'Inbox',folder:''},
+    {key:'d',label:'Keepers',folder:''},
+    {key:'a',label:'Favorites',folder:''},
+    {key:'f',label:'Archive',folder:''}
+  ];
+  var folderShortcutMemory = {}, shortcutMovePending = false;
+  function folderShortcutConfig() {
+    var root = isExternal() ? 'external:' + String(externalPath || '') : 'managed';
+    var stored = folderShortcutMemory[root];
+    if (!stored) {
+      try {
+        var all = JSON.parse(window.localStorage.getItem('webcap.mediaExplorer.folderShortcuts.v1') || '{}');
+        stored = all[root];
+      } catch (_) { stored = null; }
+    }
+    return folderShortcutDefaults.map(function (entry, index) {
+      var value = Array.isArray(stored) ? stored[index] : null;
+      return {
+        key:value && typeof value.key === 'string' ? value.key.toLowerCase() : entry.key,
+        label:value && typeof value.label === 'string' ? value.label : entry.label,
+        folder:value && typeof value.folder === 'string' ? value.folder : entry.folder
+      };
+    });
+  }
+  function saveFolderShortcutConfig(config) {
+    var root = isExternal() ? 'external:' + String(externalPath || '') : 'managed';
+    folderShortcutMemory[root] = config;
+    try {
+      var store = JSON.parse(window.localStorage.getItem('webcap.mediaExplorer.folderShortcuts.v1') || '{}');
+      store[root] = config;
+      window.localStorage.setItem('webcap.mediaExplorer.folderShortcuts.v1',JSON.stringify(store));
+    } catch (error) {
+      // Browser storage can be disabled; the settings still work for this session.
+      window.reportConsoleError('Media Explorer folder shortcuts',error);
+    }
+  }
+  function configuredFolderShortcuts() {
+    return folderShortcutConfig().filter(function (entry) {return !!entry.folder;});
+  }
+  function folderShortcutDestination(entry, chosen) {
+    if (shortcutMovePending || !entry || !entry.folder || !chosen.length) return;
+    var allExternal = chosen.every(function (item) {return item.source === 'external';});
+    var allGenerate = chosen.every(function (item) {
+      return item.source === 'generate' && item.role === 'generated' && item.storageId;
+    });
+    var allTest = chosen.every(function (item) {
+      return item.source === 'test' && item.ownerFolder && item.storageId;
+    });
+    if (!allExternal && !allGenerate && !allTest) return;
+    var endpoint, payload;
+    if (allExternal) {
+      if (!externalPath) return;
+      endpoint = '/fs/media_explorer/external/move';
+      payload = {path:externalPath,files:chosen.map(function (item) {return item.relativePath;}),destination:entry.folder};
+    } else if (allGenerate) {
+      endpoint = '/fs/generate/result/move';
+      payload = {storageIds:Array.from(new Set(chosen.map(function (item) {return item.storageId;}))),destination:entry.folder};
+    } else {
+      endpoint = '/fs/media_explorer/test/copy';
+      payload = {results:chosen.map(function (item) {
+        return {folder:item.ownerFolder,session:item.storageId,mediaFile:item.fileName};
+      }),destination:entry.folder};
+    }
+    var viewerWasOpen = el('media-explorer-loupe').open;
+    var viewerIndex = active;
+    var movedIds = chosen.map(function (item) {return item.id;});
+    shortcutMovePending = true;
+    return fetch(endpoint,{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)
+    }).then(function (res) {return res.json().then(function (body) {
+      if (!res.ok || !body.ok) throw Error(body.error || 'Folder shortcut failed');
+      return body;
+    });}).then(function (result) {
+      if (allExternal) {
+        if (viewerWasOpen) load(true,{refreshFilesystem:true,advanceIndex:viewerIndex,movedIds:movedIds});
+        else refreshExternalFiles();
+      } else if (allGenerate) {
+        load(true,viewerWasOpen ? {advanceIndex:viewerIndex,movedIds:movedIds} : {});
+      } else {
+        el('media-explorer-status').dataset.state = 'success';
+        el('media-explorer-status').textContent =
+          'Copied '+(result.copied || []).length+' item(s) to '+entry.label+'. Originals retained.';
+      }
+      if (result.warning) report(new Error(result.warning));
+    }).catch(report).finally(function () {shortcutMovePending = false;});
+  }
+  function folderShortcutTarget(item) {
+    if (selected.size && selected.has(item.id)) return items.filter(function (entry) {return selected.has(entry.id);});
+    return item ? [item] : [];
+  }
+  function openFolderShortcutSettings() {
+    if (isExternal() && !externalPath) return;
+    var host = el('media-explorer-shortcuts-rows');
+    host.replaceChildren();
+    folderShortcutConfig().forEach(function (entry) {
+      var row = document.createElement('div');
+      row.className = 'media-explorer-shortcut-row';
+      var key = document.createElement('input');
+      key.value = entry.key.toUpperCase(); key.maxLength = 1;
+      key.setAttribute('aria-label','Shortcut key for '+entry.label);
+      key.dataset.shortcutField = 'key';
+      var label = document.createElement('input');
+      label.value = entry.label; label.setAttribute('aria-label','Folder role label');
+      label.dataset.shortcutField = 'label';
+      var folder = document.createElement('input');
+      folder.value = entry.folder;
+      folder.placeholder = 'Existing folder path (relative to root)';
+      folder.setAttribute('aria-label','Destination folder for '+entry.label);
+      folder.dataset.shortcutField = 'folder';
+      row.appendChild(key); row.appendChild(label); row.appendChild(folder);
+      host.appendChild(row);
+    });
+    el('media-explorer-shortcuts-status').textContent = '';
+    el('media-explorer-shortcuts-dialog').showModal();
+  }
+  function saveFolderShortcutSettings(event) {
+    event.preventDefault();
+    var rows = Array.from(el('media-explorer-shortcuts-rows').children);
+    var config = rows.map(function (row) {
+      return {
+        key:row.children[0].value.trim().toLowerCase(),
+        label:row.children[1].value.trim(),
+        folder:row.children[2].value.trim().replace(/\\/g,'/')
+      };
+    });
+    var keys = config.map(function (entry) {return entry.key;});
+    var invalid = config.some(function (entry) {
+      return !/^[a-z]$/.test(entry.key) || entry.key === 'z' || !entry.label ||
+        (entry.folder && (entry.folder.startsWith('/') ||
+          entry.folder.split('/').some(function (part) {return part === '..' || part === '.' || !part;})));
+    });
+    if (invalid || new Set(keys).size !== keys.length) {
+      el('media-explorer-shortcuts-status').textContent =
+        'Use distinct letter keys (Z is reserved), a label, and an existing relative folder path.';
+      return;
+    }
+    saveFolderShortcutConfig(config);
+    el('media-explorer-shortcuts-dialog').close();
+  }
+
   function createExternalFolder() {
     if (!isExternal() || !externalPath) return;
     promptMediaAction('Create folder in /'+externalDirectory, '', 'Create folder', function (name) {
@@ -593,6 +737,11 @@
       actions.push({label:'Edit tags…',run:function () {editMediaTags(item);}});
       actions.push({label:'Rename…',run:function () {renameExternalFile(item);}});
       actions.push({label:'Move to folder…',run:function () {externalMutation(item,'move');}});
+      configuredFolderShortcuts().forEach(function (entry) {
+        actions.push({label:'Move to '+entry.label+' ('+entry.key.toUpperCase()+')',run:function () {
+          folderShortcutDestination(entry,folderShortcutTarget(item));
+        }});
+      });
       var edit = [];
       if (item.mediaKind === 'video') {
         edit.push({label:'Clip video to Set…',run:function () {openExternalClipEditor(item);}});
@@ -635,6 +784,14 @@
             (entry.source==='epoch' || entry.source==='storyboard');
         }) : [item]);}});
       actions.push({label:'Edit tags…',run:function () {editMediaTags(item);}});
+    }
+    if ((item.source === 'generate' && item.role === 'generated' && item.storageId) ||
+        (item.source === 'test' && item.ownerFolder && item.storageId)) {
+      configuredFolderShortcuts().forEach(function (entry) {
+        actions.push({label:(item.source === 'generate' ? 'Move to ' : 'Copy to ')+entry.label+' ('+entry.key.toUpperCase()+')',run:function () {
+          folderShortcutDestination(entry,folderShortcutTarget(item));
+        }});
+      });
     }
     if (item.source==='external' ||
         (item.source==='generate' && item.role==='generated' && item.storageId) ||
@@ -821,6 +978,8 @@
     el('media-explorer-analyze-quality').classList.toggle('hidden', !external);
     el('media-explorer-external-path-bar').classList.toggle('hidden', !external);
     el('media-explorer-external-navigation').classList.toggle('hidden', !external);
+    var shortcutButton = el('media-explorer-shortcuts-open');
+    shortcutButton.disabled = external && !externalPath;
     var createFolder = el('media-explorer-new-folder');
     if (createFolder) {
       createFolder.disabled = !externalPath || !external;
@@ -975,6 +1134,7 @@
   }
   function cardSummary(item) {
     return ((item.source === 'generate' && item.role !== 'reference' ? item.model : item.contextLabel) || item.model || sourceNames[item.source]) +
+      (item.selectedTake ? ' · Selected Take' : '') +
       (item.rating ? ' · ★ ' + item.rating : '');
   }
   function badgeText(item) {
@@ -995,6 +1155,7 @@
     dl.replaceChildren();
     var facts = mediaFacts.get(item.id) || {};
     detail('Roles', (item.roles || [item.role]).map(function (role) { return roleNames[role] || role; }).join(' · '), dl);
+    if (item.source === 'storyboard' && item.selectedTake) detail('Storyboard', 'Selected Take', dl);
     detail('Producer', sourceNames[item.source], dl); detail('Model', item.model, dl);
     detail('Workflow', item.workflow, dl);
     detail('Set', item.ownerFolder, dl);
@@ -1423,6 +1584,7 @@
     open.appendChild(frame);
     var badge = document.createElement('span'); badge.className = 'media-explorer-card-badge';
     text(badge, badgeText(item));
+    if (item.selectedTake) { badge.title = 'Selected Take in Storyboard'; badge.setAttribute('aria-label','Selected Take in Storyboard'); }
     frame.appendChild(badge);
     var meta = document.createElement('div'); meta.className = 'media-explorer-card-meta';
     var name = document.createElement('div'); name.className = 'media-explorer-card-name';
@@ -1695,6 +1857,19 @@
       }
       count(); renderSideList(); updateSelection(); renderMainPreview();
       if (!isExternal()) facets(data.facets);
+      if (options.advanceIndex != null && el('media-explorer-loupe').open) {
+        var next = Math.min(options.advanceIndex, items.length - 1);
+        if (items.length && options.movedIds && options.movedIds.includes(items[next].id)) {
+          next = items.findIndex(function (item, index) {
+            return index > next && !options.movedIds.includes(item.id);
+          });
+          if (next < 0) next = items.findIndex(function (item) {
+            return !options.movedIds.includes(item.id);
+          });
+        }
+        if (next >= 0 && items.length) openLoupe(next);
+        else el('media-explorer-loupe').close();
+      }
       needsLoad = false;
       if (isExternal()) {
         if (!data.complete) {
@@ -2094,6 +2269,9 @@
       showSavedViews(payload.views,'');
     });}).catch(report);
   });
+  el('media-explorer-shortcuts-open').addEventListener('click',openFolderShortcutSettings);
+  el('media-explorer-shortcuts-cancel').addEventListener('click',function () {el('media-explorer-shortcuts-dialog').close();});
+  el('media-explorer-shortcuts-form').addEventListener('submit',saveFolderShortcutSettings);
   var newFolderButton = document.createElement('button');
   newFolderButton.type = 'button'; newFolderButton.className = 'review-captions-btn';
   newFolderButton.id = 'media-explorer-new-folder'; newFolderButton.textContent = '+ New folder';
@@ -2412,11 +2590,61 @@
     if (!el('media-explorer-workspace').contains(event.target)) return;
     if (event.target.closest('input, select, textarea, [contenteditable="true"]') && event.target.type !== 'checkbox') return;
     var loupe = el('media-explorer-loupe').open;
+    if ((event.key === 'Delete' || event.key === 'Backspace') &&
+        !event.ctrlKey && !event.altKey && !event.metaKey &&
+        !el('media-explorer-shortcuts-dialog').open) {
+      var focusedCard = event.target.closest('.media-explorer-card');
+      var focusedRow = event.target.closest('.media-explorer-side-row');
+      var focusedItem = loupe ? items[active] :
+        focusedCard ? items[Number(focusedCard.dataset.index)] :
+        focusedRow ? items.find(function (entry) {return entry.id === focusedRow.dataset.id;}) : null;
+      var chosen = selected.size ? items.filter(function (item) {return selected.has(item.id);}) :
+        focusedItem ? [focusedItem] : [];
+      var canTrash = chosen.length && chosen.every(function (item) {
+        return item.source === 'external' ||
+          (item.source === 'generate' && item.role === 'generated' && item.storageId);
+      });
+      if (canTrash && (loupe || focusedCard || focusedRow)) {
+        event.preventDefault();
+        if (loupe) el('media-explorer-loupe').close();
+        if (chosen[0].source === 'external' && chosen.every(function(item) {return item.source === 'external';}))
+          externalMutation(chosen[0],'trash');
+        else if (chosen.every(function (item) {return item.source === 'generate';}))
+          trashGenerations(chosen[0]);
+        else report(new Error('Select files from one source to move to Trash.'));
+        return;
+      }
+    }
     if (!loupe && event.key === 'Escape') { selected.clear(); updateSelection(); selectItem(-1); return; }
     if (!loupe && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
       event.preventDefault(); items.forEach(function (item) { selected.add(item.id); }); updateSelection(); return;
     }
-    if (!loupe && !event.target.closest('.media-explorer-card')) return;
+    // Single-key file sorting works in gallery, list, and fullscreen viewer.
+    // Preserve the existing 1–5 rating keys and all text-entry shortcuts.
+    var cardTarget = event.target.closest('.media-explorer-card');
+    var sideTarget = event.target.closest('.media-explorer-side-row');
+    if (!event.ctrlKey && !event.metaKey && !event.altKey &&
+        !event.shiftKey && !el('media-explorer-shortcuts-dialog').open &&
+        !el('media-explorer-export-dialog').open &&
+        /^[a-z]$/i.test(event.key) &&
+        (loupe || cardTarget || sideTarget)) {
+      var match = configuredFolderShortcuts().find(function (entry) {
+        return entry.key === event.key.toLowerCase();
+      });
+      if (match) {
+        var focusedItem = loupe ? items[active] :
+          cardTarget ? items[Number(cardTarget.dataset.index)] :
+          items.find(function (entry) {return entry.id === sideTarget.dataset.id;});
+        var targets = selected.size ? items.filter(function (item) {return selected.has(item.id);}) :
+          focusedItem ? [focusedItem] : [];
+        if (targets.length) {
+          event.preventDefault();
+          folderShortcutDestination(match,targets);
+        }
+        return;
+      }
+    }
+    if (!loupe && !cardTarget) return;
     var focused = Number(event.target.closest('.media-explorer-card') && event.target.closest('.media-explorer-card').dataset.index);
     if (!loupe && (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10'))) {
       var targetCard = event.target.closest('.media-explorer-card');

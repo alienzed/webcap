@@ -84,7 +84,7 @@ def copy_media(data):
 
 def copy_generated_media(data):
     """Copy owner-validated Generate results into a Set without moving originals."""
-    from .generate_store import load_result, resolve_result_media
+    from .generate_store import load_result, resolve_owned_result_media
     storage_ids = data.get("storageIds")
     if not isinstance(storage_ids, list) or not storage_ids or len(storage_ids) != len(set(storage_ids)):
         raise ValueError("Select one or more unique generated results.")
@@ -93,7 +93,7 @@ def copy_generated_media(data):
         if not isinstance(storage_id, str) or not storage_id.strip():
             raise ValueError("Invalid generation identifier.")
         result = load_result(storage_id)
-        source = resolve_result_media(result.get("mediaPath"))
+        source = resolve_owned_result_media(storage_id)
         sources.append((source, storage_id))
     destination = _destination(data)
     copied = []

@@ -139,6 +139,7 @@ def discover_generate(limit=500):
         if output:
             output.update(_record_details(record))
             output["tags"] = record.get("tags") if isinstance(record.get("tags"), list) else []
+            output["organizedMediaPath"] = record.get("organizedMediaPath") or ""
             output["contextLabel"] = storage_id
             items[output["id"]] = output
         references = record.get("references") or {}
@@ -497,7 +498,8 @@ def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", f
         # Only Generate results participate; references are never an unsorted render.
         results = [item for item in results if item["source"] == "generate"
                    and item["role"] == "generated"
-                   and not item.get("rating") and not item.get("tags")]
+                   and not item.get("rating") and not item.get("tags")
+                   and not item.get("organizedMediaPath")]
     if rating:
         if rating == "unrated":
             results = [item for item in results if not item.get("rating")]

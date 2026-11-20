@@ -16,8 +16,9 @@ test('LIVE — conversation attachment survives a different write destination an
   await sendLive(page,'Discuss the greenhouse painting as a creative idea, without changing any saved Project.');
   expect(requests).toHaveLength(1);
   expect(JSON.stringify(requests[0].messages)).not.toContain('A maritime museum.');
-  // Attachment controls live in the Read / Write sidebar.
-  await page.locator('#studio-dw-open-tools').click();
+  // Attachment controls are accessible through the contextual Actions launcher.
+  await page.locator('#director-studio-actions-toggle').click();
+  await page.locator('[data-studio-tool="read"]').click();
   await expect(page.locator('#director-studio-attach-current')).toBeVisible();
   // The header may suggest the open Project even without an attachment.
   // The saved conversation, not that label, owns the association.

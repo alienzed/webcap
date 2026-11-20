@@ -3057,7 +3057,17 @@ def generate_result_move_route():
     try:
         from .generate_store import relocate_result_media
         data = request.get_json(silent=True) or {}
-        return jsonify(relocate_result_media(data.get("storageId"), data.get("destination")))
+        storage_ids = data.get("storageIds")
+        if not isinstance(storage_ids, list) or not storage_ids or len(storage_ids) != len(set(map(str, storage_ids))):
+            raise ValueError("Select one or more unique Generation results.")
+        relocated = []
+        for storage_id in storage_ids:
+            try:
+                relocated.append(relocate_result_media(storage_id, data.get("destination")))
+            except Exception as exc:
+                raise RuntimeError("Moved " + str(len(relocated)) + "/" + str(len(storage_ids)) +
+                                   " results; remaining move failed: " + str(exc)) from exc
+        return jsonify({"ok": True, "moved": len(relocated), "results": relocated})
     except (ValueError, OSError, RuntimeError) as exc:
         app.logger.exception("GENERATE RESULT MOVE FAILED")
         return jsonify({"ok": False, "error": str(exc)}), 400

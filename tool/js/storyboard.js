@@ -347,7 +347,9 @@
     var preset = storyStylePresetById(presetId);
     var textarea = el('storyboard-story-style');
     if (!textarea || !preset) return;
+    var previousValue = textarea.value;
     textarea.value = preset.text;
+    window.webcapTextareaRevisions.recordChange(textarea, previousValue);
     renderStoryStylePresetSelector();
     scheduleStorySave();
   }
@@ -559,7 +561,11 @@
           var currentRoot = sceneElement(sceneId);
           var currentPrompt = currentRoot && currentRoot.querySelector('[data-scene-field="prompt"]');
           var currentDuration = currentRoot && currentRoot.querySelector('[data-scene-field="durationSeconds"]');
-          if (currentPrompt) currentPrompt.value = savedScene.prompt || '';
+          if (currentPrompt) {
+            var previousPrompt = currentPrompt.value;
+            currentPrompt.value = savedScene.prompt || '';
+            window.webcapTextareaRevisions.recordChange(currentPrompt, previousPrompt);
+          }
           if (currentDuration) currentDuration.value = savedScene.durationSeconds == null ? '' : savedScene.durationSeconds;
           if (operation === 'refine_prompt' && job.clearCorrection !== false) {
             var currentCorrection = currentRoot && currentRoot.querySelector('[data-director-correction]');
@@ -596,7 +602,11 @@
         storyState.story.previousConcept = canonical.previousConcept;
         storyState.story.updatedAt = canonical.updatedAt;
         var concept = el('storyboard-story-concept');
-        if (concept) concept.value = canonical.concept || '';
+        if (concept) {
+          var previousConcept = concept.value;
+          concept.value = canonical.concept || '';
+          window.webcapTextareaRevisions.recordChange(concept, previousConcept);
+        }
         var restore = el('storyboard-restore-concept-btn');
         if (restore) restore.classList.toggle('hidden', typeof canonical.previousConcept !== 'string');
         setDevelopStatus('Concept expansion completed.');
@@ -1513,7 +1523,11 @@
       var root = sceneElement(sceneId);
       var prompt = root && root.querySelector('[data-scene-field="prompt"]');
       var duration = root && root.querySelector('[data-scene-field="durationSeconds"]');
-      if (prompt) prompt.value = payload.scene.prompt || '';
+      if (prompt) {
+        var previousPrompt = prompt.value;
+        prompt.value = payload.scene.prompt || '';
+        window.webcapTextareaRevisions.recordChange(prompt, previousPrompt);
+      }
       if (duration) duration.value = payload.scene.durationSeconds == null ? '' : payload.scene.durationSeconds;
       syncSceneDirectorRestore(sceneId);
       syncPromptTakeStatus(sceneId);
@@ -6317,6 +6331,7 @@
       storyState.story.scenes[promptAssistSession.sceneId] = payload.scene;
       storyState.story.updatedAt = payload.story.updatedAt;
       editor.value = payload.scene.prompt;
+      window.webcapTextareaRevisions.recordChange(editor, expectedPrompt);
       clearSceneDirectorCompletion(promptAssistSession.storyId, promptAssistSession.sceneId);
       promptAssistSession.sourcePrompt = payload.scene.prompt;
       el("storyboard-prompt-assist-source").textContent = payload.scene.prompt;

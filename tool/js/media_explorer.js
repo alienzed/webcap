@@ -2530,6 +2530,31 @@
     if (!el('media-explorer-workspace').contains(event.target)) return;
     if (event.target.closest('input, select, textarea, [contenteditable="true"]') && event.target.type !== 'checkbox') return;
     var loupe = el('media-explorer-loupe').open;
+    if ((event.key === 'Delete' || event.key === 'Backspace') &&
+        !event.ctrlKey && !event.altKey && !event.metaKey &&
+        !el('media-explorer-shortcuts-dialog').open) {
+      var focusedCard = event.target.closest('.media-explorer-card');
+      var focusedRow = event.target.closest('.media-explorer-side-row');
+      var focusedItem = loupe ? items[active] :
+        focusedCard ? items[Number(focusedCard.dataset.index)] :
+        focusedRow ? items.find(function (entry) {return entry.id === focusedRow.dataset.id;}) : null;
+      var chosen = selected.size ? items.filter(function (item) {return selected.has(item.id);}) :
+        focusedItem ? [focusedItem] : [];
+      var canTrash = chosen.length && chosen.every(function (item) {
+        return item.source === 'external' ||
+          (item.source === 'generate' && item.role === 'generated' && item.storageId);
+      });
+      if (canTrash && (loupe || focusedCard || focusedRow)) {
+        event.preventDefault();
+        if (loupe) el('media-explorer-loupe').close();
+        if (chosen[0].source === 'external' && chosen.every(function(item) {return item.source === 'external';}))
+          externalMutation(chosen[0],'trash');
+        else if (chosen.every(function (item) {return item.source === 'generate';}))
+          trashGenerations(chosen[0]);
+        else report(new Error('Select files from one source to move to Trash.'));
+        return;
+      }
+    }
     if (!loupe && event.key === 'Escape') { selected.clear(); updateSelection(); selectItem(-1); return; }
     if (!loupe && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
       event.preventDefault(); items.forEach(function (item) { selected.add(item.id); }); updateSelection(); return;

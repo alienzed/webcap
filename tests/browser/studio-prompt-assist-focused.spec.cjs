@@ -106,7 +106,7 @@ test('Prompt Assist reviews one complete correction at a time and preserves edit
   await expect(cards.getByRole('button',{name:'Applied'})).toBeDisabled();
   await prev.click();
   await expect(cards.getByRole('button',{name:'Applied'})).toBeDisabled();
-  await expect(cards.locator('[data-assist-replacement]')).toBeEditable({editable:false});
+  await expect(cards.locator('[data-assist-replacement]')).not.toBeEditable();
   const final=await story(page,project.id);
   expect(final.scenes[scene.id].prompt).toContain(suggestions[0].replacementText);
   expect(final.scenes[scene.id].prompt).toContain(custom);

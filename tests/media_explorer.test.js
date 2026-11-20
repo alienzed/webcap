@@ -1088,3 +1088,36 @@ test('Folder shortcut editing rejects duplicate keys and path traversal before s
   assert.match(f.nodes['media-explorer-shortcuts-status'].textContent,/distinct letter keys/);
   assert.equal(f.window.localStorage.getItem('webcap.mediaExplorer.folderShortcuts.v1'),null);
 });
+
+test('Delete uses existing external Trash action and confirmation',async()=>{
+  const f=fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0],[]);
+  f.buttons.find(button=>button.dataset.mediaSource==='external').click();
+  f.nodes['media-explorer-external-path'].value='/sample-library';
+  f.nodes['media-explorer-open-path'].click();
+  await f.settle(f.pending.at(-1),[
+    {id:'external:one',source:'external',relativePath:'one.mp4',fileName:'one.mp4',
+      mediaKind:'video',rating:null,tags:[]}
+  ],true,{folders:[],revision:1});
+  const card=f.nodes['media-explorer-grid'].children[0];
+  f.key(card.querySelector('.media-explorer-card-open'),'Delete');
+  const req=f.pending.at(-1);
+  assert.equal(req.url,'/fs/media_explorer/external/trash');
+  assert.deepEqual(JSON.parse(req.options.body),{
+    path:'/sample-library',files:['one.mp4'],destination:''
+  });
+});
+
+test('Delete does not offer to Trash Test results through an unrelated owner',async()=>{
+  const f=fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0],[{
+    id:'test:one',source:'test',relativePath:'one.mp4',fileName:'one.mp4',
+    mediaKind:'video',storageId:'session',ownerFolder:'set',rating:null,tags:[]
+  }]);
+  const card=f.nodes['media-explorer-grid'].children[0];
+  const n=f.pending.length;
+  f.key(card.querySelector('.media-explorer-card-open'),'Delete');
+  assert.equal(f.pending.length,n);
+});

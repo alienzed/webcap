@@ -1,5 +1,7 @@
 # Generate Library
 
+> **Proposed design, not the current Generate Library contract (reviewed 2026-11-20).** This draft describes a future Scratch/Saved split, session-based Scratch storage, and multi-root Saved browsing. Current Generate uses dated Generation records under the configured output root, with manifests owning prompt/ratings/tags and Media Explorer organizing individual output media by source-aware move/copy shortcuts. Do not interpret the phases below as implemented behavior or implement them without a fresh codebase review and decision on Generate-versus-Set destination ownership. Current UI/behavior: [README](../README.md), [Media Explorer IA notes](media_explorer_ia_polish_plan.md), and [filesystem ownership](filesystem_state_contract.md).
+
 ## Goal
 
 Give Generate a practical media library without creating a second media-curation system.

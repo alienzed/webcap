@@ -321,7 +321,7 @@
   function syncRevisionSceneSelection() {
     var scope = window.getStudioDirectorNavigation();
     var ids = scope.sceneOrder || [];
-    var key = JSON.stringify([scope.projectId, ids]);
+    var key = JSON.stringify([scope.projectId, ids, scope.sceneTitles || []]);
     var list = el('director-studio-revision-scenes');
     if (key !== revisionSceneScopeKey) {
       revisionSceneScopeKey = key;
@@ -334,11 +334,12 @@
         checkbox.checked = true;
         checkbox.className = 'director-studio-revision-scene';
         checkbox.addEventListener('change', function () {
-          syncRevisionSceneSelection();
+          syncStudioRevisionUi();
           syncControls();
         });
         label.appendChild(checkbox);
-        label.appendChild(document.createTextNode('Scene ' + (index + 1)));
+        label.appendChild(document.createTextNode((index + 1) + '. ' +
+          (scope.sceneTitles && scope.sceneTitles[index] || 'Untitled Scene')));
         list.appendChild(label);
       });
     }
@@ -1742,6 +1743,12 @@
         : 'Send';
     }
     revisionInput.disabled = studioRevisionRunning;
+    el('director-studio-revision-preset').disabled = studioRevisionRunning;
+    el('director-studio-revision-all').disabled = studioRevisionRunning;
+    el('director-studio-revision-scenes').querySelectorAll('input').forEach(function (checkbox) {
+      checkbox.disabled = studioRevisionRunning;
+    });
+    el('director-studio-revision-fresh').disabled = studioRevisionRunning;
     el('director-studio-composer-mode-select').disabled = studioRevisionRunning;
     if (input) input.disabled = state.pending || (persistentMode(state.activeMode) && !state.sessionReady);
     if (model) model.disabled = state.pending || !state.modelsLoaded;

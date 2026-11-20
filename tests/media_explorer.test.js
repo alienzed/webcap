@@ -1035,8 +1035,8 @@ test('Folder shortcut configuration is root-scoped and does not move anything on
   f.nodes['media-explorer-shortcuts-form'].emit('submit',{preventDefault(){}});
   assert.equal(dialog.open,false);
   const stored=JSON.parse(f.window.localStorage.getItem('webcap.mediaExplorer.folderShortcuts.v1'));
-  assert.equal(stored['/sample-library'][0].folder,'Inbox');
-  assert.equal(stored['/sample-library'][1].folder,'Keepers');
+  assert.equal(stored['external:/sample-library'][0].folder,'Inbox');
+  assert.equal(stored['external:/sample-library'][1].folder,'Keepers');
   assert.equal(f.pending.filter(request=>request.url.includes('/move')).length,0);
 });
 
@@ -1119,5 +1119,60 @@ test('Delete does not offer to Trash Test results through an unrelated owner',as
   const card=f.nodes['media-explorer-grid'].children[0];
   const n=f.pending.length;
   f.key(card.querySelector('.media-explorer-card-open'),'Delete');
+  assert.equal(f.pending.length,n);
+});
+
+test('Generator shortcut copies via existing owner resolver, preserving the generated record', async()=>{
+  const f=fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0],[{...media('render'),storageId:'2026/render'}]);
+  f.nodes['media-explorer-shortcuts-open'].click();
+  assert.equal(f.nodes['media-explorer-shortcuts-dialog'].open,true);
+  f.nodes['media-explorer-shortcuts-rows'].children[0].children[2].value='Media/Keepers';
+  f.nodes['media-explorer-shortcuts-form'].emit('submit',{preventDefault(){}});
+  const card=f.nodes['media-explorer-grid'].children[0];
+  const count=f.pending.length;
+  f.key(card.querySelector('.media-explorer-card-open'),'s');
+  assert.equal(f.pending.length,count+1);
+  const request=f.pending.at(-1);
+  assert.equal(request.url,'/fs/media_explorer/generated/copy');
+  assert.deepEqual(JSON.parse(request.options.body),{
+    storageIds:['2026/render'],destination:'Media/Keepers'
+  });
+  await f.settle(request,[],true,{copied:[{name:'render.mp4'}],destination:'Media/Keepers'});
+  assert.match(f.nodes['media-explorer-status'].textContent,/Originals retained/);
+});
+
+test('Test shortcut copies results while leaving their session files and records in place',async()=>{
+  const f=fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0],[{
+    id:'test:one',source:'test',mediaKind:'video',fileName:'one.mp4',
+    storageId:'session',ownerFolder:'set',role:'generated',rating:null,tags:[]
+  }]);
+  f.nodes['media-explorer-shortcuts-open'].click();
+  f.nodes['media-explorer-shortcuts-rows'].children[1].children[2].value='Media/Keepers';
+  f.nodes['media-explorer-shortcuts-form'].emit('submit',{preventDefault(){}});
+  const card=f.nodes['media-explorer-grid'].children[0];
+  f.key(card.querySelector('.media-explorer-card-open'),'d');
+  assert.equal(f.pending.at(-1).url,'/fs/media_explorer/test/copy');
+  assert.deepEqual(JSON.parse(f.pending.at(-1).options.body),{
+    results:[{folder:'set',session:'session',mediaFile:'one.mp4'}],destination:'Media/Keepers'
+  });
+});
+
+test('Storyboard Takes do not get folder shortcut actions',async()=>{
+  const f=fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0],[{
+    id:'storyboard:take',source:'storyboard',mediaKind:'video',fileName:'take.mp4',
+    storageId:'project',role:'generated',rating:null,tags:[]
+  }]);
+  f.nodes['media-explorer-shortcuts-open'].click();
+  f.nodes['media-explorer-shortcuts-rows'].children[0].children[2].value='Media/Keepers';
+  f.nodes['media-explorer-shortcuts-form'].emit('submit',{preventDefault(){}});
+  const card=f.nodes['media-explorer-grid'].children[0];
+  const n=f.pending.length;
+  f.key(card.querySelector('.media-explorer-card-open'),'s');
   assert.equal(f.pending.length,n);
 });

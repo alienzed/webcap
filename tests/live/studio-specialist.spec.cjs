@@ -12,9 +12,9 @@ test('Live optional Flow 9 — real Coherence review proposes changes without si
   });
   const model=await openLiveDirector(page);
   await attachProject(page,project);
-  const mode=page.locator('#director-studio-composer-mode-select');
-  await expect(mode).toBeVisible();
-  await mode.selectOption('revision');
+  await page.locator('#director-studio-actions-toggle').click();
+  await page.locator('[data-studio-tool="revision"]').click();
+  await expect(page.locator('#director-studio-composer-mode-select')).toHaveValue('revision');
   await page.locator('#director-studio-revision-preset').selectOption('coherence');
   await expect(page.locator('#director-studio-revision-fresh')).not.toBeChecked();
   await expect(page.locator('#director-chat-send')).toHaveText('Check Coherence');

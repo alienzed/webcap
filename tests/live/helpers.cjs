@@ -36,10 +36,16 @@ async function attachProject(page,project){
   if(await mode.isVisible() && await mode.inputValue()!=='conversation')
     await mode.selectOption('conversation');
   const tools=page.locator('#studio-dw-open-tools');
-  if(await tools.getAttribute('aria-expanded')!=='true') await tools.click();
+  if(await tools.isVisible()) {
+    if(await tools.getAttribute('aria-expanded')!=='true') await tools.click();
+  } else {
+    await page.locator('#director-studio-actions-toggle').click();
+    await page.locator('[data-studio-tool="read"]').click();
+  }
   const attach=page.locator('#director-studio-attach-current');
   if(await attach.isVisible()) await attach.click();
   await expect(page.locator('#director-chat-title')).toContainText(project.title);
+  await closeDirectorTools(page);
 }
 async function approveOverview(page,projectId){
   await page.locator('#director-chat-context-approve').click();
@@ -72,7 +78,15 @@ async function waitForLiveJob(page,trigger){
     throw new Error('Real Director job '+payload.job.status+': '+String(payload.job.error||'No diagnostic provided'));
   await expect(page.locator('#director-chat-progress')).toBeHidden({timeout:20000});
 }
+async function closeDirectorTools(page){
+  const drawer=page.locator('#director-chat-drawer');
+  if(await drawer.evaluate(node=>node.classList.contains('studio-actions-open')))
+    await page.locator('#studio-dw-close-actions').click();
+}
 async function sendLive(page,instruction){
+  // Explicit tools remain available, but a floating action sheet must never
+  // obstruct a subsequent live conversation.
+  await closeDirectorTools(page);
   const composer=page.locator('#director-chat-input');
   await composer.fill(instruction);
   await expect(page.locator('#director-chat-send')).toBeEnabled();
@@ -118,4 +132,4 @@ function observeLiveCalls(page){
     return jobs.at(-1);
   }};
 }
-module.exports={writeLive,observeLiveCalls,waitForLiveJob,openLiveDirector,attachProject,approveOverview,sendLive,actualReply,addEvidence,story,stories,seedProject,seedScene,openProject,reopenDirectorIfClosed};
+module.exports={writeLive,observeLiveCalls,waitForLiveJob,openLiveDirector,attachProject,approveOverview,sendLive,actualReply,closeDirectorTools,addEvidence,story,stories,seedProject,seedScene,openProject,reopenDirectorIfClosed};

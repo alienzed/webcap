@@ -335,6 +335,11 @@
     el('director-chat-clear').classList.toggle('hidden', revision);
     el('studio-dw-open-tools').classList.toggle('hidden', revision);
     mode.classList.toggle('hidden', !studio);
+    el('director-studio-action-launcher').classList.toggle('hidden', !studio || revision);
+    if (revision) {
+      el('director-studio-actions-menu').classList.add('hidden');
+      el('director-studio-actions-toggle').setAttribute('aria-expanded','false');
+    }
     el('director-studio-composer-mode-select').value = studioComposerMode;
     el('director-studio-revision-controls').classList.toggle('hidden', !revision);
     el('director-chat-input').classList.toggle('hidden', revision);
@@ -428,7 +433,14 @@
         !el('studio-action-advisor-actions').children.length));
     var contextButton = el('director-chat-context-approve');
     contextButton.classList.toggle('hidden', !studio || studioRevisionActive());
-    contextButton.textContent = 'Read…';
+    contextButton.textContent = 'Read Project';
+    var contextNote = el('director-studio-context-note');
+    var hasRead = studio && currentMessages().some(function (message) {
+      return message.role === 'user' && String(message.content || '')
+        .includes('[WEBCAP EXPLICIT READ — SAVED SNAPSHOT]');
+    });
+    contextNote.textContent = hasRead ? 'Project snapshot in conversation' :
+      'No Project snapshot in conversation';
     var contextual = !persistentMode(state.activeMode);
     var context = active && typeof active.contextSnapshot === 'function'
       ? active.contextSnapshot() : null;
@@ -1642,6 +1654,21 @@
     else prepareStudioProject();
   }
 
+  function resizeStudioComposer() {
+    var input = el('director-chat-input'), drawer = el('director-chat-drawer');
+    if (!drawer.classList.contains('studio-director')) {
+      input.style.height = '';
+      input.style.overflowY = '';
+      return;
+    }
+    var minimum = 156;
+    var maximum = Math.max(minimum, Math.min(430, Math.floor(drawer.clientHeight * .42)));
+    input.style.height = 'auto';
+    var desired = Math.max(minimum, Math.min(maximum, input.scrollHeight));
+    input.style.height = desired + 'px';
+    input.style.overflowY = input.scrollHeight > desired + 2 ? 'auto' : 'hidden';
+  }
+
   function syncControls() {
     var send = el('director-chat-send');
     var inspect = el('studio-director-inspect');
@@ -1674,6 +1701,7 @@
     var history = el('director-chat-history-toggle');
     if (history) history.disabled = state.pending || !state.sessionReady;
     syncStudioFlow();
+    resizeStudioComposer();
     if (state.activeMode === 'storyboard' && window.studioDirectorWorkbench) {
       window.studioDirectorWorkbench.updateContext();
     }
@@ -3808,6 +3836,8 @@
     var stop = el('director-chat-stop');
     var copy = el('director-chat-prompt-copy');
     var input = el('director-chat-input');
+    input.addEventListener('input', resizeStudioComposer);
+    window.addEventListener('resize', resizeStudioComposer);
     var model = el('director-chat-model');
     var refresh = el('director-chat-model-refresh');
     var modeSwitch = el('director-chat-mode-switch');

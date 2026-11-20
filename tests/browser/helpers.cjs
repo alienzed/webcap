@@ -95,7 +95,12 @@ async function ensureAttachedProject(page,expectedTitle) {
   if(await composerMode.isVisible() && await composerMode.inputValue()!=='conversation')
     await composerMode.selectOption('conversation');
   const tools=page.locator('#studio-dw-open-tools');
-  if(await tools.getAttribute('aria-expanded')!=='true') await tools.click();
+  if(await tools.isVisible()) {
+    if(await tools.getAttribute('aria-expanded')!=='true') await tools.click();
+  } else {
+    await page.locator('#director-studio-actions-toggle').click();
+    await page.locator('[data-studio-tool="read"]').click();
+  }
   const label=page.locator('#director-chat-title');
   const attach=page.locator('#director-studio-attach-current');
   if(await attach.isVisible()) await attach.click();
@@ -108,7 +113,17 @@ async function openWrite(page, {projectId, operation='project', sceneMode, instr
   await expect(page.locator('#director-chat-progress')).toBeHidden({timeout:60000});
   await expect(page.locator('#director-chat-input')).toBeEnabled({timeout:60000});
   const tools=page.locator('#studio-dw-open-tools');
-  if(await tools.getAttribute('aria-expanded')!=='true') await tools.click();
+  if(await tools.isVisible()) {
+    if(await tools.getAttribute('aria-expanded')!=='true') await tools.click();
+  } else if(await page.locator('#director-chat-drawer').evaluate(node=>node.classList.contains('studio-actions-open'))) {
+    // A Read or previous Write can be showing: switch its existing task panel
+    // without trying to click the launcher behind the floating sheet.
+    if(!(await page.locator('#studio-dw-write-panel').isVisible()))
+      await page.locator('#studio-dw-write').click();
+  } else {
+    await page.locator('#director-studio-actions-toggle').click();
+    await page.locator('[data-studio-tool="'+(operation==='scene-write'?'scene':'project')+'"]').click();
+  }
   const panel=page.locator('#studio-dw-write-panel');
   if(!(await panel.isVisible())) await page.locator('#studio-dw-write').click();
   await expect(panel).toBeVisible();

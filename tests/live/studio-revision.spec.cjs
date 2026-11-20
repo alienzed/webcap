@@ -128,3 +128,31 @@ test('LIVE Revise Scenes — non-adjacent selection saves only chosen Scenes',as
     contentType:'application/json'
   });
 });
+
+test('LIVE Revise Scenes — preset alone is a valid submission without custom text',async({page},testInfo)=>{
+  const project=await seedProject(page,'Live Preset Revision '+Date.now(),{
+    concept:'A traveler visits a small night market.',style:'Documentary realism.'
+  });
+  const scene=await seedScene(page,project.id,{
+    title:'Market',prompt:'A traveler walks through lantern-lit market stalls.',durationSeconds:8
+  });
+  const model=await openLiveDirector(page);
+  await attachProject(page,project);
+  await page.locator('#director-studio-actions-toggle').click();
+  await page.locator('[data-studio-tool="revision"]').click();
+  await page.locator('#director-studio-revision-preset').selectOption('continuity');
+  await expect(page.locator('#director-studio-revision-input')).toHaveValue('');
+  await expect(page.locator('#director-chat-send')).toBeEnabled();
+  await page.locator('#director-chat-send').click();
+  await expect(page.locator('#director-studio-revision-status'))
+    .toContainText('Scene revision completed.',{timeout:300000});
+  const saved=await story(page,project.id);
+  expect(saved.scenes[scene.id].prompt.trim()).toBeTruthy();
+  expect(saved.scenes[scene.id].title).toBe(scene.title);
+  expect(saved.scenes[scene.id].durationSeconds).toBe(scene.durationSeconds);
+  await testInfo.attach('studio-live-preset-revision-evidence',{
+    body:Buffer.from(JSON.stringify({model,projectId:project.id,preset:'continuity',
+      original:scene.prompt,saved:saved.scenes[scene.id].prompt},null,2)),
+    contentType:'application/json'
+  });
+});

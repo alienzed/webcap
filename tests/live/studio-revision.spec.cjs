@@ -3,9 +3,9 @@ const {test,expect}=require('../browser/test.cjs');
 const {openLiveDirector,attachProject,story,seedProject,seedScene}=require('./helpers.cjs');
 
 async function reviseUsingRealModel(page,instruction) {
-  const mode=page.locator('#director-studio-composer-mode-select');
-  await expect(mode).toBeVisible();
-  await mode.selectOption('revision');
+  await page.locator('#director-studio-actions-toggle').click();
+  await page.locator('[data-studio-tool="revision"]').click();
+  await expect(page.locator('#director-studio-composer-mode-select')).toHaveValue('revision');
   await expect(page.locator('#director-studio-revision-controls')).toBeVisible();
   await page.locator('#director-studio-revision-preset').selectOption('');
   await page.locator('#director-studio-revision-fresh').uncheck();

@@ -158,47 +158,64 @@
     });});
   }
 
-  // Folder roles are ordinary destinations, not media states. Each external root
-  // has independent, browser-local preferences; no folders are created implicitly.
+  // Sorting actions use explicit destinations; Delete is never a folder mapping.
   var folderShortcutDefaults = [
-    {key:'s',label:'Inbox',folder:''},
-    {key:'d',label:'Keepers',folder:''},
-    {key:'a',label:'Favorites',folder:''},
-    {key:'f',label:'Archive',folder:''}
+    {key:'s',label:'Save',folder:''},
+    {key:'a',label:'Archive',folder:''},
+    {key:'f',label:'Favorite',folder:''}
   ];
   var folderShortcutMemory = {}, shortcutMovePending = false;
+  var sortingPreferenceKey = 'webcap.mediaExplorer.sortingShortcuts.v2';
+  function shortcutScope() {
+    return isExternal() ? 'external:' + String(externalPath || '') : 'managed';
+  }
   function folderShortcutConfig() {
-    var root = isExternal() ? 'external:' + String(externalPath || '') : 'managed';
-    var stored = folderShortcutMemory[root];
+    var root = shortcutScope(), stored = folderShortcutMemory[root];
     if (!stored) {
-      try {
-        var all = JSON.parse(window.localStorage.getItem('webcap.mediaExplorer.folderShortcuts.v1') || '{}');
-        stored = all[root];
-      } catch (_) { stored = null; }
+      try {stored = JSON.parse(window.localStorage.getItem(sortingPreferenceKey) || '{}')[root];}
+      catch (_) {stored = null;}
     }
-    return folderShortcutDefaults.map(function (entry, index) {
-      var value = Array.isArray(stored) ? stored[index] : null;
-      return {
-        key:value && typeof value.key === 'string' ? value.key.toLowerCase() : entry.key,
-        label:value && typeof value.label === 'string' ? value.label : entry.label,
-        folder:value && typeof value.folder === 'string' ? value.folder : entry.folder
-      };
+    return folderShortcutDefaults.map(function (entry) {
+      var value = Array.isArray(stored) ? stored.find(function (candidate) {
+        return candidate && candidate.key === entry.key;
+      }) : null;
+      return {key:entry.key,label:entry.label,
+        folder:value && typeof value.folder === 'string' ? value.folder : ''};
     });
   }
   function saveFolderShortcutConfig(config) {
-    var root = isExternal() ? 'external:' + String(externalPath || '') : 'managed';
+    var root = shortcutScope();
     folderShortcutMemory[root] = config;
     try {
-      var store = JSON.parse(window.localStorage.getItem('webcap.mediaExplorer.folderShortcuts.v1') || '{}');
+      var store = JSON.parse(window.localStorage.getItem(sortingPreferenceKey) || '{}');
       store[root] = config;
-      window.localStorage.setItem('webcap.mediaExplorer.folderShortcuts.v1',JSON.stringify(store));
+      window.localStorage.setItem(sortingPreferenceKey,JSON.stringify(store));
     } catch (error) {
-      // Browser storage can be disabled; the settings still work for this session.
-      window.reportConsoleError('Media Explorer folder shortcuts',error);
+      window.reportConsoleError('Media Explorer sorting shortcuts',error);
     }
   }
   function configuredFolderShortcuts() {
     return folderShortcutConfig().filter(function (entry) {return !!entry.folder;});
+  }
+  function sortingCanDelete(chosen) {
+    return chosen.length && (chosen.every(function (item) {return item.source === 'external';}) ||
+      chosen.every(function (item) {
+        return item.source === 'generate' && item.role === 'generated' && item.storageId;
+      }));
+  }
+  function shortcutDelete(chosen) {
+    if (!sortingCanDelete(chosen)) return;
+    if (chosen[0].source === 'external') externalMutation(chosen[0],'trash');
+    else trashGenerations(chosen[0]);
+  }
+  function updateSortingHint() {
+    var host = el('media-explorer-loupe-shortcuts');
+    if (!host) return;
+    var hints = folderShortcutConfig().map(function (entry) {
+      return entry.key.toUpperCase()+' '+entry.label+(entry.folder ? ' ✓' : ' (unset)');
+    });
+    hints.splice(1,0,'D Delete');
+    host.textContent = hints.join('  ·  ');
   }
   function folderShortcutDestination(entry, chosen) {
     if (shortcutMovePending || !entry || !entry.folder || !chosen.length) return;
@@ -251,26 +268,106 @@
     if (selected.size && selected.has(item.id)) return items.filter(function (entry) {return selected.has(entry.id);});
     return item ? [item] : [];
   }
+  function shortcutFolders(path) {
+    if (isExternal()) {
+      return fetch('/fs/media_explorer/external?'+new URLSearchParams({
+        path:externalPath,directory:path,recursive:'0',limit:'1',offset:'0'
+      })).then(function (res) {return res.json().then(function (data) {
+        if (!res.ok || !data.ok) throw Error(data.error || 'Cannot browse external folders');
+        return data.folders || [];
+      });});
+    }
+    return fetch('/fs/media_explorer/external/destinations?destination='+
+      encodeURIComponent(path)).then(function (res) {return res.json().then(function (data) {
+        if (!res.ok || !data.ok) throw Error(data.error || 'Cannot browse destinations');
+        return data.folders || [];
+      });});
+  }
   function openFolderShortcutSettings() {
     if (isExternal() && !externalPath) return;
     var host = el('media-explorer-shortcuts-rows');
     host.replaceChildren();
+    text(el('media-explorer-shortcuts-scope'),isExternal()
+      ? 'External library · '+externalPath : 'WebCap media · folders inside WebCap files');
     folderShortcutConfig().forEach(function (entry) {
       var row = document.createElement('div');
       row.className = 'media-explorer-shortcut-row';
-      var key = document.createElement('input');
-      key.value = entry.key.toUpperCase(); key.maxLength = 1;
-      key.setAttribute('aria-label','Shortcut key for '+entry.label);
-      key.dataset.shortcutField = 'key';
-      var label = document.createElement('input');
-      label.value = entry.label; label.setAttribute('aria-label','Folder role label');
-      label.dataset.shortcutField = 'label';
+      var key = document.createElement('kbd');
+      text(key,entry.key.toUpperCase());
+      var label = document.createElement('span');
+      text(label,entry.label);
+      var slot = document.createElement('div');
+      slot.className = 'media-explorer-shortcut-destination';
       var folder = document.createElement('input');
       folder.value = entry.folder;
-      folder.placeholder = 'Existing folder path (relative to root)';
-      folder.setAttribute('aria-label','Destination folder for '+entry.label);
-      folder.dataset.shortcutField = 'folder';
-      row.appendChild(key); row.appendChild(label); row.appendChild(folder);
+      folder.readOnly = true;
+      folder.placeholder = 'Not assigned';
+      folder.setAttribute('aria-label',entry.label+' destination');
+      var browse = document.createElement('button');
+      browse.type = 'button'; browse.textContent = 'Choose…';
+      browse.setAttribute('aria-label','Choose '+entry.label+' folder');
+      var clear = document.createElement('button');
+      clear.type = 'button'; clear.textContent = '×'; clear.title = 'Clear destination';
+      clear.setAttribute('aria-label','Clear '+entry.label+' folder');
+      clear.addEventListener('click',function () {
+        folder.value = '';
+        var panel = row.querySelector('.media-explorer-shortcut-picker');
+        if (panel) panel.remove();
+      });
+      browse.addEventListener('click',function () {
+        var previous = row.querySelector('.media-explorer-shortcut-picker');
+        if (previous) {previous.remove();return;}
+        var panel = document.createElement('div');
+        panel.className = 'media-explorer-shortcut-picker';
+        row.appendChild(panel);
+        var directory = folder.value;
+        var serial = 0;
+        function showFolder() {
+          var request = ++serial;
+          panel.replaceChildren();
+          var heading = document.createElement('div');
+          heading.className = 'media-explorer-shortcut-picker-path';
+          text(heading,'/'+directory);
+          panel.appendChild(heading);
+          shortcutFolders(directory).then(function (folders) {
+            if (request !== serial) return;
+            var parent = document.createElement('button');
+            parent.type='button';parent.textContent='↑ Parent';
+            parent.disabled=!directory;
+            parent.addEventListener('click',function () {
+              directory=directory.split('/').slice(0,-1).join('/');showFolder();
+            });
+            var use = document.createElement('button');
+            use.type='button';use.textContent='Use this folder';
+            use.addEventListener('click',function () {
+              folder.value=directory;
+              panel.remove();
+            });
+            panel.appendChild(parent);panel.appendChild(use);
+            folders.forEach(function (name) {
+              var child=document.createElement('button');
+              child.type='button';child.textContent='📁 '+name;
+              child.addEventListener('click',function () {
+                directory=[directory,name].filter(Boolean).join('/');showFolder();
+              });
+              panel.appendChild(child);
+            });
+            if (!folders.length) {
+              var empty=document.createElement('span');
+              text(empty,'No subfolders');
+              panel.appendChild(empty);
+            }
+          }).catch(function (error) {
+            if (request === serial) {
+              panel.replaceChildren();
+              text(panel,error.message);
+            }
+          });
+        }
+        showFolder();
+      });
+      slot.appendChild(folder);slot.appendChild(browse);slot.appendChild(clear);
+      row.appendChild(key);row.appendChild(label);row.appendChild(slot);
       host.appendChild(row);
     });
     el('media-explorer-shortcuts-status').textContent = '';
@@ -279,26 +376,21 @@
   function saveFolderShortcutSettings(event) {
     event.preventDefault();
     var rows = Array.from(el('media-explorer-shortcuts-rows').children);
-    var config = rows.map(function (row) {
-      return {
-        key:row.children[0].value.trim().toLowerCase(),
-        label:row.children[1].value.trim(),
-        folder:row.children[2].value.trim().replace(/\\/g,'/')
-      };
+    var config = rows.map(function (row, index) {
+      return {key:folderShortcutDefaults[index].key,
+        label:folderShortcutDefaults[index].label,
+        folder:row.children[2].children[0].value.trim()};
     });
-    var keys = config.map(function (entry) {return entry.key;});
-    var invalid = config.some(function (entry) {
-      return !/^[a-z]$/.test(entry.key) || entry.key === 'z' || !entry.label ||
-        (entry.folder && (entry.folder.startsWith('/') ||
-          entry.folder.split('/').some(function (part) {return part === '..' || part === '.' || !part;})));
-    });
-    if (invalid || new Set(keys).size !== keys.length) {
-      el('media-explorer-shortcuts-status').textContent =
-        'Use distinct letter keys (Z is reserved), a label, and an existing relative folder path.';
-      return;
-    }
-    saveFolderShortcutConfig(config);
-    el('media-explorer-shortcuts-dialog').close();
+    el('media-explorer-shortcuts-save').disabled = true;
+    var paths = Array.from(new Set(config.map(function (entry) {return entry.folder;}).filter(Boolean)));
+    Promise.all(paths.map(function (path) {return shortcutFolders(path);}))
+      .then(function () {
+        saveFolderShortcutConfig(config);
+        el('media-explorer-shortcuts-dialog').close();
+        updateSortingHint();
+      }).catch(function (error) {
+        text(el('media-explorer-shortcuts-status'),'Choose existing folders: '+error.message);
+      }).finally(function () {el('media-explorer-shortcuts-save').disabled = false;});
   }
 
   function createExternalFolder() {
@@ -1563,6 +1655,7 @@
     el('media-explorer-loupe-content').replaceChildren(mediaElement(items[active], true));
     text(el('media-explorer-loupe-name'), (active + 1) + ' / ' + items.length + ' · ' + items[active].fileName);
     text(el('media-explorer-loupe-caption'), (items[active].roles || [items[active].role]).join(' · ') + ' · ' + cardSummary(items[active]));
+    updateSortingHint();
     el('media-explorer-previous').disabled = active === 0;
     el('media-explorer-next').disabled = active === items.length - 1;
     if (!dlg.open) dlg.showModal();

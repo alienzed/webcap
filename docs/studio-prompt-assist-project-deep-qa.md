@@ -71,6 +71,8 @@ Use the interaction principles established by Caption Assist rather than inventi
 - keep the correction scoped to the relevant prompt/cut material;
 - make the actual resulting text visible and editable.
 
+To keep the modal readable when several substantial findings are returned, display one complete finding at a time with direct Previous/Next navigation, a truthful applied count, and an expandable full Scene prompt. Keep the complete problem, suggested fix, exact source excerpt, and editable replacement available for the current finding. Preserve unsaved replacement edits when navigating. Advance after an actual successful Apply while allowing the author to revisit applied or skipped findings. This changes presentation only; navigation itself must not save or trigger another model request.
+
 The expected unit of assistance is one problem and one practical adjustment. Each suggestion uses an exact, unique excerpt from the saved prompt and a focused replacement, so corrections can be applied independently and successively without overwriting earlier accepted changes. Multiple alternative solutions are generally unnecessary; prefer one best, sufficiently grounded recommendation. A larger rewrite may be appropriate only when the problem cannot be solved locally, not as the default.
 
 ### Independence and optional context

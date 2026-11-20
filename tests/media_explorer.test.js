@@ -1172,3 +1172,44 @@ test('Fullscreen keyboard sorting advances to next unsorted Generation without c
   assert.equal(f.nodes['media-explorer-loupe'].open,true);
   assert.match(f.nodes['media-explorer-loupe-name'].textContent,/render-b/);
 });
+
+test('Prompt-derived tag suggestions are optional and preserve existing saved tags', async()=>{
+  const f=fixture();
+  f.window.openMediaExplorerActivity();
+  const item={...media('yoga-render'),storageId:'2026/yoga',tags:['keeper'],
+    prompt:'A woman in jeans lays a yoga mat on the studio floor while a dog watches'};
+  await f.settle(f.pending[0],[item]);
+  const card=f.nodes['media-explorer-grid'].children[0];
+  card.querySelector('.media-explorer-item-menu').click({preventDefault(){},stopPropagation(){}});
+  f.menus.at(-1).find(action=>action.label==='Edit tags…').run();
+  const dlg=f.document.body.children.at(-1);
+  const input=dlg.querySelector('input');
+  const area=dlg.querySelector('.media-explorer-tag-suggestions');
+  assert.ok(area);
+  const labels=area.querySelectorAll('button').map(button=>button.textContent);
+  assert.ok(labels.includes('+ yoga mat'));
+  assert.ok(labels.includes('+ jeans'));
+  assert.ok(labels.includes('+ studio'));
+  assert.ok(labels.includes('+ dog'));
+  assert.ok(!labels.includes('+ yoga'),'specific phrase preferred over generic word');
+  assert.equal(input.value,'keeper','suggestions never automatically enter the tag field');
+  assert.equal(f.pending.length,1,'suggestions require no model or network requests');
+  area.querySelectorAll('button').find(button=>button.textContent==='+ yoga mat').click();
+  assert.equal(input.value,'keeper, yoga mat');
+  assert.equal(f.pending.length,1,'accepting suggestion still does not write until Save');
+  dlg.children[0].emit('submit',{preventDefault(){}});
+  const post=f.pending.at(-1);
+  assert.equal(post.url,'/fs/generate/result/tags');
+  assert.deepEqual(JSON.parse(post.options.body),{storageId:'2026/yoga',tags:['keeper','yoga mat']});
+});
+
+test('Prompt tag suggestions are not falsely applied to external files or media with no prompt',async()=>{
+  const f=fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0],[{...media('unknown'),storageId:'2026/unknown',tags:[]}]);
+  const card=f.nodes['media-explorer-grid'].children[0];
+  card.querySelector('.media-explorer-item-menu').click({preventDefault(){},stopPropagation(){}});
+  f.menus.at(-1).find(action=>action.label==='Edit tags…').run();
+  const dlg=f.document.body.children.at(-1);
+  assert.equal(dlg.querySelector('.media-explorer-tag-suggestions'),undefined);
+});

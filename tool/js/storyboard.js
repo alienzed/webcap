@@ -6608,8 +6608,8 @@
     preset.value = '';
     input.value = '';
     var instructionLabel = document.querySelector('label[for="storyboard-director-tools-instruction"]');
-    if (instructionLabel) instructionLabel.textContent = 'Revise Scenes';
-    input.placeholder = 'Describe what should be revised across these Scenes.';
+    if (instructionLabel) instructionLabel.textContent = 'Additional direction (optional for presets)';
+    input.placeholder = 'Describe your revision, or add optional direction to a preset.';
     sceneRevisionHistory.reset(input);
     input.readOnly = false;
     el('storyboard-director-tools-generate-takes').closest('label').classList.remove('hidden');
@@ -6764,10 +6764,10 @@
     var status = el('storyboard-director-tools-status');
     if (!input || !run || !status) throw new Error('Director Tools modal markup is missing.');
     var generateFreshTakes = el('storyboard-director-tools-generate-takes').checked;
-    var instruction = String(input.value || '').trim();
     var preset = el('storyboard-director-tools-preset').value;
-    if (!instruction && preset !== 'visual_direction') {
-      status.textContent = 'Enter a revision instruction or choose a preset.';
+    var instruction = String(input.value || '').trim() || (DIRECTOR_PASS_PRESETS[preset] && DIRECTOR_PASS_PRESETS[preset].instruction) || '';
+    if (!instruction && !preset) {
+      status.textContent = 'Choose a revision approach or enter an instruction.';
       input.focus();
       return;
     }
@@ -6985,8 +6985,9 @@
       if (this.value === 'visual_direction') input.value = '';
       var visualDirection = this.value === 'visual_direction';
       var instructionLabel = document.querySelector('label[for="storyboard-director-tools-instruction"]');
-      if (instructionLabel) instructionLabel.textContent = visualDirection ? 'Additional direction (optional)' : 'Revise Scenes';
-      input.placeholder = visualDirection ? 'Optional direction for this Visual Direction pass.' : 'Describe what should be revised across these Scenes.';
+      if (instructionLabel) instructionLabel.textContent = 'Additional direction (optional for presets)';
+      input.placeholder = visualDirection ? 'Optional direction for this Visual Direction pass.' :
+        this.value ? 'Optional instructions to refine this preset.' : 'Describe what should be revised across these Scenes.';
       sceneRevisionHistory.reset(input);
       var coherence = this.value === 'coherence';
       syncDirectorToolsRunLabel();

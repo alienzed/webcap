@@ -50,6 +50,13 @@ async function setup(page,request,modelResponse) {
 
 test('Prompt Assist reviews one complete correction at a time and preserves edits while browsing',async({page,request})=>{
   const {project,scene}=await setup(page,request,{findings:suggestions});
+  const initialHistory=await page.locator('.storyboard-scene[data-scene-id="'+scene.id+'"] [data-scene-field="prompt"]').evaluate(editor=>{
+    const api=window.webcapTextareaRevisions;
+    const history=api.history(api.identity(editor));
+    return history && history.versions.slice();
+  });
+  expect(initialHistory).toEqual([source]);
+
   const cards=page.locator('#storyboard-prompt-assist-findings .storyboard-assist-finding');
   const position=page.locator('#storyboard-prompt-assist-position');
   const progress=page.locator('#storyboard-prompt-assist-count');
@@ -118,6 +125,14 @@ test('Prompt Assist reviews one complete correction at a time and preserves edit
   await expect(cards.getByRole('button',{name:'Applied'})).toBeDisabled();
   await expect(cards.locator('[data-assist-replacement]')).not.toBeEditable();
   const final=await story(page,project.id);
+  const revisions=await page.locator('.storyboard-scene[data-scene-id="'+scene.id+'"] [data-scene-field="prompt"]').evaluate(editor=>{
+    const api=window.webcapTextareaRevisions;
+    const history=api.history(api.identity(editor));
+    return history && history.versions.slice();
+  });
+  expect(revisions).toHaveLength(4);
+  expect(revisions[0]).toBe(source);
+  expect(revisions[3]).toBe(final.scenes[scene.id].prompt);
   expect(final.scenes[scene.id].prompt).toContain(suggestions[0].replacementText);
   expect(final.scenes[scene.id].prompt).toContain(custom);
   expect(final.scenes[scene.id].prompt).toContain(suggestions[2].replacementText);

@@ -56,6 +56,16 @@
 
   function el(id) { return document.getElementById(id); }
 
+  function setGeneratePromptText(text) {
+    var field = el('generate-prompt');
+    var revisions = window.webcapTextareaRevisions;
+    var previous = field.value;
+    var hadHistory = !!revisions.history(revisions.identity(field));
+    field.value = String(text == null ? '' : text);
+    if (hadHistory) revisions.recordChange(field, previous);
+    else revisions.captureInitial(field);
+  }
+
   function requestJson(url, options) {
     return fetch(url, options || {}).then(function (response) {
       return response.json().then(function (payload) {
@@ -416,7 +426,7 @@ function sweepLoras(model, folder) {
 
     var prompt = el('generate-prompt');
     if (prompt && (!prompt.value.trim() || prompt.dataset.modelId !== model.id)) {
-      prompt.value = String(model.defaultPrompt || '');
+      setGeneratePromptText(model.defaultPrompt || '');
       prompt.dataset.modelId = model.id;
     }
 
@@ -745,7 +755,7 @@ function sweepLoras(model, folder) {
     generateState.loraMode = saved.loraMode;
     generateState.sweepSelections = JSON.parse(JSON.stringify(saved.sweepSelections || {}));
     renderModelForm();
-    el('generate-prompt').value = saved.prompt;
+    setGeneratePromptText(saved.prompt);
     el('generate-prompt').dataset.modelId = saved.promptModelId || saved.modelId;
     generateEditorFieldIds.forEach(function (id) { el(id).value = saved.fields[id]; });
     ['first_frame', 'last_frame'].forEach(function (role) {
@@ -869,7 +879,7 @@ function sweepLoras(model, folder) {
     }
   
     var prompt = el('generate-prompt');
-    prompt.value = String(result.sourcePrompt || result.resolvedPrompt || '');
+    setGeneratePromptText(result.sourcePrompt || result.resolvedPrompt || '');
     prompt.dataset.modelId = resultModelId || String(generateState.modelId || '');
     if (model) {
       var settings = result.settings && typeof result.settings === 'object' ? result.settings : {};
@@ -1165,7 +1175,7 @@ function sweepLoras(model, folder) {
     if (!item) throw new Error('Saved prompt is missing from the Prompt Library.');
     if (!noteGenerateEditorEdit(false)) return;
     var prompt = el('generate-prompt');
-    prompt.value = String(item.prompt || '');
+    setGeneratePromptText(item.prompt || '');
 
     generateState.promptLibrary.activeId = String(item.id || '');
     generateState.director.previousPrompt = null;
@@ -2662,7 +2672,7 @@ function sweepLoras(model, folder) {
     if (generateState.director.busy || generateState.director.previousPrompt === null) return;
     if (!noteGenerateEditorEdit(false)) return;
     var prompt = el('generate-prompt');
-    prompt.value = generateState.director.previousPrompt;
+    setGeneratePromptText(generateState.director.previousPrompt);
     generateState.director.previousPrompt = null;
 
     setDirectorStatus('Previous prompt restored.');
@@ -2746,8 +2756,8 @@ function sweepLoras(model, folder) {
           var missing = phrases.filter(function (phrase) {
             return originalPrompt.toLowerCase().indexOf(phrase.toLowerCase()) === -1;
           });
-          if (missing.length) el('generate-prompt').value = originalPrompt +
-            (originalPrompt.trim() ? ', ' : '') + missing.join(', ');
+          if (missing.length) setGeneratePromptText(originalPrompt +
+            (originalPrompt.trim() ? ', ' : '') + missing.join(', '));
           noteGenerateEditorEdit(false);
           renderLoras();
           generateState.director.busy = false;
@@ -2802,7 +2812,7 @@ function sweepLoras(model, folder) {
           rewritten += (rewritten.trim() ? ', ' : '') + phrase;
         }
       });
-      promptNode.value = rewritten;
+      setGeneratePromptText(rewritten);
       noteGenerateEditorEdit(false);
       generateState.director.previousPrompt = previousPrompt;
 
@@ -2862,7 +2872,8 @@ function sweepLoras(model, folder) {
   function resetGeneratePromptScratch() {
     var prompt = el('generate-prompt');
     if (!prompt) throw new Error('Generate prompt editor is missing.');
-    prompt.value = '';
+    if (generateState.open) setGeneratePromptText('');
+    else prompt.value = ''; // Initial startup has no working draft to checkpoint.
     prompt.removeAttribute('data-model-id');
     generateState.modelId = getGenerateModelPreference();
     generateState.lorasByModel = {};
@@ -3246,7 +3257,7 @@ el('generate-sweep-folder').addEventListener('change', function () {
         var after = field.value.slice(field.selectionEnd);
         var insertText = (before.trim() && !/[\s,]$/.test(before) ? ', ' : '') + fragments.join(', ');
         var cursor = before.length + insertText.length;
-        field.value = before + insertText + after;
+        setGeneratePromptText(before + insertText + after);
         field.dispatchEvent(new Event('input', {bubbles: true}));
         field.focus();
         field.setSelectionRange(cursor, cursor);
@@ -3264,7 +3275,7 @@ el('generate-sweep-folder').addEventListener('change', function () {
         var end = prompt.selectionEnd;
         var before = prompt.value.slice(0, start);
         var text = (before.trim() && !/[\s,]$/.test(before) ? ', ' : '') + words.join(', ');
-        prompt.value = before + text + prompt.value.slice(end);
+        setGeneratePromptText(before + text + prompt.value.slice(end));
         prompt.dispatchEvent(new Event('input', {bubbles: true}));
         prompt.focus();
         prompt.setSelectionRange(start + text.length, start + text.length);

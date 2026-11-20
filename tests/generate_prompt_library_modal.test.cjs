@@ -6,6 +6,10 @@ const vm = require('node:vm');
 
 const script = fs.readFileSync('tool/js/generate.js', 'utf8');
 const html = fs.readFileSync('tool/tool.html', 'utf8');
+const helperStart = script.indexOf('  function setGeneratePromptText(text) {');
+const helperEnd = script.indexOf('  function requestJson(', helperStart);
+assert.ok(helperStart >= 0 && helperEnd > helperStart);
+const historyHelper = script.slice(helperStart, helperEnd);
 const start = script.indexOf('  function promptLibraryItem(');
 const end = script.indexOf('  function runGenerate(', start);
 assert.ok(start >= 0 && end > start, 'Prompt Library functions remain identifiable');
@@ -62,10 +66,13 @@ function fixture(saved = []) {
       if(url==='/fs/generate/prompt/delete') records=records.filter(item=>item.id!==data.id);
       return {};
     },
-    window:{prompt:()=>'',confirm:()=>true}
+    window:{prompt:()=>'',confirm:()=>true,webcapTextareaRevisions:{
+      identity:()=> 'generate-prompt',history:()=>undefined,
+      captureInitial(){},recordChange(){}
+    }}
   };
   const body = script.slice(start,end);
-  const api = vm.runInNewContext('(function(){'+body+
+  const api = vm.runInNewContext('(function(){'+historyHelper+body+
     ';return {setPromptLibraryOpen,selectPromptLibraryItem,renderPromptLibrary,'+
     'usePromptLibraryItem,deletePromptLibraryItem};})()',context);
   return {api,nodes,state,requestCount:()=>requestCount,edits:()=>editorEditCount};

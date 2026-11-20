@@ -108,6 +108,7 @@ test('Write opens the explicit operation picker without launching a model reques
   }
   let selected=0, availability=0;
   node('studio-dw-write-panel').classList.add('hidden');
+  node('director-studio-action-launcher').classList.add('hidden');
   const a=rail.indexOf('    function openDirectAction(which) {');
   const b=rail.indexOf("    rail.addEventListener('keydown'",a);
   const scope=vm.createContext({el:node,document:{addEventListener(){}},lastQuickAction:'write',updateScope(){},showConversationWrite(){availability++;},refreshWrite:async()=>{selected++;}});

@@ -216,7 +216,7 @@
       endpoint = '/fs/media_explorer/external/move';
       payload = {path:externalPath,files:chosen.map(function (item) {return item.relativePath;}),destination:entry.folder};
     } else if (allGenerate) {
-      endpoint = '/fs/media_explorer/generated/copy';
+      endpoint = '/fs/generate/result/move';
       payload = {storageIds:Array.from(new Set(chosen.map(function (item) {return item.storageId;}))),destination:entry.folder};
     } else {
       endpoint = '/fs/media_explorer/test/copy';
@@ -234,6 +234,9 @@
       if (allExternal) {
         if (el('media-explorer-loupe').open) el('media-explorer-loupe').close();
         refreshExternalFiles();
+      } else if (allGenerate) {
+        if (el('media-explorer-loupe').open) el('media-explorer-loupe').close();
+        load(true);
       } else {
         el('media-explorer-status').dataset.state = 'success';
         el('media-explorer-status').textContent =
@@ -783,7 +786,7 @@
     if ((item.source === 'generate' && item.role === 'generated' && item.storageId) ||
         (item.source === 'test' && item.ownerFolder && item.storageId)) {
       configuredFolderShortcuts().forEach(function (entry) {
-        actions.push({label:'Copy to '+entry.label+' ('+entry.key.toUpperCase()+')',run:function () {
+        actions.push({label:(item.source === 'generate' ? 'Move to ' : 'Copy to ')+entry.label+' ('+entry.key.toUpperCase()+')',run:function () {
           folderShortcutDestination(entry,folderShortcutTarget(item));
         }});
       });

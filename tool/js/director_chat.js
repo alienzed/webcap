@@ -327,8 +327,8 @@
     var drawer = el('director-chat-drawer');
     drawer.classList.toggle('studio-revision-mode', revision);
     if (revision) {
-      drawer.classList.remove('studio-actions-open');
-      el('studio-dw-open-tools').setAttribute('aria-expanded','false');
+      if (drawer.classList.contains('studio-actions-open'))
+        window.studioDirectorWorkbench.closeActions();
       el('director-chat-title').textContent = 'Revise Scenes';
     }
     el('director-chat-history-toggle').classList.toggle('hidden', revision);
@@ -1774,11 +1774,7 @@
   }
 
   function studioActionStatus(message, error, showPartial) {
-    var status = el('director-studio-action-status');
     // Routine receipts stay quiet; incomplete saved results remain visibly explained.
-    status.classList.toggle('hidden', !message || (!error && !showPartial));
-    status.textContent = error || showPartial ? (message || '') : '';
-    status.dataset.error = error ? 'true' : 'false';
     if (state.activeMode === 'storyboard' && window.studioDirectorWorkbench) {
       window.studioDirectorWorkbench.setStatus(String(message || ''), !!error, !!showPartial);
     }
@@ -2051,8 +2047,10 @@
         (skippedCreate.length ? '. Skipped: ' + skippedCreate.join(', ') + '. Raw output is in I/O.' : ''),false,!!skippedCreate.length);
       return window.studioDirectorBridge.recordApplied('project.create',story,{
         title:story.title,concept:story.concept,style:story.style,invariants:story.invariants
-      }).then(function () {return window.refreshStudioDirectorStoryIfOpen(story.id);});
+      }).then(function () {return window.refreshStudioDirectorStoryIfOpen(story.id);})
+        .then(function () {return payload;});
     }).catch(function (error) {
+      if (saved) error.saved = true;
       state.lastStudioIoError = String(error.message || error);
       studioActionStatus(saved ? 'Project saved, but reporting failed: '+state.lastStudioIoError :
         'Project Write failed: '+state.lastStudioIoError,true);
@@ -2540,9 +2538,11 @@
         var values = {};
         Object.keys(changes).forEach(function (key) {values[key === 'invariantOps' ? 'invariants' : key]=result.story[key === 'invariantOps' ? 'invariants' : key];});
         return window.studioDirectorBridge.recordApplied('brief.apply',result.story,values)
-          .then(function () {return window.refreshStudioDirectorStoryIfOpen(storyId);});
+          .then(function () {return window.refreshStudioDirectorStoryIfOpen(storyId);})
+          .then(function () {return result;});
       });
     }).catch(function (error) {
+      if (saved) error.saved = true;
       state.lastStudioIoError = String(error.message || error);
       studioActionStatus(saved ? 'Project saved, but reporting failed: '+state.lastStudioIoError
         : 'Project Write failed: '+state.lastStudioIoError,true);
@@ -3696,6 +3696,8 @@
     if (state.open) {
       if (typeof window.setActivityDrawerOpen === 'function') window.setActivityDrawerOpen(false);
       if (typeof window.setInferenceQueueOpen === 'function') window.setInferenceQueueOpen(false);
+    } else if (drawer.classList.contains('studio-actions-open')) {
+      window.studioDirectorWorkbench.closeActions();
     }
 
     drawer.classList.toggle('hidden', !state.open);
@@ -3756,8 +3758,17 @@
     el('studio-director-io-history').textContent = recorded.length ? recorded.map(function(message,index){
       return 'Event ' + (index+1) + '\n' + message.content;
     }).join('\n\n') : 'No recorded Read or Apply payloads in this conversation.';
-    var hasRequest=!!(state.requestDiagnostic && Array.isArray(state.requestDiagnostic.messages));
-    el('studio-director-io-request').disabled=!hasRequest;
+    var request = state.requestDiagnostic;
+    var hasRequest = !!(request && Array.isArray(request.messages));
+    var requestDetails = el('studio-director-io-request');
+    var requestMessages = el('studio-director-io-request-messages');
+    requestDetails.open = false;
+    requestDetails.classList.toggle('hidden', !hasRequest);
+    if (hasRequest) renderDirectorRequestDetails(requestMessages, request);
+    else requestMessages.replaceChildren();
+    el('studio-director-io-copy-request').onclick = hasRequest
+      ? function () {return copyDirectorRequest(request);}
+      : null;
     el('studio-director-io-status').textContent = (state.lastStudioIoError
       ? 'Latest request failed: ' + state.lastStudioIoError + ' '
       : '') + (hasRequest
@@ -3957,9 +3968,6 @@
     });
     el('studio-director-inspect').onclick = studioDirectorOpenIo;
     el('studio-director-io-close').onclick = function(){el('studio-director-io-dialog').close();};
-    el('studio-director-io-request').onclick = function(){
-      openDirectorRequestInspector(state.requestDiagnostic,'Director request (latest)');
-    };
     stop.onclick = stopJob;
     copy.onclick = function () {
       openDirectorRequestInspector(state.requestDiagnostic, 'Director Chat Request');
@@ -4828,6 +4836,7 @@
       }).then(function (payload) {
         if (!payload.job || !payload.job.jobId) throw new Error('Director did not queue a draft.');
         state.jobId = payload.job.jobId;
+        state.requestDiagnostic = payload.job.request || null;
         trackTransientLlmJob(payload.job);
         return waitForJob(payload.job);
       }).then(function (job) {

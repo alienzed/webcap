@@ -2543,6 +2543,10 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   margin: 0 0 10px;
 }
 .director-studio-action-status.hidden { display: none; }
+.director-chat-drawer:not(.studio-director) .director-studio-action-status,
+.director-chat-drawer.studio-actions-open .director-studio-action-status,
+.director-chat-drawer:not(.studio-director) #studio-dw-coherence-review,
+.director-chat-drawer.studio-revision-mode #studio-dw-coherence-review { display: none; }
 .director-studio-action-status[data-error="true"] { color: var(--danger, #f87171); }
 /* Conversation and workspace are separate surfaces; normal Assistant stays single-column. */
 .director-chat-layout {

@@ -2201,6 +2201,8 @@
                     <button id="director-studio-retry" type="button" class="review-captions-btn hidden">Start Writer's Workshop</button>
                 </div>
                 <div class="director-chat-composer">
+                    <span id="director-studio-action-status" class="director-studio-action-status hidden" role="status"></span>
+                    <button id="studio-dw-coherence-review" type="button" class="review-captions-btn hidden">Review coherence changes</button>
                     <div id="director-studio-revision-target" class="director-studio-revision-target hidden"></div>
                     <div id="director-chat-scene-context" class="hidden" role="status"></div>
                     <div id="director-studio-revision-controls" class="director-studio-revision-controls hidden">
@@ -2343,7 +2345,6 @@
                                             <div id="director-studio-operation-list" class="director-studio-operation-list"></div>
                                         </details>
                     </div>
-                    <span id="director-studio-action-status" class="director-studio-action-status hidden" aria-live="polite"></span>
                 </section>
                     </div>
                 </div>
@@ -2352,7 +2353,11 @@
               <header class="studio-scene-draft-header"><h2 id="studio-director-io-title">Director I/O</h2><button id="studio-director-io-close" type="button" class="review-captions-btn">Close</button></header>
               <div class="studio-scene-draft-content">
                 <p id="studio-director-io-status" role="status"></p>
-                <button id="studio-director-io-request" type="button" class="review-captions-btn">Inspect exact request…</button>
+                <details id="studio-director-io-request">
+                  <summary>Exact latest request</summary>
+                  <div id="studio-director-io-request-messages"></div>
+                  <button id="studio-director-io-copy-request" type="button" class="review-captions-btn">Copy full request</button>
+                </details>
                 <label for="studio-director-io-exchange">Response</label>
                 <select id="studio-director-io-exchange" aria-label="Director response to inspect"></select>
                 <details open><summary>Raw model response</summary><pre id="studio-director-io-raw"></pre></details>
@@ -2899,6 +2904,9 @@
                     <div id="storyboard-prompt-assist-findings" class="storyboard-assist-findings"></div>
                     <p id="storyboard-prompt-assist-status" class="training-history-summary" role="status"></p>
                 </div>
+                <footer id="storyboard-prompt-assist-completed" class="keep-lora-footer hidden">
+                    <button id="storyboard-prompt-assist-done" type="button" class="training-btn">Done</button>
+                </footer>
             </section>
         </div>
         <div id="storyboard-project-deep-qa-modal" class="keep-lora-modal hidden" aria-hidden="true" data-escape-close-id="storyboard-project-deep-qa-close">

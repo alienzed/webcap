@@ -27,9 +27,11 @@ test('LIVE Project Deep QA -> Prompt Assist: whole-project findings feed focused
   });
 
   await openProject(page,project.id);
-  await expect(page.locator('#storyboard-project-deep-qa-btn')).toBeVisible();
-  await page.locator('#storyboard-project-deep-qa-btn').click();
-  await expect(page.locator('#storyboard-project-deep-qa-modal')).toBeVisible({timeout:300000});
+  const deepQaButton=page.locator('#storyboard-project-deep-qa-btn');
+  const deepQaDialog=page.locator('#storyboard-project-deep-qa-modal');
+  await deepQaButton.click();
+  await expect(deepQaDialog).toBeVisible();
+  await page.locator('#storyboard-project-deep-qa-close').click();
   await expect.poll(async()=>{
     const response=await page.request.get('/fs/storyboard/deep-qa?storyId='+encodeURIComponent(project.id));
     const body=await response.json();
@@ -50,6 +52,11 @@ test('LIVE Project Deep QA -> Prompt Assist: whole-project findings feed focused
     expect(finding.suggestedFix).toBeTruthy();
   }
   await attachEvidence(info,'live-project-deep-qa',{model,projectId:project.id,cache:cached});
+  await expect(deepQaButton).toBeEnabled({timeout:300000});
+  await expect(deepQaDialog).toBeHidden();
+  await deepQaButton.click();
+  await expect(deepQaDialog.locator('#storyboard-project-deep-qa-count'))
+    .toHaveText(cached.findings.length+(cached.findings.length===1?' finding':' findings'));
   await page.locator('#storyboard-project-deep-qa-close').click();
 
   // Prompt Assist is a distinct one-Scene action. It may use current Deep QA
@@ -165,6 +172,15 @@ test('LIVE standalone Prompt Assist: one focused suggestion, optional navigation
     await page.locator('#storyboard-prompt-assist-prev').click();
   }
   await expect(cards.getByRole('button',{name:'Applied'})).toBeDisabled();
+  const done=page.locator('#storyboard-prompt-assist-done');
+  if(total>1){
+    await expect(done).toBeHidden();
+  } else {
+    await expect(done).toBeFocused();
+    await done.click();
+    await expect(page.locator('#storyboard-prompt-assist-modal')).toBeHidden();
+    await expect(button).toBeFocused();
+  }
   await attachEvidence(info,'live-standalone-prompt-assist-focus',{
     model,projectId:project.id,sceneId:scene.id,before,after:saved.prompt,
     suggestionCount:total,firstTarget:exactExcerpt,firstReplacement

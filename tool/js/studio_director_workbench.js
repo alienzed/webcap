@@ -4,6 +4,7 @@
   var readChoices = {}, writeOperationChosen = false;
   var sceneSelectionManual = false, sceneSelectionProject = '';
   var lastQuickAction = 'write';
+  var actionPanelVersion = 0;
   var sceneFields = ['prompt', 'title', 'durationSeconds'];
   var projectFields = ['title', 'concept', 'style', 'invariants'];
   var labels = {title:'Title', concept:'Concept', style:'Visual / atmosphere',
@@ -20,18 +21,26 @@
     });
   }
   function status(message, error, showSuccess) {
-    var node = el('studio-dw-status');
-    if (node) {
+    ['studio-dw-status', 'director-studio-action-status'].forEach(function (id) {
+      var node = el(id);
       node.textContent = (error || showSuccess) ? (message || '') : '';
       node.dataset.error = error ? 'true' : 'false';
       node.classList.toggle('hidden', !message || (!error && !showSuccess));
-    }
+    });
     if (error) {
-      el('director-chat-drawer').classList.add('studio-actions-open');
-      el('studio-dw-open-tools').setAttribute('aria-expanded','true');
       window.reportConsoleError('Studio Director workbench', new Error(message));
     }
     else if (message) window.reportConsoleInfo('Studio Director workbench', message);
+  }
+  function closeActions(focusTarget) {
+    actionPanelVersion += 1;
+    el('director-chat-drawer').classList.remove('studio-actions-open');
+    el('studio-dw-open-tools').setAttribute('aria-expanded','false');
+    if (focusTarget) el(focusTarget).focus();
+  }
+  function ownsActionPanel(version) {
+    return version === actionPanelVersion &&
+      el('director-chat-drawer').classList.contains('studio-actions-open');
   }
   function option(select, id, name) {
     var node = document.createElement('option');
@@ -191,6 +200,7 @@
     var id = el('studio-dw-read-project').value, keys = selectedPaths();
     if (!id || !keys.length) { status('Choose a Project and at least one field.', true); return; }
     var readConversationId = window.studioDirectorBridge.readConversationId();
+    var panelVersion = actionPanelVersion;
     el('studio-dw-read-send').disabled = true;
     window.studioDirectorWorkbench.setReadStatus('working','Preparing saved context selection…');
     // Same exact serializer drives the inspector and the outbound LLM message.
@@ -199,12 +209,13 @@
       var payload = readPayload(story, keys);
       el('studio-dw-read-preview-data').textContent = JSON.stringify(payload, null, 2);
       return window.studioDirectorBridge.appendReadSnapshot(payload, readConversationId, story.id).then(function () {
-        status('Read snapshot saved in conversation. No model request sent.', false, true);
-        el('studio-dw-read-panel').classList.add('hidden');
-        el('studio-dw-read').setAttribute('aria-expanded', 'false');
+        status('Read snapshot saved in conversation. No model request sent.', false);
+        if (ownsActionPanel(panelVersion)) {
+          el('studio-dw-read-panel').classList.add('hidden');
+          el('studio-dw-read').setAttribute('aria-expanded', 'false');
+          closeActions('director-chat-input');
+        }
         updateScope();
-        if (el('director-chat-drawer').classList.contains('studio-actions-open'))
-          el('studio-dw-close-actions').click();
       });
     }).catch(function (error) {
       window.studioDirectorWorkbench.setReadStatus('error','Read failed: ' + String(error.message || error));
@@ -574,6 +585,7 @@
       .catch(function (e) { status('Write setup failed: ' + e.message, true); return false; });
   }
   function toggle(which) {
+    actionPanelVersion += 1;
     var other = which === 'read' ? 'write' : 'read', panel = el('studio-dw-' + which + '-panel'),
       button = el('studio-dw-' + which), show = panel.classList.contains('hidden');
     panel.classList.toggle('hidden', !show);
@@ -663,51 +675,57 @@
     showConversationWrite();
     return refreshWrite().then(showConversationWrite);
   }
-  function writePrepare(options) {
+  async function writePrepare() {
     var bridge = window.studioDirectorBridge;
     var operation = el('studio-dw-write-operation').value;
     var id = el('studio-dw-write-project').value;
+    var panelVersion = actionPanelVersion;
+    var revisingScenes = operation === 'scene-write' && el('studio-dw-scene-mode').value === 'revise';
     if (!bridge.isReady()) {status(bridge.readinessMessage(),true);return;}
     if (operation !== 'new-project' && !id) {status('Choose a destination Project.',true);return;}
-    if (operation === 'scene-write') {
-      if (el('studio-dw-scene-mode').value === 'revise') return prepareBatchScenes(id);
-      var instruction = manualSceneInstruction() ||
-        'Create the Scene(s) we have developed in this Studio conversation.';
-      return bridge.writeNewScene({
-        projectId:id, instruction:instruction, authorRequest:instruction,
-        forceAuthor:true, directSave:true
-      });
-    }
-    if (operation !== 'new-project' && operation !== 'project')
-      throw new Error('Unsupported Studio creative Write goal: ' + operation);
     try {
-      var item = projects.find(function (p) {return p.id === id;});
-      var selectedProjectFields = operation === 'project' ? Array.from(
-        el('studio-dw-write-project-fields').querySelectorAll('input:checked')
-      ).map(function (input) {return input.value;}) : [];
-      if (operation === 'project' && !selectedProjectFields.length) {
-        status('Select at least one Project field to revise.',true);
-        return;
+      var result;
+      if (revisingScenes) {
+        result = await prepareBatchScenes(id);
+      } else if (operation === 'scene-write') {
+        var instruction = manualSceneInstruction() ||
+          'Create the Scene(s) we have developed in this Studio conversation.';
+        result = await bridge.writeNewScene({
+          projectId:id, instruction:instruction, authorRequest:instruction,
+          forceAuthor:true, directSave:true
+        });
+      } else {
+        var item = projects.find(function (p) {return p.id === id;});
+        var selectedProjectFields = operation === 'project' ? Array.from(
+          el('studio-dw-write-project-fields').querySelectorAll('input:checked')
+        ).map(function (input) {return input.value;}) : [];
+        if (operation === 'project' && !selectedProjectFields.length) {
+          status('Select at least one Project field to revise.',true);
+          return;
+        }
+        result = await bridge.prepareWrite(operation, id, item && storyName(item),{
+          instruction:manualSceneInstruction(),requestedFields:selectedProjectFields
+        });
       }
-      return Promise.resolve(bridge.prepareWrite(operation, id, item && storyName(item),{
-        instruction:manualSceneInstruction(),requestedFields:selectedProjectFields
-      })).catch(function (error) {
-        status('Write failed: ' + String(error.message || error), true);
-        if (typeof window.reportConsoleError === 'function')
-          window.reportConsoleError('Studio Project Write', error);
-        throw error;
-      });
+      if (result && (result.story || (revisingScenes && result.saved.length)) &&
+          ownsActionPanel(panelVersion)) closeActions('director-chat-input');
     } catch (error) {
-      status('Write failed: ' + String(error.message || error), true);
-      if (typeof window.reportConsoleError === 'function')
-        window.reportConsoleError('Studio Project Write', error);
-      throw error;
+      if (error.saved && ownsActionPanel(panelVersion)) closeActions('director-chat-input');
+      status((error.saved ? 'Changes saved, but follow-up failed: ' : 'Write failed: ') +
+        String(error.message || error), true);
     }
   }
   function prepareProjectCoherence(storyId) {
-    var button = el('studio-dw-write-prepare');
+    var button = el('studio-dw-coherence-check');
+    var writeButton = el('studio-dw-write-prepare');
+    var reviewButton = el('studio-dw-coherence-review');
+    var conversationId = window.studioDirectorBridge.readConversationId();
+    var panelVersion = actionPanelVersion;
     button.disabled = true;
-    status('Checking saved H3 Prompts across the selected Project. Nothing will be saved.', false);
+    writeButton.disabled = true;
+    proposedBatch = null;
+    reviewButton.classList.add('hidden');
+    status('Checking saved H3 Prompts across the selected Project…', false, true);
     var originalStory;
     Promise.resolve().then(function () {
       return window.flushStudioDirectorStoryEdits(storyId);
@@ -720,6 +738,7 @@
       return window.studioDirectorBridge.checkProjectCoherence(storyId);
     }).then(function (result) {
       return loadStory(storyId).then(function (fresh) {
+        if (!window.studioDirectorBridge.isCurrentConversation(conversationId)) return;
         if (fresh.updatedAt !== originalStory.updatedAt)
           throw new Error('The Project changed during coherence analysis. Run the check again before reviewing changes.');
         var ids = originalStory.sceneOrder || [], seen = new Set(), failures = [];
@@ -742,7 +761,7 @@
         var summary = 'Checked ' + seen.size + ' of ' + ids.length + ' Scenes' +
           (failures.length ? ' · ' + failures.length + ' skipped/failed: ' + failures.join(' | ') : '');
         if (!changed.length) {
-          status(summary + ' · No H3 Prompt changes proposed.', !!failures.length);
+          status(summary + ' · No H3 Prompt changes proposed.', !!failures.length, true);
           return;
         }
         proposedBatch = {
@@ -758,12 +777,20 @@
             };
           })
         };
-        renderBatchReview();
-        status(summary + ' · Review ' + changed.length + ' proposed Prompt changes before applying.', !!failures.length);
+        status(summary + ' · ' + changed.length + ' proposed Prompt changes to review.', !!failures.length, true);
+        reviewButton.classList.remove('hidden');
+        if (ownsActionPanel(panelVersion) &&
+            !document.querySelector('dialog[open], #app-overlay-root > :not(.hidden)[data-escape-close-id]')) {
+          closeActions('director-chat-input');
+          renderBatchReview();
+        }
       });
     }).catch(function (error) {
       status('Project coherence check failed: ' + String(error.message || error), true);
-    }).finally(function () {button.disabled = false;});
+    }).finally(function () {
+      button.disabled = false;
+      writeButton.disabled = false;
+    });
   }
   // Validate model-produced revisions before presenting them for review. The saved
   // Scene identity and untouched fields remain authoritative.
@@ -939,7 +966,6 @@
     el('studio-dw-batch-target-warning').textContent = proposedBatch.targetWarning || '';
     el('studio-dw-batch-error').textContent = '';
     el('studio-dw-batch-review').showModal();
-    status('Selected Scene drafts are ready for one reviewed Apply.',false);
   }
   function applyBatchScenes() {
     if (!proposedBatch) throw new Error('No reviewed multi-Scene draft.');
@@ -962,7 +988,11 @@
     }
     if (draft.targetWarning && !window.confirm(draft.targetWarning + '\nApply to the selected Scenes anyway?')) return;
     var button = el('studio-dw-batch-apply');
+    var reviewButton = el('studio-dw-coherence-review');
+    var checkButton = el('studio-dw-coherence-check');
     button.disabled = true;
+    reviewButton.disabled = true;
+    checkButton.disabled = true;
     var applied = false;
     Promise.resolve().then(function () {
       return window.flushStudioDirectorStoryEdits(draft.storyId);
@@ -975,10 +1005,11 @@
       if (!result.story || !result.savedFieldsByScene) throw new Error('Batch Apply returned no authoritative saved fields.');
       applied = true;
       proposedBatch = null;
+      reviewButton.classList.add('hidden');
       el('studio-dw-batch-review').close();
       return window.studioDirectorBridge.recordApplied('scene.batch.update',result.story,
         {scenes:result.savedFieldsByScene}).then(function () {
-          status('Reviewed Scene revisions saved together.',false);
+          status('',false);
           if (typeof window.refreshStudioDirectorStoryIfOpen === 'function')
             return window.refreshStudioDirectorStoryIfOpen(result.story.id);
       });
@@ -987,8 +1018,12 @@
       el('studio-dw-batch-error').textContent = applied
         ? 'Scenes saved, but conversation recording or refresh failed: '+detail
         : 'Apply was not confirmed: '+detail;
-      status('Multi-Scene Apply: '+detail,true);
-    }).finally(function () {button.disabled = false;});
+      status((applied ? 'Scene revisions saved, but follow-up failed: ' : 'Multi-Scene Apply: ')+detail,true);
+    }).finally(function () {
+      button.disabled = false;
+      reviewButton.disabled = false;
+      checkButton.disabled = false;
+    });
   }
   function applyScene() {
     if (!proposedScene) throw new Error('There is no reviewed Scene proposal.');
@@ -1398,6 +1433,7 @@
       });
     },
     setStatus:status,
+    closeActions:closeActions,
     markSavedFields:function(selected,story){
       if (!story || !story.id) throw new Error('Field update feedback needs the saved Project identity.');
       var values=selected.savedFields || selected.fields || selected;
@@ -1463,8 +1499,9 @@
       el('studio-dw-write-panel').classList.add('hidden');
       el('studio-dw-read').setAttribute('aria-expanded','false');
       el('studio-dw-write').setAttribute('aria-expanded','false');
-      el('studio-dw-open-tools').setAttribute('aria-expanded','false');
-      el('director-chat-drawer').classList.remove('studio-actions-open');
+      closeActions();
+      proposedBatch = null;
+      el('studio-dw-coherence-review').classList.add('hidden');
       el('director-studio-actions-menu').classList.add('hidden');
       el('director-studio-actions-toggle').setAttribute('aria-expanded','false');
       status('', false);
@@ -1497,7 +1534,11 @@
       var id = el('studio-dw-write-project').value;
       if (!id) {status('Choose a Project to check.',true);return;}
       if (!window.studioDirectorBridge.isReady()) {status(window.studioDirectorBridge.readinessMessage(),true);return;}
-      prepareProjectCoherence(id);
+      return prepareProjectCoherence(id);
+    };
+    el('studio-dw-coherence-review').onclick=function () {
+      closeActions('director-chat-input');
+      renderBatchReview();
     };
     el('studio-dw-read-preview').ontoggle = function () {
       if (!this.open) return;
@@ -1553,11 +1594,8 @@
       else openDirectAction(lastQuickAction);
     };
     el('studio-dw-close-actions').onclick=function () {
-      el('director-chat-drawer').classList.remove('studio-actions-open');
-      el('studio-dw-open-tools').setAttribute('aria-expanded','false');
-      var launcher = el('director-studio-actions-toggle');
-      if (!el('director-studio-action-launcher').classList.contains('hidden')) launcher.focus();
-      else el('studio-dw-open-tools').focus();
+      closeActions(el('director-studio-action-launcher').classList.contains('hidden')
+        ? 'studio-dw-open-tools' : 'director-studio-actions-toggle');
     };
     var launcher = el('director-studio-action-launcher');
     var menu = el('director-studio-actions-menu');
@@ -1600,7 +1638,10 @@
         }
         if (tool === 'history') return el('director-chat-history-toggle').click();
         if (tool === 'new-chat') return el('director-chat-clear').click();
-        if (tool === 'io') return el('studio-director-inspect').click();
+        if (tool === 'io') {
+          closeActions(launcherButton.id);
+          return el('studio-director-inspect').click();
+        }
         if (tool === 'revision') {
           var mode = el('director-studio-composer-mode-select');
           mode.value = 'revision';

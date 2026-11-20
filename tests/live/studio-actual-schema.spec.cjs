@@ -108,6 +108,21 @@ test('LIVE creative partnership — chat recommends staging, explicit Write auth
     'Preserve the night porter, paper crane, railway station doorway and rain-slick blue twilight.';
   await writeLive(page,{projectId:project.id,operation:'scene-write',sceneMode:'create',instruction});
   await expect.poll(async()=>(await story(page,project.id)).sceneOrder.length,{timeout:60000}).toBeGreaterThan(0);
+  await expect(page.locator('#director-chat-sidebar')).toBeHidden();
+  await expect(page.locator('#director-chat-messages')).toContainText('Saved '+project.title);
+  const actions=page.locator('#director-studio-actions-toggle');
+  await actions.click();
+  await page.locator('[data-studio-tool="io"]').click();
+  const modelIo=page.locator('#studio-director-io-dialog');
+  await expect(modelIo).toBeVisible();
+  await modelIo.getByText('Exact latest request',{exact:true}).click();
+  const exactRequest=modelIo.locator('#studio-director-io-request-messages');
+  await expect(exactRequest).toBeVisible();
+  await expect(exactRequest).toContainText('exact captured request');
+  await expect(page.locator('dialog[open]')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await expect(modelIo).toBeHidden();
+  await expect(actions).toBeFocused();
   const saved=await story(page,project.id);
   const writeReceipt=observed.jobs.at(-1),writeRequest=observed.requests.at(-1);
   await evidence(info,'live-creative-scene-write',{model,instruction,request:writeRequest,
@@ -167,6 +182,8 @@ test('LIVE Project pivot — explicit new Project Write never changes the open P
     'Visual atmosphere: warm golden workshop light. Include an Invariant: the bird has a copper beak.';
   await writeLive(page,{operation:'new-project',instruction:direction});
   await expect.poll(async()=>(await stories(page)).some(item=>item.title===title),{timeout:60000}).toBe(true);
+  await expect(page.locator('#director-chat-sidebar')).toBeHidden();
+  await expect(page.locator('#director-chat-messages')).toContainText('Saved '+title);
   const created=(await stories(page)).find(item=>item.title===title);
   const saved=await story(page,created.id),untouched=await story(page,original.id);
   await evidence(info,'actual-project-pivot',{model,writeRequest:observed.requests.at(-1),

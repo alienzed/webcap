@@ -94,6 +94,29 @@
     var submit = document.createElement('button'); submit.type = 'submit'; submit.textContent = confirmText;
     buttons.appendChild(cancel); buttons.appendChild(submit);
     form.appendChild(heading); form.appendChild(input);
+    if (options.tagSuggestionValues && options.tagSuggestionValues.length) {
+      var suggestionArea = document.createElement('div');
+      suggestionArea.className = 'media-explorer-tag-suggestions';
+      var suggestionLabel = document.createElement('div');
+      text(suggestionLabel,'Suggested from prompt · not applied');
+      suggestionArea.appendChild(suggestionLabel);
+      options.tagSuggestionValues.forEach(function (tag) {
+        var chip = document.createElement('button');
+        chip.type = 'button'; chip.className = 'media-explorer-tag-suggestion';
+        text(chip,'+ '+tag);
+        chip.addEventListener('click',function () {
+          var existing = input.value.split(',').map(function (value) {return value.trim();}).filter(Boolean);
+          if (!existing.some(function (value) {return value.toLowerCase() === tag.toLowerCase();})) {
+            existing.push(tag);
+            input.value = existing.join(', ');
+          }
+          chip.disabled = true;
+          input.focus();
+        });
+        suggestionArea.appendChild(chip);
+      });
+      form.appendChild(suggestionArea);
+    }
     var folderHost = null;
     if (options.folders) {
       folderHost = document.createElement('div'); folderHost.className = 'media-explorer-dialog-folders';
@@ -652,6 +675,34 @@
         load(true, {soft:true});
       });
   }
+  // Lightweight descriptive hints from the saved authoring prompt, not visual
+  // observations. This intentionally avoids extra model calls and automatic tags.
+  var promptTagVocabulary = [
+    'yoga mat','yoga','fashion show','runway','streetwear','jeans','jogging pants',
+    'sneakers','dress','jacket','coat','shirt','skirt','suit','uniform','hat',
+    'handbag','glasses','ball','bat','bicycle','motorcycle','car','train',
+    'airplane','boat','dog','cat','horse','bird','tree','flower','forest',
+    'beach','ocean','river','mountain','snow','rain','sunset','sunrise',
+    'city','street','rooftop','kitchen','bedroom','office','classroom',
+    'gym','studio','garden','park','pool','stage','crowd','dancing',
+    'running','walking','swimming','cycling','tennis','baseball','soccer',
+    'basketball','portrait','close-up','aerial','silhouette','macro',
+    'black and white','cinematic','anime','watercolor','photorealistic'
+  ];
+  function promptDerivedTagSuggestions(item) {
+    if (!item || !['generate','test','storyboard','epoch'].includes(item.source)) return [];
+    var prompt = String(item.prompt || item.sourcePrompt || '').toLowerCase();
+    if (!prompt.trim()) return [];
+    var tags = new Set((item.tags || []).map(function (tag) {return tag.toLowerCase();}));
+    var matches = promptTagVocabulary.filter(function (tag) {
+      var expression = new RegExp('(?:^|[^a-z])'+tag.replace(/[.*+?^$\{\}()|[\]\\]/g,'\\  function editMediaTags(item) {')+'(?:$|[^a-z])','i');
+      return expression.test(prompt) && !tags.has(tag);
+    });
+    // Prefer useful specific phrases instead of also suggesting their component words.
+    return matches.filter(function (tag) {
+      return !matches.some(function (other) {return other !== tag && other.includes(tag);});
+    }).slice(0,10);
+  }
   function editMediaTags(item) {
     promptMediaAction('Edit tags (comma-separated)',(item.tags || []).join(', '),'Save tags',function (value) {
       var tags=value.split(',').map(function (tag) {return tag.trim();}).filter(Boolean);
@@ -660,7 +711,7 @@
         if(item.source==='external')item.rating=result.rating;
         load(true,{soft:true});
       });
-    },{allowEmpty:true,tagSuggestions:true});
+    },{allowEmpty:true,tagSuggestions:true,tagSuggestionValues:promptDerivedTagSuggestions(item)});
   }
   function rateExplorerItem(item, value) {
     if (item.source === 'external') return curateExternal(item,{rating:value});

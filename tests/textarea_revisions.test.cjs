@@ -153,6 +153,36 @@ test('browsing is non-destructive; editing an earlier version appends after the 
     'Original|New|Original but changed');
 });
 
+test('leaving an edited textarea checkpoints immediately without waiting for inactivity',()=>{
+  const h=harness(),field=editor('Original','scene-blur');
+  const api=h.window.webcapTextareaRevisions;
+  h.focus(field);
+  field.value='Just typed';
+  h.input(field);
+  h.blur(field);
+  assert.deepEqual(Array.from(api.history(api.identity(field)).versions),['Original','Just typed']);
+  h.idle();
+  assert.equal(api.history(api.identity(field)).versions.length,2,'pending timer was cancelled');
+});
+
+test('programmatic changes record both sides, including without editor focus',()=>{
+  const h=harness(),field=editor('First','scene-generated');
+  const api=h.window.webcapTextareaRevisions;
+  const key=api.identity(field);
+  field.value='Generated';
+  api.recordChange(field,'First');
+  assert.deepEqual(Array.from(api.history(key).versions),['First','Generated']);
+  h.focus(field);
+  field.value='Revised by assist';
+  api.recordChange(field,'Generated');
+  assert.deepEqual(Array.from(api.history(key).versions),['First','Generated','Revised by assist']);
+  assert.equal(h.controls['[data-rev-count]'].textContent,'3/3');
+  h.click('[data-rev-prev]');
+  assert.equal(field.value,'Generated');
+  h.blur(field);
+  assert.equal(field.value,'Revised by assist','history preview is non-destructive');
+});
+
 test('recreated Scene textareas reuse the same key, other Scenes stay isolated',()=>{
   const h=harness(),old=editor('First','scene-1'),again=editor('First','scene-1'),other=editor('Second','scene-2');
   const key=h.window.webcapTextareaRevisions.identity(old);

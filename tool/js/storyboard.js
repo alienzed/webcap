@@ -6257,11 +6257,14 @@
             sceneId:sceneId,
             sourcePrompt:context.prompt,
             findings:Array.isArray(result.findings) ? result.findings : [],
-            discardedFindingCount:Number(result.discardedFindingCount || 0)
+            discardedFindingCount:Number(result.discardedFindingCount || 0),
+            activeFindingIndex:0,
+            applying:false
           };
           el("storyboard-prompt-assist-source").textContent = context.prompt;
+          el("storyboard-prompt-assist-source-details").open = false;
           renderPromptAssistFindings();
-          status.textContent = "Suggestions are optional. Apply each correction independently.";
+          status.textContent = "";
           openAssistModal("storyboard-prompt-assist-modal");
         });
       });
@@ -6291,6 +6294,8 @@
       return;
     }
     button.disabled = true;
+    promptAssistSession.applying = true;
+    syncPromptAssistNavigator();
     status.textContent = "Applying correction…";
     setDirectorPending(target, true);
     fetch("/fs/storyboard/prompt-assist/apply", {
@@ -6319,12 +6324,25 @@
       syncSceneDirectorRestore(promptAssistSession.sceneId);
       syncSceneRefineState(promptAssistSession.sceneId);
       setSaveState("Saved");
-      card.classList.add("is-applied");
-      status.textContent = "Applied";
-      button.textContent = "Applied";
-      button.disabled = true;
+      finding.applied = true;
+      finding.draftReplacement = replacement;
+      promptAssistSession.applying = false;
+      var findings = promptAssistSession.findings;
+      var current = promptAssistSession.activeFindingIndex;
+      var next = findings.findIndex(function (item, index) {
+        return index > current && !item.applied;
+      });
+      if (next === -1) next = findings.findIndex(function (item) { return !item.applied; });
+      if (next !== -1) promptAssistSession.activeFindingIndex = next;
+      renderPromptAssistFindings();
+      el("storyboard-prompt-assist-status").textContent = next !== -1
+        ? "Correction applied. Continue with the next finding."
+        : "All suggested corrections applied.";
+      el("storyboard-prompt-assist-position").focus();
       return refreshLibrary();
     }).catch(function (error) {
+      promptAssistSession.applying = false;
+      syncPromptAssistNavigator();
       status.textContent = String(error && error.message || error);
       button.disabled = false;
     }).finally(function () {
@@ -6908,6 +6926,12 @@
     el('storyboard-project-deep-qa-btn').onclick = function () { runProjectDeepQa(false); };
     el('storyboard-project-deep-qa-refresh').onclick = function () { runProjectDeepQa(true); };
     el('storyboard-prompt-assist-close').onclick = function () { closeAssistModal('storyboard-prompt-assist-modal'); };
+    el('storyboard-prompt-assist-prev').onclick = function () {
+      if (promptAssistSession) showPromptAssistFinding(promptAssistSession.activeFindingIndex - 1);
+    };
+    el('storyboard-prompt-assist-next').onclick = function () {
+      if (promptAssistSession) showPromptAssistFinding(promptAssistSession.activeFindingIndex + 1);
+    };
     el('storyboard-project-deep-qa-close').onclick = function () { closeAssistModal('storyboard-project-deep-qa-modal'); };
     el('storyboard-find-replace-btn').onclick = openProjectReplace;
     el('storyboard-find-replace-find').addEventListener('input', previewProjectReplacement);

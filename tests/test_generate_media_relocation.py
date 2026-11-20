@@ -47,6 +47,8 @@ def test_move_preserves_record_and_reuses_existing_destination(generation):
     discovered = media_explorer.discover_generate(limit=500)
     assert len(discovered) == 1
     assert discovered[0]["relativePath"] == moved["location"]
+    assert discovered[0]["ownerFolder"] == "Keepers"
+    assert media_explorer.list_media(source="generate", folder="Keepers")["total"] == 1
     assert discovered[0]["id"] == "generate:generations/2026-11-20/job-1/result.mp4"
     assert media_explorer.list_media(source="generate", curation="unsorted")["total"] == 0
 

@@ -1436,6 +1436,7 @@
       });
     },
     setStatus:status,
+    dismissActions:closeActions,
     markSavedFields:function(selected,story){
       if (!story || !story.id) throw new Error('Field update feedback needs the saved Project identity.');
       var values=selected.savedFields || selected.fields || selected;

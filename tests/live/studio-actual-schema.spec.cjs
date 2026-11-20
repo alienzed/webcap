@@ -184,10 +184,26 @@ test('LIVE Project pivot — explicit new Project Write never changes the open P
   await expect.poll(async()=>(await stories(page)).some(item=>item.title===title),{timeout:60000}).toBe(true);
   await expect(page.locator('#director-chat-sidebar')).toBeHidden();
   await expect(page.locator('#director-chat-messages')).toContainText('Saved '+title);
+  const receipt=observed.jobs.at(-1);
+  expect(receipt?.raw).toBeTruthy();
+  await page.locator('#director-studio-actions-toggle').click();
+  await page.locator('[data-studio-tool="io"]').click();
+  const modelIo=page.locator('#studio-director-io-dialog');
+  await modelIo.getByText('Exact latest request',{exact:true}).click();
+  await expect(modelIo.locator('#studio-director-io-request-messages')).toContainText(title);
+  await expect.poll(()=>modelIo.locator('#studio-director-io-raw').textContent()).toBe(receipt.raw);
+  await page.keyboard.press('Escape');
+  const sessions=await (await page.request.get('/fs/director/chats')).json();
+  const chatId=sessions.activeByMode.storyboard;
+  expect(chatId).toBeTruthy();
+  await expect.poll(async()=>{
+    const history=await (await page.request.get('/fs/director/chats/'+chatId+'?inspect=1')).json();
+    return history.chat?.writeIo;
+  }).toContainEqual(expect.objectContaining({operation:'studio_project_draft',rawResponse:receipt.raw}));
   const created=(await stories(page)).find(item=>item.title===title);
   const saved=await story(page,created.id),untouched=await story(page,original.id);
   await evidence(info,'actual-project-pivot',{model,writeRequest:observed.requests.at(-1),
-    receipt:observed.jobs.at(-1),saved,untouched});
+    receipt,saved,untouched});
   expect(observed.requests.at(-1).operation).toBe('studio_project_draft');
   expect(JSON.stringify(observed.requests.at(-1).messages)).not.toContain('H3 PROMPT AUTHORING REFERENCE');
   expect(saved.invariants.length).toBeGreaterThan(0);

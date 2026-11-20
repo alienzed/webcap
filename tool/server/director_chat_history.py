@@ -237,13 +237,15 @@ def _validate_working_draft(value):
 
 
 def _validate_write_io(records):
-    """Retain verbatim Scene Write output for diagnostics, separate from chat context."""
+    """Retain verbatim Studio Write output for diagnostics, separate from chat context."""
     if not isinstance(records, list):
         raise ValueError("Studio Write I/O history must be an array.")
+    operations = {"studio_project_draft", "studio_brief_draft",
+                  "studio_scenes_draft", "studio_scene_field_draft"}
     for record in records:
         if (not isinstance(record, dict)
                 or set(record) != {"operation", "projectId", "at", "rawResponse"}
-                or record["operation"] not in {"studio_scenes_draft", "studio_scene_field_draft"}
+                or record["operation"] not in operations
                 or not all(isinstance(record[key], str) for key in record)):
             raise ValueError("Studio Write I/O record is invalid.")
     return [dict(record) for record in records]

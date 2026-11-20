@@ -1479,6 +1479,14 @@
     });
   }
 
+  function rememberStudioWriteResponse(operation, raw, projectId) {
+    state.lastStudioIoRaw = raw;
+    if (!raw) return;
+    state.studioWriteIo.push({operation:operation,projectId:projectId || '',
+      at:new Date().toISOString(),rawResponse:raw});
+    scheduleSessionSave();
+  }
+
   function recordStudioOperation(kind, label, storyId, sceneIds) {
     state.studioOperations.push({
       kind: kind, label: String(label || '').slice(0, 200), storyId: String(storyId || ''),
@@ -2020,7 +2028,7 @@
       return waitForJob(payload.job);
     }).then(function (job) {
       var raw = String(job.result && job.result.text || '');
-      state.lastStudioIoRaw = raw;
+      rememberStudioWriteResponse('studio_project_draft', raw);
       var proposal;
       try { proposal = JSON.parse(raw); }
       catch (error) { throw new Error('Director returned invalid Project JSON: '+error.message+'\\nRaw response:\\n'+raw); }
@@ -2495,7 +2503,7 @@
       return waitForJob(payload.job);
     }).then(function (job) {
       var raw = String(job.result && job.result.text || '');
-      state.lastStudioIoRaw = raw;
+      rememberStudioWriteResponse('studio_brief_draft', raw, storyId);
       var authored = parseStudioBriefDraft(raw);
       var material = studioProjectFieldsFromModel(authored), changes = {}, expected = {};
       var permitted = requestedFields.length ? requestedFields : ['title','concept','style','invariants'];
@@ -3693,6 +3701,9 @@
     var toggle = el('director-chat-rail-btn');
     if (!drawer || !toggle) return;
 
+    if (!state.open && state.activeMode === 'storyboard' && drawer.classList.contains('studio-actions-open'))
+      window.studioDirectorWorkbench.dismissActions();
+
     if (state.open) {
       if (typeof window.setActivityDrawerOpen === 'function') window.setActivityDrawerOpen(false);
       if (typeof window.setInferenceQueueOpen === 'function') window.setInferenceQueueOpen(false);
@@ -3728,8 +3739,13 @@
       responses.push({content:'Write · ' + entry.operation + ' · ' + entry.at,
         rawResponse:entry.rawResponse});
     });
-    if (state.lastStudioIoError && state.lastStudioIoRaw)
+    var latestResponse = state.lastStudioIoRaw ? responses.findLastIndex(function (message) {
+      return (message.rawResponse || message.content) === state.lastStudioIoRaw;
+    }) : -1;
+    if (latestResponse === -1 && state.lastStudioIoError && state.lastStudioIoRaw) {
+      latestResponse = responses.length;
       responses.push({content:'Failed response',rawResponse:state.lastStudioIoRaw});
+    }
     chooser.replaceChildren();
     responses.forEach(function(message,index){
       var option=document.createElement('option');
@@ -3747,7 +3763,7 @@
       el('studio-director-io-parsed').textContent = parsed;
     }
     chooser.onchange=render;
-    if (responses.length) chooser.value=String(responses.length-1);
+    if (responses.length) chooser.value=String(latestResponse === -1 ? responses.length - 1 : latestResponse);
     render();
     var recorded = currentMessages().filter(function(message){
       return message.role === 'user' && (message.content.startsWith('[WEBCAP EXPLICIT READ') ||
@@ -4615,12 +4631,7 @@
           'studio_scenes_draft', true,
           {projectId:storyId,projectTitle:story.title,sceneOrder:order})
         .then(function (raw) {
-          state.lastStudioIoRaw = raw;
-          // Keep the exact model result inspectable after reload, even if
-          // parsing or persistence fails. This is diagnostics, not chat context.
-          state.studioWriteIo.push({operation:'studio_scenes_draft',projectId:storyId,
-            at:new Date().toISOString(),rawResponse:raw});
-          scheduleSessionSave();
+          rememberStudioWriteResponse('studio_scenes_draft', raw, storyId);
           var fields;
           try { fields = JSON.parse(raw); }
           catch (error) { throw new Error('Director returned invalid Scene JSON.\\nRaw response:\\n' + raw); }
@@ -4754,10 +4765,7 @@
             sceneNumber:story.sceneOrder.indexOf(sceneId)+1,sceneOrder:story.sceneOrder.slice()},
           requestedFields)
           .then(function (raw) {
-            state.lastStudioIoRaw = raw;
-            state.studioWriteIo.push({operation:'studio_scene_field_draft',projectId:storyId,
-              at:new Date().toISOString(),rawResponse:raw});
-            scheduleSessionSave();
+            rememberStudioWriteResponse('studio_scene_field_draft', raw, storyId);
             var proposed;
             try {proposed = JSON.parse(raw);}
             catch (error) {throw new Error('Director returned invalid Scene JSON.\nRaw response:\n' + raw);}

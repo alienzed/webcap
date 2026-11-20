@@ -2884,14 +2884,18 @@
                     <button id="storyboard-prompt-assist-close" type="button" class="training-review-modal-close" aria-label="Close Prompt Assist">&times;</button>
                 </header>
                 <div class="keep-lora-content storyboard-assist-content">
-                    <div class="storyboard-assist-context">
-                        <div><strong>Scene prompt</strong><span>Text-only review; no generated Takes or visual claims.</span></div>
+                    <details id="storyboard-prompt-assist-source-details" class="storyboard-assist-source-details">
+                        <summary>Full Scene prompt</summary>
                         <pre id="storyboard-prompt-assist-source"></pre>
-                    </div>
-                    <div class="storyboard-assist-findings-heading">
-                        <strong>Suggested corrections</strong>
-                        <span id="storyboard-prompt-assist-count" class="keep-lora-source"></span>
-                    </div>
+                    </details>
+                    <nav id="storyboard-prompt-assist-navigator" class="storyboard-assist-navigator hidden" aria-label="Prompt Assist findings">
+                        <button id="storyboard-prompt-assist-prev" type="button" class="review-captions-btn">‹ Previous</button>
+                        <div class="storyboard-assist-position">
+                            <strong id="storyboard-prompt-assist-position" tabindex="-1" aria-live="polite"></strong>
+                            <span id="storyboard-prompt-assist-count"></span>
+                        </div>
+                        <button id="storyboard-prompt-assist-next" type="button" class="review-captions-btn">Next ›</button>
+                    </nav>
                     <div id="storyboard-prompt-assist-findings" class="storyboard-assist-findings"></div>
                     <p id="storyboard-prompt-assist-status" class="training-history-summary" role="status"></p>
                 </div>

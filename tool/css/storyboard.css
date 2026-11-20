@@ -4592,3 +4592,187 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 .storyboard-assist-finding-main p {
   font-size: 15px;
 }
+
+/* Prompt Assist focused review: one roomy decision, with the full text intact.
+   Intentionally scoped: Project Deep QA continues to show its complete list. */
+#storyboard-prompt-assist-modal .storyboard-assist-dialog {
+  width: min(1400px, 88vw);
+  max-width: calc(100vw - 32px);
+  max-height: 90dvh;
+}
+#storyboard-prompt-assist-modal .storyboard-assist-content {
+  max-height: calc(90dvh - 96px);
+  gap: 18px;
+  padding-block: 18px;
+}
+#storyboard-prompt-assist-modal #storyboard-prompt-assist-target {
+  font-size: 17px;
+  line-height: 1.4;
+}
+#storyboard-prompt-assist-modal .storyboard-assist-source-details {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 11px 16px;
+  background: var(--panel);
+}
+#storyboard-prompt-assist-modal .storyboard-assist-source-details summary {
+  cursor: pointer;
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+#storyboard-prompt-assist-modal .storyboard-assist-source-details pre {
+  max-height: 40dvh;
+  margin: 12px 0 0;
+  padding: 14px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: 16px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+#storyboard-prompt-assist-modal .storyboard-assist-navigator {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+}
+#storyboard-prompt-assist-modal .storyboard-assist-navigator.hidden {
+  display: none !important;
+}
+#storyboard-prompt-assist-modal .storyboard-assist-navigator > button {
+  min-width: 125px;
+  min-height: 46px;
+  padding: 9px 14px;
+  font-size: 17px;
+}
+#storyboard-prompt-assist-modal .storyboard-assist-navigator > button:disabled {
+  opacity: .5;
+  cursor: default;
+}
+#storyboard-prompt-assist-modal .storyboard-assist-position {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  text-align: center;
+}
+#storyboard-prompt-assist-position {
+  font-size: 23px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+#storyboard-prompt-assist-position:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 5px;
+}
+#storyboard-prompt-assist-count {
+  font-size: 16px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+#storyboard-prompt-assist-modal .storyboard-assist-findings {
+  display: block;
+}
+#storyboard-prompt-assist-modal .storyboard-assist-finding {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 24px;
+  border-radius: 12px;
+}
+#storyboard-prompt-assist-modal .storyboard-assist-finding.is-applied {
+  opacity: 1;
+  border-color: var(--accent);
+}
+#storyboard-prompt-assist-modal .storyboard-assist-finding-main {
+  gap: 10px;
+}
+#storyboard-prompt-assist-modal .storyboard-assist-location {
+  margin: 0 0 6px;
+  color: var(--text);
+  font-size: 21px;
+  line-height: 1.4;
+}
+#storyboard-prompt-assist-modal .storyboard-assist-finding-main strong {
+  margin-top: 6px;
+  font-size: 18px;
+}
+#storyboard-prompt-assist-modal .storyboard-assist-finding-main p {
+  font-size: 17px;
+  line-height: 1.55;
+}
+#storyboard-prompt-assist-modal .storyboard-assist-patch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 18px;
+}
+#storyboard-prompt-assist-modal .storyboard-assist-patch label {
+  gap: 9px;
+  min-width: 0;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 650;
+}
+#storyboard-prompt-assist-modal .storyboard-assist-patch textarea {
+  box-sizing: border-box;
+  min-height: 195px;
+  padding: 13px;
+  resize: vertical;
+  color: var(--text);
+  font: 16px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+#storyboard-prompt-assist-modal .storyboard-assist-patch textarea[readonly] {
+  background: var(--panel-soft, var(--panel));
+}
+#storyboard-prompt-assist-modal .storyboard-assist-patch-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+}
+#storyboard-prompt-assist-modal .storyboard-assist-patch-actions button {
+  min-height: 46px;
+  padding: 9px 18px;
+  font-size: 18px;
+  font-weight: 650;
+}
+#storyboard-prompt-assist-modal .storyboard-assist-apply-status,
+#storyboard-prompt-assist-modal #storyboard-prompt-assist-status,
+#storyboard-prompt-assist-modal .storyboard-assist-empty {
+  font-size: 16px;
+  line-height: 1.5;
+}
+@media (max-width: 900px) {
+  #storyboard-prompt-assist-modal .storyboard-assist-dialog {
+    width: 96vw;
+    max-height: 94dvh;
+  }
+  #storyboard-prompt-assist-modal .storyboard-assist-content {
+    max-height: calc(94dvh - 90px);
+  }
+  #storyboard-prompt-assist-modal .storyboard-assist-patch {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  #storyboard-prompt-assist-modal .storyboard-assist-finding {
+    padding: 16px;
+  }
+}
+@media (max-width: 550px) {
+  #storyboard-prompt-assist-modal .storyboard-assist-navigator {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  #storyboard-prompt-assist-modal .storyboard-assist-position {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  #storyboard-prompt-assist-modal .storyboard-assist-navigator > button {
+    grid-row: 2;
+    min-width: 0;
+  }
+}

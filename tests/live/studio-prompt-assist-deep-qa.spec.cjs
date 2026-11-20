@@ -61,19 +61,47 @@ test('LIVE Project Deep QA -> Prompt Assist: whole-project findings feed focused
   const source=await page.locator('#storyboard-prompt-assist-source').textContent();
   expect(source).toContain('red baseball jacket');
   const cards=page.locator('#storyboard-prompt-assist-findings .storyboard-assist-finding');
-  const count=await cards.count();
-  expect(count).toBeGreaterThan(0);
+  await expect(cards).toHaveCount(1);
+  const position=page.locator('#storyboard-prompt-assist-position');
+  await expect(position).toContainText('Finding 1 of');
+  const total=Number((await position.innerText()).match(/Finding 1 of (\d+)/)?.[1] || 0);
+  expect(total).toBeGreaterThan(0);
+  const details=page.locator('#storyboard-prompt-assist-source-details');
+  await expect(details).not.toHaveAttribute('open', '');
+  await details.locator('summary').click();
+  await expect(page.locator('#storyboard-prompt-assist-source')).toBeVisible();
+  await details.locator('summary').click();
   const savedBefore=await story(page,project.id);
   expect(savedBefore.scenes[first.id].prompt).toBe(source);
 
   const card=cards.first();
   const target=await card.locator('textarea').nth(0).inputValue();
   const replacement=await card.locator('[data-assist-replacement]').inputValue();
+  const originalFinding=await card.innerText();
   expect(target).toBeTruthy();
   expect(replacement).toBeTruthy();
   expect(source.split(target)).toHaveLength(2);
+  if (total > 1) {
+    await card.locator('[data-assist-replacement]').fill(replacement + ' [temporary draft]');
+    await page.locator('#storyboard-prompt-assist-next').click();
+    await expect(position).toContainText('Finding 2 of '+total);
+    await expect(cards).toHaveCount(1);
+    await page.locator('#storyboard-prompt-assist-prev').click();
+    await expect(card.locator('[data-assist-replacement]')).toHaveValue(replacement + ' [temporary draft]');
+    await card.locator('[data-assist-replacement]').fill(replacement);
+    expect((await story(page,project.id)).scenes[first.id].prompt).toBe(source);
+  }
   await card.getByRole('button',{name:'Apply correction'}).click();
-  await expect(card.getByRole('button',{name:'Applied'})).toBeDisabled({timeout:30000});
+  await expect(page.locator('#storyboard-prompt-assist-count'))
+    .toContainText('1 of '+total+' applied',{timeout:30000});
+  if (total > 1) {
+    await expect(position).toContainText('Finding 2 of '+total);
+    await page.locator('#storyboard-prompt-assist-prev').click();
+    await expect(card.getByRole('button',{name:'Applied'})).toBeDisabled();
+    await page.locator('#storyboard-prompt-assist-next').click();
+  } else {
+    await expect(card.getByRole('button',{name:'Applied'})).toBeDisabled();
+  }
   const savedAfter=await story(page,project.id);
   expect(savedAfter.scenes[first.id].prompt).toContain(replacement);
   expect(savedAfter.scenes[first.id].previousPrompt).toBe(source);
@@ -83,8 +111,62 @@ test('LIVE Project Deep QA -> Prompt Assist: whole-project findings feed focused
 
   await attachEvidence(info,'live-prompt-assist',{
     model,projectId:project.id,sceneId:first.id,sourcePrompt:source,
-    suggestionCount:count,
-    suggestions:await cards.allTextContents(),
+    suggestionCount:total,
+    firstSuggestion:originalFinding,
+    currentVisibleFinding:await cards.allTextContents(),
     saved:(await story(page,project.id)).scenes[first.id]
+  });
+});
+
+test('LIVE standalone Prompt Assist: one focused suggestion, optional navigation, and explicit saved correction',async({page},info)=>{
+  test.setTimeout(600000);
+  const model=await openLiveDirector(page);
+  const project=await seedProject(page,'Live Standalone Prompt Assist '+Date.now(),{
+    concept:'An intimate yoga class in a small sunlit studio.',
+    style:'Observational camera and natural light.'
+  });
+  const scene=await seedScene(page,project.id,{
+    title:'Arriving on the mats',durationSeconds:12,
+    prompt:'[00:00-00:04] Four yoga mats are already arranged neatly on the floor. Two students enter and place two new yoga mats directly on top of the existing mats. The camera observes the preparation.\n\n[00:04-00:08] The two students start a carefully balanced pose, but the camera frames only their faces and keeps their hands out of view.\n\n[00:08-00:12] The students remain in the studio. The mat arrangement suddenly returns to the original four mats with no explanation.'
+  });
+  await openProject(page,project.id);
+  const before=(await story(page,project.id)).scenes[scene.id].prompt;
+  const button=page.locator('.storyboard-scene[data-scene-id="'+scene.id+'"] [data-prompt-assist-open]');
+  await expect(button).toBeVisible();
+  await button.click();
+  await expect(page.locator('#storyboard-prompt-assist-modal')).toBeVisible({timeout:300000});
+  const position=page.locator('#storyboard-prompt-assist-position');
+  const cards=page.locator('#storyboard-prompt-assist-findings .storyboard-assist-finding');
+  await expect(cards).toHaveCount(1);
+  const total=Number((await position.innerText()).match(/Finding 1 of (\d+)/)?.[1] || 0);
+  expect(total,'Real Prompt Assist produced no actionable exact-excerpt suggestions').toBeGreaterThan(0);
+  await expect(page.locator('#storyboard-prompt-assist-source')).toHaveText(before);
+  await expect(page.locator('#storyboard-prompt-assist-source-details')).not.toHaveAttribute('open','');
+
+  const firstReplacement=await cards.locator('[data-assist-replacement]').inputValue();
+  const exactExcerpt=await cards.locator('textarea').first().inputValue();
+  expect(before.split(exactExcerpt)).toHaveLength(2);
+  if(total>1){
+    await page.locator('#storyboard-prompt-assist-next').click();
+    await expect(cards).toHaveCount(1);
+    await expect(position).toHaveText('Finding 2 of '+total);
+    await page.locator('#storyboard-prompt-assist-prev').click();
+    await expect(position).toHaveText('Finding 1 of '+total);
+    expect((await story(page,project.id)).scenes[scene.id].prompt).toBe(before);
+  }
+  await cards.getByRole('button',{name:'Apply correction'}).click();
+  await expect(page.locator('#storyboard-prompt-assist-count'))
+    .toContainText('1 of '+total+' applied',{timeout:30000});
+  const saved=(await story(page,project.id)).scenes[scene.id];
+  expect(saved.prompt).toContain(firstReplacement);
+  expect(saved.previousPrompt).toBe(before);
+  if(total>1){
+    await expect(position).toHaveText('Finding 2 of '+total);
+    await page.locator('#storyboard-prompt-assist-prev').click();
+  }
+  await expect(cards.getByRole('button',{name:'Applied'})).toBeDisabled();
+  await attachEvidence(info,'live-standalone-prompt-assist-focus',{
+    model,projectId:project.id,sceneId:scene.id,before,after:saved.prompt,
+    suggestionCount:total,firstTarget:exactExcerpt,firstReplacement
   });
 });

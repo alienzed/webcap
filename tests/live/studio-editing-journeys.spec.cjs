@@ -134,7 +134,12 @@ test('Live journey — edit A, move to B and edit B, then return to A in the sam
   // Navigation alone must not silently switch Director's connected Project.
   const attach=page.locator('#director-studio-attach-current');
   const tools=page.locator('#studio-dw-open-tools');
-  if(await tools.getAttribute('aria-expanded')!=='true') await tools.click();
+  if(await tools.isVisible()) {
+    if(await tools.getAttribute('aria-expanded')!=='true') await tools.click();
+  } else {
+    await page.locator('#director-studio-actions-toggle').click();
+    await page.locator('[data-studio-tool="read"]').click();
+  }
   await expect(attach).toBeVisible();
   await attach.click();
   await expect(page.locator('#director-chat-title')).toContainText(b.title);
@@ -146,7 +151,12 @@ test('Live journey — edit A, move to B and edit B, then return to A in the sam
 
   await openProject(page,a.id);
   await expect(page.locator('#director-chat-title')).toContainText(b.title);
-  if(await tools.getAttribute('aria-expanded')!=='true') await tools.click();
+  if(await tools.isVisible()) {
+    if(await tools.getAttribute('aria-expanded')!=='true') await tools.click();
+  } else {
+    await page.locator('#director-studio-actions-toggle').click();
+    await page.locator('[data-studio-tool="read"]').click();
+  }
   await expect(attach).toBeVisible();
   await attach.click();
   await expect(page.locator('#director-chat-title')).toContainText(a.title);

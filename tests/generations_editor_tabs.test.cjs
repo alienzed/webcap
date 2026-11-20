@@ -6,10 +6,14 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 
 const source = fs.readFileSync('tool/js/generate.js', 'utf8');
+const helperFrom = source.indexOf('  function setGeneratePromptText(text) {');
+const helperTo = source.indexOf('  function requestJson(',helperFrom);
+assert.ok(helperFrom >= 0 && helperTo > helperFrom);
+const historyHelper = source.slice(helperFrom,helperTo);
 const from = source.indexOf('  // The existing form is the sole editor.');
 const to = source.indexOf('  function uploadReference(file) {', from);
 assert.ok(from !== -1 && to > from, 'Generations editor snapshot code is present');
-const code = source.slice(from, to) + '\nthis.api = {captureGenerateEditorSnapshot, applyGenerateEditorSnapshot, switchGenerateEditorMode, loadGenerateTakeIntoEditor, useLoadedAsWorking, noteGenerateEditorEdit, markSubmittedWorkingDraft};';
+const code = historyHelper + source.slice(from, to) + '\nthis.api = {captureGenerateEditorSnapshot, applyGenerateEditorSnapshot, switchGenerateEditorMode, loadGenerateTakeIntoEditor, useLoadedAsWorking, noteGenerateEditorEdit, markSubmittedWorkingDraft};';
 
 function fixture() {
   const nodes = new Map();
@@ -71,6 +75,10 @@ function fixture() {
     syncActiveTakeState() {},
     setGenerateViewMode() {},
     window:{
+      webcapTextareaRevisions:{
+        identity:()=> 'generate-prompt',history:()=>undefined,
+        captureInitial(){},recordChange(){}
+      },
       reportConsoleWarning:(_,message)=>warnings.push(message),
       confirm:message=>{confirmations.push(message); return allowOverwrite;}
     },

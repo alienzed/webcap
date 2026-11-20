@@ -4235,7 +4235,7 @@ iframe {
 .test-generations-results {
   display: grid;
   flex: 1 1 0;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   grid-auto-rows: max-content;
   align-content: start;
   justify-content: start;

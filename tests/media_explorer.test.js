@@ -1194,3 +1194,25 @@ test('Selected Storyboard Take is visibly distinguished without changing ratings
   cards[0].click();
   assert.ok(f.nodes['media-explorer-inspector-body'].querySelectorAll('dd').some(node=>node.textContent==='Selected Take'));
 });
+
+test('Fullscreen keyboard sorting advances to next unsorted Generation without closing viewer', async()=>{
+  const f=fixture();
+  f.window.openMediaExplorerActivity();
+  const first={...media('render-a'),storageId:'2026/render-a'};
+  const next={...media('render-b'),storageId:'2026/render-b'};
+  await f.settle(f.pending[0],[first,next]);
+  f.nodes['media-explorer-shortcuts-open'].click();
+  f.nodes['media-explorer-shortcuts-rows'].children[0].children[2].value='Keepers';
+  f.nodes['media-explorer-shortcuts-form'].emit('submit',{preventDefault(){}});
+  f.nodes['media-explorer-grid'].children[0].emit('dblclick');
+  assert.equal(f.nodes['media-explorer-loupe'].open,true);
+  f.key(f.nodes['media-explorer-loupe'],'s');
+  const request=f.pending.at(-1);
+  assert.equal(request.url,'/fs/generate/result/move');
+  await f.settle(request,[],true,{moved:1});
+  const refreshed=f.pending.at(-1);
+  assert.match(refreshed.url,/^\/fs\/media_explorer\?/);
+  await f.settle(refreshed,[next]);
+  assert.equal(f.nodes['media-explorer-loupe'].open,true);
+  assert.match(f.nodes['media-explorer-loupe-name'].textContent,/render-b/);
+});

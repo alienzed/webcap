@@ -61,19 +61,47 @@ test('LIVE Project Deep QA -> Prompt Assist: whole-project findings feed focused
   const source=await page.locator('#storyboard-prompt-assist-source').textContent();
   expect(source).toContain('red baseball jacket');
   const cards=page.locator('#storyboard-prompt-assist-findings .storyboard-assist-finding');
-  const count=await cards.count();
-  expect(count).toBeGreaterThan(0);
+  await expect(cards).toHaveCount(1);
+  const position=page.locator('#storyboard-prompt-assist-position');
+  await expect(position).toContainText('Finding 1 of');
+  const total=Number((await position.innerText()).match(/Finding 1 of (\\d+)/)?.[1] || 0);
+  expect(total).toBeGreaterThan(0);
+  const details=page.locator('#storyboard-prompt-assist-source-details');
+  await expect(details).not.toHaveAttribute('open', '');
+  await details.locator('summary').click();
+  await expect(page.locator('#storyboard-prompt-assist-source')).toBeVisible();
+  await details.locator('summary').click();
   const savedBefore=await story(page,project.id);
   expect(savedBefore.scenes[first.id].prompt).toBe(source);
 
   const card=cards.first();
   const target=await card.locator('textarea').nth(0).inputValue();
   const replacement=await card.locator('[data-assist-replacement]').inputValue();
+  const originalFinding=await card.innerText();
   expect(target).toBeTruthy();
   expect(replacement).toBeTruthy();
   expect(source.split(target)).toHaveLength(2);
+  if (total > 1) {
+    await card.locator('[data-assist-replacement]').fill(replacement + ' [temporary draft]');
+    await page.locator('#storyboard-prompt-assist-next').click();
+    await expect(position).toContainText('Finding 2 of '+total);
+    await expect(cards).toHaveCount(1);
+    await page.locator('#storyboard-prompt-assist-prev').click();
+    await expect(card.locator('[data-assist-replacement]')).toHaveValue(replacement + ' [temporary draft]');
+    await card.locator('[data-assist-replacement]').fill(replacement);
+    expect((await story(page,project.id)).scenes[first.id].prompt).toBe(source);
+  }
   await card.getByRole('button',{name:'Apply correction'}).click();
-  await expect(card.getByRole('button',{name:'Applied'})).toBeDisabled({timeout:30000});
+  await expect(page.locator('#storyboard-prompt-assist-count'))
+    .toContainText('1 of '+total+' applied',{timeout:30000});
+  if (total > 1) {
+    await expect(position).toContainText('Finding 2 of '+total);
+    await page.locator('#storyboard-prompt-assist-prev').click();
+    await expect(card.getByRole('button',{name:'Applied'})).toBeDisabled();
+    await page.locator('#storyboard-prompt-assist-next').click();
+  } else {
+    await expect(card.getByRole('button',{name:'Applied'})).toBeDisabled();
+  }
   const savedAfter=await story(page,project.id);
   expect(savedAfter.scenes[first.id].prompt).toContain(replacement);
   expect(savedAfter.scenes[first.id].previousPrompt).toBe(source);
@@ -83,8 +111,9 @@ test('LIVE Project Deep QA -> Prompt Assist: whole-project findings feed focused
 
   await attachEvidence(info,'live-prompt-assist',{
     model,projectId:project.id,sceneId:first.id,sourcePrompt:source,
-    suggestionCount:count,
-    suggestions:await cards.allTextContents(),
+    suggestionCount:total,
+    firstSuggestion:originalFinding,
+    currentVisibleFinding:await cards.allTextContents(),
     saved:(await story(page,project.id)).scenes[first.id]
   });
 });

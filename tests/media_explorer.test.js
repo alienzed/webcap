@@ -1176,3 +1176,21 @@ test('Storyboard Takes do not get folder shortcut actions',async()=>{
   f.key(card.querySelector('.media-explorer-card-open'),'s');
   assert.equal(f.pending.length,n);
 });
+
+test('Selected Storyboard Take is visibly distinguished without changing ratings or shortcuts',async()=>{
+  const f=fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0],[
+    {id:'story:take-one',source:'storyboard',mediaKind:'video',fileName:'one.mp4',
+      role:'generated',storageId:'story-a',selectedTake:true,rating:null,tags:[],
+      contextLabel:'Story / Scene'},
+    {id:'story:take-two',source:'storyboard',mediaKind:'video',fileName:'two.mp4',
+      role:'generated',storageId:'story-a',selectedTake:false,rating:null,tags:[],
+      contextLabel:'Story / Scene'}
+  ]);
+  const cards=f.nodes['media-explorer-grid'].children;
+  assert.match(cards[0].textContent+' '+cards[0].querySelector('.media-explorer-card-sub').textContent,/Selected Take/);
+  assert.doesNotMatch(cards[1].querySelector('.media-explorer-card-sub').textContent,/Selected Take/);
+  cards[0].querySelector('.media-explorer-card-open').click({stopPropagation(){},preventDefault(){}});
+  assert.match(f.nodes['media-explorer-inspector-body'].textContent+' '+f.nodes['media-explorer-inspector-body'].children.map(c=>c.textContent).join(' '),/Selected Take/);
+});

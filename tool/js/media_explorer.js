@@ -834,6 +834,7 @@
           folderShortcutDestination(entry,folderShortcutTarget(item));
         }});
       });
+      actions.push({label:'Delete (D) · Move to Trash',run:function () {shortcutDelete(folderShortcutTarget(item));}});
       var edit = [];
       if (item.mediaKind === 'video') {
         edit.push({label:'Clip video to Set…',run:function () {openExternalClipEditor(item);}});
@@ -884,6 +885,9 @@
           folderShortcutDestination(entry,folderShortcutTarget(item));
         }});
       });
+    }
+    if (item.source === 'generate' && item.role === 'generated' && item.storageId) {
+      actions.push({label:'Delete (D) · Move to Trash',run:function () {shortcutDelete(folderShortcutTarget(item));}});
     }
     if (item.source==='external' ||
         (item.source==='generate' && item.role==='generated' && item.storageId) ||
@@ -2736,6 +2740,21 @@
         }
         return;
       }
+    }
+    if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey &&
+        !el('media-explorer-shortcuts-dialog').open &&
+        !el('media-explorer-export-dialog').open && event.key.toLowerCase() === 'd' &&
+        (loupe || cardTarget || sideTarget)) {
+      var deleteTarget = loupe ? items[active] :
+        cardTarget ? items[Number(cardTarget.dataset.index)] :
+        items.find(function (entry) {return entry.id === sideTarget.dataset.id;});
+      var deleteItems = selected.size ? items.filter(function (item) {return selected.has(item.id);}) :
+        deleteTarget ? [deleteTarget] : [];
+      if (sortingCanDelete(deleteItems)) {
+        event.preventDefault();
+        shortcutDelete(deleteItems);
+      }
+      return;
     }
     if (!loupe && !cardTarget) return;
     var focused = Number(event.target.closest('.media-explorer-card') && event.target.closest('.media-explorer-card').dataset.index);

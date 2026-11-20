@@ -1122,7 +1122,7 @@ test('Delete does not offer to Trash Test results through an unrelated owner',as
   assert.equal(f.pending.length,n);
 });
 
-test('Generator shortcut copies via existing owner resolver, preserving the generated record', async()=>{
+test('Generator shortcut moves via owner-preserving API and retains record identity', async()=>{
   const f=fixture();
   f.window.openMediaExplorerActivity();
   await f.settle(f.pending[0],[{...media('render'),storageId:'2026/render'}]);
@@ -1135,12 +1135,12 @@ test('Generator shortcut copies via existing owner resolver, preserving the gene
   f.key(card.querySelector('.media-explorer-card-open'),'s');
   assert.equal(f.pending.length,count+1);
   const request=f.pending.at(-1);
-  assert.equal(request.url,'/fs/media_explorer/generated/copy');
+  assert.equal(request.url,'/fs/generate/result/move');
   assert.deepEqual(JSON.parse(request.options.body),{
     storageIds:['2026/render'],destination:'Media/Keepers'
   });
-  await f.settle(request,[],true,{copied:[{name:'render.mp4'}],destination:'Media/Keepers'});
-  assert.match(f.nodes['media-explorer-status'].textContent,/Originals retained/);
+  await f.settle(request,[],true,{moved:1,results:[{location:'Media/Keepers/render.mp4'}]});
+  assert.ok(f.pending.at(-1).url.startsWith('/fs/media_explorer?'));
 });
 
 test('Test shortcut copies results while leaving their session files and records in place',async()=>{

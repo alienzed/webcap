@@ -1,6 +1,6 @@
 # WebCap Specification (Current Behavior)
 
-Documentation note updated: 2026-10-18
+Documentation note updated: 2026-11-20 (workspace navigation wording reconciled; Set/Training scope retained).
 
 ## Scope and architecture
 
@@ -18,12 +18,12 @@ Key set-owned artifacts are:
 
 WebCap has a permanent outer shell around the feature workspaces.
 
-- **Activity rail:** Prep, Generate, Training, Test, Storyboard, and Storage are major activities. Activity, Inference Queue, Console, Settings, Help, and immersive mode also live in the permanent rail. Review, Grid, Focus, Config, Run Log, Candidate Analysis, Test sessions, and Compare remain workspace-owned views rather than top-level activities.
+- **Activity rail:** Prep, Generate, Training, Test, Storyboard, Media Explorer, and Storage are major activities. Activity, Inference Queue, Console, Settings, Help, and immersive mode also live in the permanent rail. Review, Grid, Focus, Config, Run Log, Candidate Analysis, Test sessions, and Compare remain workspace-owned views rather than top-level activities.
 - **Header:** current folder/set breadcrumb, workspace identity, and the single editable **Base Model** selector are shell-owned. Historical Training/Test artifacts retain their own recorded model identity even when the current working model differs.
 - **Status and background work:** transient application feedback is shown in a floating bottom-left shell status. The general multiline console has one stable shell host. The header continuously exposes workload state (**Idle**, **Training**, **Testing**, or **Generating**), GPU utilization/VRAM when available, and free disk space. Feature work remains domain-owned even though its operational status is globally visible.
 - **Overlay root:** true modals use the single static `#app-overlay-root`; feature code does not reparent modal nodes at runtime.
-- **Workspace roots:** Prep, Review, Training, Test, Generate, Storyboard, and Storage have explicit stable roots. Grid and Focus are surface modes within the Prep-owned workspace model.
-- **Reload location:** URL hash routing owns durable folder + major-workspace location. Supported durable routes are Prep, Generate, Training, Test, Storyboard, Storage, Review, and Grid, with Training global/set scope. Transient UI state is not persisted in the route.
+- **Workspace roots:** Prep, Review, Training, Test, Generate, Storyboard, Media Explorer, and Storage have explicit stable roots. Grid and Focus are surface modes within the Prep-owned workspace model.
+- **Reload location:** URL hash routing owns durable folder + major-workspace location. Supported durable routes are Prep, Generate, Training, Test, Storyboard, Media Explorer, Storage, Review, and Grid, with Training global/set scope. Transient UI state is not persisted in the route.
 
 The shell owns navigation/context presentation. Feature-local tabs, selections, queues, sessions, artifact details, and modal state remain feature-owned.
 

@@ -1,18 +1,18 @@
 # App Settings
 
-Documentation reconciled with Settings tab markup and configuration paths: 2026-10-18; Director runtime limits checked against configuration/runtime code: 2026-11-06.
+Settings navigation and locations reconciled with current markup: 2026-11-20; Director runtime limits last checked against configuration/runtime code: 2026-11-06.
 
 The app settings modal is the global configuration surface for values stored in `tool/config.json`. Its navigation is organized by user-facing ownership rather than implementation details.
 
 ## Current sections
 
-- **Workspace → Storage**: media/dataset root, generated output root, and shared models root. The optional raw-config field `filesystem.app_data_root` overrides WebCap's conventional host-local app-data location; blank uses the platform default.
-- **Workspace → Appearance**: browser-scoped theme.
-- **Workspace → Caption Defaults**: app-wide fallback caption template.
-- **Training → Runtime**: Diffusion Pipe/WSL runtime, Conda or activation script, and repeat-reference epochs.
-- **Training → Models**: profiles available for new training runs.
-- **Training → Test Staging**: per-stage LoRA destinations used by Copy to Test.
-- **Training → Advanced Training**: uncommon H3 troubleshooting behavior.
+- **General → Application**: media/dataset root, generated output root, and theme. The optional raw-config field `filesystem.app_data_root` overrides WebCap's conventional host-local app-data location; blank uses the platform default.
+- **Models → Model Storage**: shared models root.
+- **Models → Training Models**: profiles available for new training runs.
+- **Models → LoRA Library**: access to configured Test LoRA profiles.
+- **Training**: Diffusion Pipe/WSL runtime and repeat-reference epochs; **Runtime Environment** and **Test Staging** disclosures contain advanced runtime and Copy-to-Test destination settings.
+- **Director**: Director runtime configuration and model controls.
+- **Advanced**: caption defaults, optional analysis, logging, raw configuration, and reset controls.
 - **Director**: one local llama.cpp runtime plus zero or more named remote OpenAI-compatible runtimes. Each runtime is presented as a distinct configuration card; unavailable remotes are skipped during discovery. Director model selection is shared across Director-enabled workspaces.
 - **Advanced → Debug Logging**: persistent debug logging. With **Debug mode** enabled, Director LLM calls log effective request metadata and response diagnostics such as model, message size, configured context/output settings, sampling/thinking flags, wall-clock response time, finish reason, usage, and backend timing fields when the runtime supplies them. This is observational only and does not change generation limits or request behavior.
 - **Advanced → Optional Analysis**: persistent Face Focus and MediaPipe enablement. Diagnostics reports whether their dependencies are available; choosing whether WebCap uses them remains a Settings decision.

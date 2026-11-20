@@ -115,6 +115,11 @@ async function openWrite(page, {projectId, operation='project', sceneMode, instr
   const tools=page.locator('#studio-dw-open-tools');
   if(await tools.isVisible()) {
     if(await tools.getAttribute('aria-expanded')!=='true') await tools.click();
+  } else if(await page.locator('#director-chat-drawer').evaluate(node=>node.classList.contains('studio-actions-open'))) {
+    // A Read or previous Write can be showing: switch its existing task panel
+    // without trying to click the launcher behind the floating sheet.
+    if(!(await page.locator('#studio-dw-write-panel').isVisible()))
+      await page.locator('#studio-dw-write').click();
   } else {
     await page.locator('#director-studio-actions-toggle').click();
     await page.locator('[data-studio-tool="'+(operation==='scene-write'?'scene':'project')+'"]').click();

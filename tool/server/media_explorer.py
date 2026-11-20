@@ -127,6 +127,7 @@ def discover_generate(limit=500):
                     "mediaPath": media,
                     "mediaUrl": "/fs/generate/result/media?storageId=" + quote(storage_id, safe=""),
                     "relativePath": str(record["organizedMediaPath"]),
+                    "ownerFolder": Path(str(record["organizedMediaPath"])).parent.as_posix(),
                     "createdAt": created, "rating": record.get("rating", 0),
                     "model": model, "uses": [], "fileSize": actual.stat().st_size,
                     "tags": [],

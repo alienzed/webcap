@@ -24,6 +24,14 @@ test('Studio Director exposes its tools beside the composer instead of the heade
   await launcher.click();
   await page.locator('#director-chat-input').click();
   await expect(menu).toBeHidden();
+
+  await launcher.click();
+  await menu.locator('[data-studio-tool="read"]').click();
+  await expect(page.locator('#studio-dw-read-panel')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#director-chat-drawer')).not.toHaveClass(/studio-actions-open/);
+  await expect(drawer).toBeVisible();
+  await expect(launcher).toBeFocused();
 });
 
 test('explicit Read is discoverable and still appends a visible Project snapshot',async({page})=>{

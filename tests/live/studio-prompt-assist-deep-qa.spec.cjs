@@ -64,7 +64,7 @@ test('LIVE Project Deep QA -> Prompt Assist: whole-project findings feed focused
   await expect(cards).toHaveCount(1);
   const position=page.locator('#storyboard-prompt-assist-position');
   await expect(position).toContainText('Finding 1 of');
-  const total=Number((await position.innerText()).match(/Finding 1 of (\\d+)/)?.[1] || 0);
+  const total=Number((await position.innerText()).match(/Finding 1 of (\d+)/)?.[1] || 0);
   expect(total).toBeGreaterThan(0);
   const details=page.locator('#storyboard-prompt-assist-source-details');
   await expect(details).not.toHaveAttribute('open', '');

@@ -27,8 +27,6 @@
       node.classList.toggle('hidden', !message || (!error && !showSuccess));
     }
     if (error) {
-      el('director-chat-drawer').classList.add('studio-actions-open');
-      el('studio-dw-open-tools').setAttribute('aria-expanded','true');
       window.reportConsoleError('Studio Director workbench', new Error(message));
     }
     else if (message) window.reportConsoleInfo('Studio Director workbench', message);
@@ -705,8 +703,28 @@
       throw error;
     }
   }
+  async function submitWrite() {
+    var operation = el('studio-dw-write-operation').value;
+    var projectId = el('studio-dw-write-project').value;
+    try {
+      var result = await writePrepare();
+      if (result && result.story &&
+          el('studio-dw-write-operation').value === operation &&
+          el('studio-dw-write-project').value === projectId &&
+          el('director-chat-drawer').classList.contains('studio-actions-open')) {
+        el('studio-dw-close-actions').click();
+        el('director-chat-input').focus();
+      }
+    } catch (error) {
+      if (error.saved && el('director-chat-drawer').classList.contains('studio-actions-open'))
+        el('studio-dw-close-actions').click();
+      // The writer already reports failures; do not reopen dismissed setup.
+    }
+  }
   function prepareProjectCoherence(storyId) {
     var button = el('studio-dw-write-prepare');
+    var reviewButton = el('studio-dw-coherence-review');
+    reviewButton.classList.add('hidden');
     button.disabled = true;
     status('Checking saved H3 Prompts across the selected Project. Nothing will be saved.', false);
     var originalStory;
@@ -759,8 +777,12 @@
             };
           })
         };
-        renderBatchReview();
-        status(summary + ' · Review ' + changed.length + ' proposed Prompt changes before applying.', !!failures.length);
+        reviewButton.classList.remove('hidden');
+        if (el('director-chat-drawer').classList.contains('studio-actions-open')) {
+          el('studio-dw-close-actions').click();
+          renderBatchReview();
+        }
+        status(summary + ' · ' + changed.length + ' proposed Prompt changes available to review.', !!failures.length, true);
       });
     }).catch(function (error) {
       status('Project coherence check failed: ' + String(error.message || error), true);
@@ -979,6 +1001,7 @@
       if (!result.story || !result.savedFieldsByScene) throw new Error('Batch Apply returned no authoritative saved fields.');
       applied = true;
       proposedBatch = null;
+      el('studio-dw-coherence-review').classList.add('hidden');
       el('studio-dw-batch-review').close();
       return window.studioDirectorBridge.recordApplied('scene.batch.update',result.story,
         {scenes:result.savedFieldsByScene}).then(function () {
@@ -1503,6 +1526,7 @@
       if (!window.studioDirectorBridge.isReady()) {status(window.studioDirectorBridge.readinessMessage(),true);return;}
       prepareProjectCoherence(id);
     };
+    el('studio-dw-coherence-review').onclick = function () { renderBatchReview(); };
     el('studio-dw-read-preview').ontoggle = function () {
       if (!this.open) return;
       var id = el('studio-dw-read-project').value;
@@ -1604,7 +1628,11 @@
         }
         if (tool === 'history') return el('director-chat-history-toggle').click();
         if (tool === 'new-chat') return el('director-chat-clear').click();
-        if (tool === 'io') return el('studio-director-inspect').click();
+        if (tool === 'io') {
+          if (el('director-chat-drawer').classList.contains('studio-actions-open'))
+            el('studio-dw-close-actions').click();
+          return el('studio-director-inspect').click();
+        }
         if (tool === 'revision') {
           var mode = el('director-studio-composer-mode-select');
           mode.value = 'revision';
@@ -1634,7 +1662,7 @@
     el('studio-dw-read-all').onclick=selectEntireReadProject;
     el('studio-dw-scenes-select-all').onclick=function () {selectWriteScenes(true);};
     el('studio-dw-scenes-select-none').onclick=function () {selectWriteScenes(false);};
-    el('studio-dw-write-prepare').onclick=writePrepare;
+    el('studio-dw-write-prepare').onclick=submitWrite;
     el('studio-dw-scene-apply').onclick=applyScene;
     el('studio-dw-batch-apply').onclick=applyBatchScenes;
     ['studio-dw-batch-close','studio-dw-batch-cancel'].forEach(function (id) {

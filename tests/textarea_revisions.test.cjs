@@ -153,6 +153,43 @@ test('browsing is non-destructive; editing an earlier version appends after the 
     'Original|New|Original but changed');
 });
 
+test('saved initial text is recorded before first focus and reused after re-render',()=>{
+  const h=harness(),field=editor('Original saved Scene','scene-baseline');
+  const api=h.window.webcapTextareaRevisions;
+  const key=api.identity(field);
+  api.captureInitial(field);
+  assert.deepEqual(Array.from(api.history(key).versions),['Original saved Scene']);
+  field.value='Re-rendered text';
+  api.captureInitial(field);
+  assert.deepEqual(Array.from(api.history(key).versions),['Original saved Scene'],
+    're-render must not add an unrelated revision');
+  h.focus(field);
+  field.value='User edit';
+  h.input(field);
+  h.blur(field);
+  assert.deepEqual(Array.from(api.history(key).versions),
+    ['Original saved Scene','User edit']);
+});
+
+test('Director draft seeding uses saved Scene text, not its unaccepted proposal',()=>{
+  const h=harness(),field=editor('Proposed revision','scene-review-baseline');
+  const api=h.window.webcapTextareaRevisions;
+  api.captureInitial(field,'Previously saved prompt');
+  assert.deepEqual(Array.from(api.history(api.identity(field)).versions),['Previously saved prompt']);
+  h.focus(field);
+  h.idle();
+  assert.deepEqual(Array.from(api.history(api.identity(field)).versions),
+    ['Previously saved prompt','Proposed revision']);
+});
+
+test('disabled fields do not capture an initial baseline',()=>{
+  const h=harness(),field=editor('Private','scene-disabled-baseline');
+  const api=h.window.webcapTextareaRevisions;
+  api.setEnabled('scene.prompt',false);
+  api.captureInitial(field);
+  assert.equal(api.history(api.identity(field)),undefined);
+});
+
 test('leaving an edited textarea checkpoints immediately without waiting for inactivity',()=>{
   const h=harness(),field=editor('Original','scene-blur');
   const api=h.window.webcapTextareaRevisions;

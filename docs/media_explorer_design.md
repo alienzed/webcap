@@ -1,6 +1,6 @@
 # Media Explorer — interface and interaction specification
 
-This document is the **UI implementation contract** for the new WebCap Media Explorer. Read together with `media_explorer_implementation_plan.md` and root `AGENTS.md`. Date: 2026-10-17.
+**Historical design baseline (2026-10-17), not a complete statement of current behavior.** Read with `media_explorer_implementation_plan.md`, the current [README](../README.md), and root `AGENTS.md`. Since this draft, Media Explorer gained owner-backed saved collections, folder organization shortcuts, Generate media relocation, Test copies, and optional prompt-derived tag suggestions. Preserve this document as design rationale; current code and current-behavior references govern shipped details.
 
 ## Inspiration (patterns, not copies)
 
@@ -45,7 +45,7 @@ The **global WebCap activity rail** remains the primary app navigation. Explorer
 1. **All Media** is default and means recognized durable media plus discoverable references; visible incomplete-scan status if applicable.
 2. **Roles:** Generated, Reference, Training Sample, Source (only for supported Set originals), Unlinked. **A file may have multiple roles.** Clicking a role is a view/filter, not moving any file.
 3. **Producer shortcuts:** Generate, Test Generations, Epoch Finder, Training, Storyboard and actual discovered producers. Hierarchy only as deep as supported metadata allows; do not emulate a filesystem folder tree.
-4. **Saved collections** are out of scope. A later 'Favorites' filter is appropriate only where an owner-backed rating/favorite already exists; avoid a second source of truth.
+4. **Original design scope:** saved collections were initially excluded. **Current behavior:** collections are implemented using saved views and owner-backed tags, without a second media ownership database. The **Favorite** shortcut is a configurable real-folder destination, separate from collection tags.
 5. **Storage** remains separate, accessible from the global rail; do not put cleanup quotas or disk meters into Explorer chrome.
 
 ## Gallery cards

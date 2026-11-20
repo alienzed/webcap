@@ -695,7 +695,7 @@
     if (!prompt.trim()) return [];
     var tags = new Set((item.tags || []).map(function (tag) {return tag.toLowerCase();}));
     var matches = promptTagVocabulary.filter(function (tag) {
-      var expression = new RegExp('(?:^|[^a-z])'+tag.replace(/[.*+?^$\{\}()|[\]\\]/g,'\\  function editMediaTags(item) {')+'(?:$|[^a-z])','i');
+      var expression = new RegExp('(?:^|[^a-z])'+tag+'(?:$|[^a-z])','i');
       return expression.test(prompt) && !tags.has(tag);
     });
     // Prefer useful specific phrases instead of also suggesting their component words.

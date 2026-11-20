@@ -96,7 +96,10 @@ function fixture(hash = '#/media') {
     querySelectorAll: selector => selector.includes('[data-explorer-mode]') ? modeButtons :
       selector.includes('[data-media-role]') ? buttons.filter(b => 'mediaRole' in b.dataset) :
       selector.includes('[data-media-source]') ? buttons.filter(b => 'mediaSource' in b.dataset) : buttons };
-  const window = { location: {hash}, prompt: () => 'child', confirm: () => true, reportConsoleError: (source, error) => errors.push(error), syncApplicationShellContext() {}, syncShellLocationRoute() {} };
+  const stored = new Map();
+  const window = { location: {hash}, prompt: () => 'child', confirm: () => true,
+    localStorage:{getItem:key=>stored.get(key)||null,setItem:(key,value)=>stored.set(key,value)},
+    reportConsoleError: (source, error) => errors.push(error), syncApplicationShellContext() {}, syncShellLocationRoute() {} };
   for (const owner of ['Generate', 'TestBench', 'Storyboard', 'Storage']) window['close' + owner + 'Activity'] = () => closed.push(owner);
   vm.runInNewContext(fs.readFileSync('tool/js/media_explorer.js', 'utf8'), {
     document, window, console, URLSearchParams, AbortController, Set, Map, setTimeout, clearTimeout,
@@ -1009,4 +1012,79 @@ test('Saved Unsorted view restores the optional triage filter without changing o
   assert.equal(restored.get('source'), 'generate');
   assert.equal(restored.get('curation'), 'unsorted');
   assert.equal(restored.get('full'), '1');
+});
+
+
+test('Folder shortcut configuration is root-scoped and does not move anything on setup', async () => {
+  const f = fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], []);
+  f.buttons.find(button => button.dataset.mediaSource === 'external').click();
+  f.nodes['media-explorer-external-path'].value = '/sample-library';
+  f.nodes['media-explorer-open-path'].click();
+  await f.settle(f.pending.at(-1), [], true, {folders:['Inbox','Keepers'],revision:1});
+  const settings=f.nodes['media-explorer-shortcuts-open'];
+  assert.equal(settings.disabled,false);
+  settings.click();
+  const dialog=f.nodes['media-explorer-shortcuts-dialog'];
+  assert.equal(dialog.open,true);
+  const rows=f.nodes['media-explorer-shortcuts-rows'].children;
+  assert.deepEqual(rows.map(row=>row.children[0].value),['S','D','A','F']);
+  rows[0].children[2].value='Inbox';
+  rows[1].children[2].value='Keepers';
+  f.nodes['media-explorer-shortcuts-form'].emit('submit',{preventDefault(){}});
+  assert.equal(dialog.open,false);
+  const stored=JSON.parse(f.window.localStorage.getItem('webcap.mediaExplorer.folderShortcuts.v1'));
+  assert.equal(stored['/sample-library'][0].folder,'Inbox');
+  assert.equal(stored['/sample-library'][1].folder,'Keepers');
+  assert.equal(f.pending.filter(request=>request.url.includes('/move')).length,0);
+});
+
+test('S / D / A / F move selected external files using existing move API, without confirmation', async () => {
+  const f = fixture();
+  let confirms=0;
+  f.window.confirm=()=>{confirms++;return true;};
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], []);
+  f.buttons.find(button => button.dataset.mediaSource === 'external').click();
+  f.nodes['media-explorer-external-path'].value='/sample-library';
+  f.nodes['media-explorer-open-path'].click();
+  const originals=[
+    {id:'external:one',source:'external',relativePath:'one.mp4',fileName:'one.mp4',mediaKind:'video',rating:null,tags:[]},
+    {id:'external:two',source:'external',relativePath:'two.mp4',fileName:'two.mp4',mediaKind:'video',rating:null,tags:[]}
+  ];
+  await f.settle(f.pending.at(-1),originals,true,{folders:[],revision:1});
+  f.nodes['media-explorer-shortcuts-open'].click();
+  const rows=f.nodes['media-explorer-shortcuts-rows'].children;
+  rows[0].children[2].value='Inbox';
+  f.nodes['media-explorer-shortcuts-form'].emit('submit',{preventDefault(){}});
+  const cards=f.nodes['media-explorer-grid'].children;
+  cards[0].querySelector('.media-explorer-card-open').click({stopPropagation(){},preventDefault(){}});
+  const before=f.pending.length;
+  f.key(cards[0].querySelector('.media-explorer-card-open'),'s');
+  assert.equal(f.pending.length,before+1);
+  const move=f.pending.at(-1);
+  assert.equal(move.url,'/fs/media_explorer/external/move');
+  assert.deepEqual(JSON.parse(move.options.body),{path:'/sample-library',files:['one.mp4'],destination:'Inbox'});
+  assert.equal(confirms,0);
+  await f.settle(move,[],true);
+  assert.ok(f.pending.at(-1).url.startsWith('/fs/media_explorer/external?'));
+});
+
+test('Folder shortcut editing rejects duplicate keys and path traversal before saving', async () => {
+  const f=fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0],[]);
+  f.buttons.find(button=>button.dataset.mediaSource==='external').click();
+  f.nodes['media-explorer-external-path'].value='/sample-library';
+  f.nodes['media-explorer-open-path'].click();
+  await f.settle(f.pending.at(-1),[],true,{folders:[],revision:1});
+  f.nodes['media-explorer-shortcuts-open'].click();
+  const rows=f.nodes['media-explorer-shortcuts-rows'].children;
+  rows[1].children[0].value='S';
+  rows[0].children[2].value='../escape';
+  f.nodes['media-explorer-shortcuts-form'].emit('submit',{preventDefault(){}});
+  assert.equal(f.nodes['media-explorer-shortcuts-dialog'].open,true);
+  assert.match(f.nodes['media-explorer-shortcuts-status'].textContent,/distinct letter keys/);
+  assert.equal(f.window.localStorage.getItem('webcap.mediaExplorer.folderShortcuts.v1'),null);
 });

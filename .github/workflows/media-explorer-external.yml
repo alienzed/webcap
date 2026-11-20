@@ -6,6 +6,10 @@ on:
       - 'tool/server/external_media.py'
       - 'tool/server/media_quality.py'
       - 'tool/server/external_exports.py'
+      - 'tool/server/generate_store.py'
+      - 'tool/server/storage_manager.py'
+      - 'tool/js/generate.js'
+      - 'tests/test_generate_media_relocation.py'
       - 'tool/server/media.py'
       - 'tool/server/media_explorer.py'
       - 'tool/server/app.py'
@@ -35,7 +39,7 @@ jobs:
           node-version: '22'
       - run: node --check tool/js/media_explorer.js
       - run: node --test tests/media_explorer.test.js
-      - run: python -m compileall -q tool/server/media_quality.py tool/server/external_media.py tool/server/external_exports.py tool/server/media.py tool/server/app.py tests/test_external_media.py tests/test_external_exports.py
+      - run: python -m compileall -q tool/server/media_quality.py tool/server/external_media.py tool/server/external_exports.py tool/server/media.py tool/server/media_explorer.py tool/server/generate_store.py tool/server/storage_manager.py tool/server/app.py tests/test_external_media.py tests/test_external_exports.py tests/test_generate_media_relocation.py
       - run: cp tool/config.example.json tool/config.json
       - run: python -m pip install pytest Flask Pillow Werkzeug imageio websocket-client opencv-python-headless Send2Trash
-      - run: python -m pytest -q tests/test_media_quality.py tests/test_external_media.py tests/test_external_exports.py tests/test_media_explorer.py
+      - run: python -m pytest -q tests/test_media_quality.py tests/test_external_media.py tests/test_external_exports.py tests/test_media_explorer.py tests/test_generate_media_relocation.py

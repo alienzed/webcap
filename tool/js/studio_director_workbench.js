@@ -640,6 +640,7 @@
         if (key !== 'durationSeconds') textarea.rows = key === 'prompt' ? 13 : 5;
         textarea.setAttribute('aria-label',labels[key]);
         label.append(textarea);host.append(saved,diff,label);
+        if (key === 'prompt') window.webcapTextareaRevisions.captureInitial(textarea,old);
       });
       el('studio-dw-scene-target').textContent = storyName(story) + ' · ' + (scene.title || sceneId);
       el('studio-dw-scene-review-title').textContent = fields.length === 1 ? 'Review ' + labels[fields[0]] : 'Review Scene changes';
@@ -935,6 +936,9 @@
       });
       if (unchanged.children.length > 1) section.appendChild(unchanged);
       host.appendChild(section);
+      section.querySelectorAll('textarea[data-field="prompt"]').forEach(function (editor) {
+        window.webcapTextareaRevisions.captureInitial(editor,entry.before.prompt || '');
+      });
     });
     el('studio-dw-batch-target-warning').textContent = proposedBatch.targetWarning || '';
     el('studio-dw-batch-error').textContent = '';

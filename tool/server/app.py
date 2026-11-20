@@ -3052,6 +3052,29 @@ def generate_result_tags_route():
         return jsonify({"ok": False, "error": str(exc)}), 500
 
 
+@app.route("/fs/generate/result/move", methods=["POST"])
+def generate_result_move_route():
+    try:
+        from .generate_store import relocate_result_media
+        data = request.get_json(silent=True) or {}
+        return jsonify(relocate_result_media(data.get("storageId"), data.get("destination")))
+    except (ValueError, OSError, RuntimeError) as exc:
+        app.logger.exception("GENERATE RESULT MOVE FAILED")
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/generate/result/media", methods=["GET"])
+def generate_result_owned_media_route():
+    try:
+        from .generate_store import resolve_owned_result_media
+        media_path = resolve_owned_result_media(request.args.get("storageId", ""))
+        return send_from_directory(str(media_path.parent), media_path.name)
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except (ValueError, OSError, RuntimeError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/generate/media", methods=["GET"])
 def generate_media_route():
     try:

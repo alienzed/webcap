@@ -1129,6 +1129,7 @@
   }
   function cardSummary(item) {
     return ((item.source === 'generate' && item.role !== 'reference' ? item.model : item.contextLabel) || item.model || sourceNames[item.source]) +
+      (item.selectedTake ? ' · Selected Take' : '') +
       (item.rating ? ' · ★ ' + item.rating : '');
   }
   function badgeText(item) {
@@ -1149,6 +1150,7 @@
     dl.replaceChildren();
     var facts = mediaFacts.get(item.id) || {};
     detail('Roles', (item.roles || [item.role]).map(function (role) { return roleNames[role] || role; }).join(' · '), dl);
+    if (item.source === 'storyboard' && item.selectedTake) detail('Storyboard', 'Selected Take', dl);
     detail('Producer', sourceNames[item.source], dl); detail('Model', item.model, dl);
     detail('Workflow', item.workflow, dl);
     detail('Set', item.ownerFolder, dl);
@@ -1577,6 +1579,7 @@
     open.appendChild(frame);
     var badge = document.createElement('span'); badge.className = 'media-explorer-card-badge';
     text(badge, badgeText(item));
+    if (item.selectedTake) { badge.title = 'Selected Take in Storyboard'; badge.setAttribute('aria-label','Selected Take in Storyboard'); }
     frame.appendChild(badge);
     var meta = document.createElement('div'); meta.className = 'media-explorer-card-meta';
     var name = document.createElement('div'); name.className = 'media-explorer-card-name';

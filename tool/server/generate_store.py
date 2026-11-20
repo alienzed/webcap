@@ -413,8 +413,6 @@ def relocate_result_media(storage_id, destination):
         raise RuntimeError("Generation is still active.")
     source = resolve_owned_result_media(storage_id)
     root = Path(app_config.FS_ROOT).resolve()
-    if not source.is_relative_to(root):
-        raise ValueError("Generation media is outside WebCap files.")
     original_name = Path(str(payload["mediaPath"])).name
     destination_name = directory.name + "-" + original_name
     target = _unique_path(target_dir, destination_name)

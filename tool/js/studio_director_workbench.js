@@ -710,9 +710,12 @@
       if (result && (result.story || (Array.isArray(result.saved) && result.saved.length)) &&
           ownsActionPanel(panelVersion)) closeActions('director-chat-input');
     } catch (error) {
-      if (error.saved && ownsActionPanel(panelVersion)) closeActions('director-chat-input');
-      status((error.saved ? 'Changes saved, but follow-up failed: ' : 'Write failed: ') +
-        String(error.message || error), true);
+      if (error.saved) {
+        // The writer already reported which save succeeded and which follow-up failed.
+        if (ownsActionPanel(panelVersion)) closeActions('director-chat-input');
+        return;
+      }
+      status('Write failed: ' + String(error.message || error), true);
     }
   }
   function prepareProjectCoherence(storyId) {

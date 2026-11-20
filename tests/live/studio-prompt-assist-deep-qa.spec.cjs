@@ -117,3 +117,56 @@ test('LIVE Project Deep QA -> Prompt Assist: whole-project findings feed focused
     saved:(await story(page,project.id)).scenes[first.id]
   });
 });
+
+test('LIVE standalone Prompt Assist: one focused suggestion, optional navigation, and explicit saved correction',async({page},info)=>{
+  test.setTimeout(600000);
+  const model=await openLiveDirector(page);
+  const project=await seedProject(page,'Live Standalone Prompt Assist '+Date.now(),{
+    concept:'An intimate yoga class in a small sunlit studio.',
+    style:'Observational camera and natural light.'
+  });
+  const scene=await seedScene(page,project.id,{
+    title:'Arriving on the mats',durationSeconds:12,
+    prompt:'[00:00-00:04] Four yoga mats are already arranged neatly on the floor. Two students enter and place two new yoga mats directly on top of the existing mats. The camera observes the preparation.\n\n[00:04-00:08] The two students start a carefully balanced pose, but the camera frames only their faces and keeps their hands out of view.\n\n[00:08-00:12] The students remain in the studio. The mat arrangement suddenly returns to the original four mats with no explanation.'
+  });
+  await openProject(page,project.id);
+  const before=(await story(page,project.id)).scenes[scene.id].prompt;
+  const button=page.locator('.storyboard-scene[data-scene-id="'+scene.id+'"] [data-prompt-assist-open]');
+  await expect(button).toBeVisible();
+  await button.click();
+  await expect(page.locator('#storyboard-prompt-assist-modal')).toBeVisible({timeout:300000});
+  const position=page.locator('#storyboard-prompt-assist-position');
+  const cards=page.locator('#storyboard-prompt-assist-findings .storyboard-assist-finding');
+  await expect(cards).toHaveCount(1);
+  const total=Number((await position.innerText()).match(/Finding 1 of (\d+)/)?.[1] || 0);
+  expect(total,'Real Prompt Assist produced no actionable exact-excerpt suggestions').toBeGreaterThan(0);
+  await expect(page.locator('#storyboard-prompt-assist-source')).toHaveText(before);
+  await expect(page.locator('#storyboard-prompt-assist-source-details')).not.toHaveAttribute('open','');
+
+  const firstReplacement=await cards.locator('[data-assist-replacement]').inputValue();
+  const exactExcerpt=await cards.locator('textarea').first().inputValue();
+  expect(before.split(exactExcerpt)).toHaveLength(2);
+  if(total>1){
+    await page.locator('#storyboard-prompt-assist-next').click();
+    await expect(cards).toHaveCount(1);
+    await expect(position).toHaveText('Finding 2 of '+total);
+    await page.locator('#storyboard-prompt-assist-prev').click();
+    await expect(position).toHaveText('Finding 1 of '+total);
+    expect((await story(page,project.id)).scenes[scene.id].prompt).toBe(before);
+  }
+  await cards.getByRole('button',{name:'Apply correction'}).click();
+  await expect(page.locator('#storyboard-prompt-assist-count'))
+    .toContainText('1 of '+total+' applied',{timeout:30000});
+  const saved=(await story(page,project.id)).scenes[scene.id];
+  expect(saved.prompt).toContain(firstReplacement);
+  expect(saved.previousPrompt).toBe(before);
+  if(total>1){
+    await expect(position).toHaveText('Finding 2 of '+total);
+    await page.locator('#storyboard-prompt-assist-prev').click();
+  }
+  await expect(cards.getByRole('button',{name:'Applied'})).toBeDisabled();
+  await attachEvidence(info,'live-standalone-prompt-assist-focus',{
+    model,projectId:project.id,sceneId:scene.id,before,after:saved.prompt,
+    suggestionCount:total,firstTarget:exactExcerpt,firstReplacement
+  });
+});

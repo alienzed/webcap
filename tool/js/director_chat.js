@@ -2051,8 +2051,10 @@
         (skippedCreate.length ? '. Skipped: ' + skippedCreate.join(', ') + '. Raw output is in I/O.' : ''),false,!!skippedCreate.length);
       return window.studioDirectorBridge.recordApplied('project.create',story,{
         title:story.title,concept:story.concept,style:story.style,invariants:story.invariants
-      }).then(function () {return window.refreshStudioDirectorStoryIfOpen(story.id);});
+      }).then(function () {return window.refreshStudioDirectorStoryIfOpen(story.id);})
+        .then(function () {return payload;});
     }).catch(function (error) {
+      if (saved) error.saved = true;
       state.lastStudioIoError = String(error.message || error);
       studioActionStatus(saved ? 'Project saved, but reporting failed: '+state.lastStudioIoError :
         'Project Write failed: '+state.lastStudioIoError,true);
@@ -2540,9 +2542,11 @@
         var values = {};
         Object.keys(changes).forEach(function (key) {values[key === 'invariantOps' ? 'invariants' : key]=result.story[key === 'invariantOps' ? 'invariants' : key];});
         return window.studioDirectorBridge.recordApplied('brief.apply',result.story,values)
-          .then(function () {return window.refreshStudioDirectorStoryIfOpen(storyId);});
+          .then(function () {return window.refreshStudioDirectorStoryIfOpen(storyId);})
+          .then(function () {return result;});
       });
     }).catch(function (error) {
+      if (saved) error.saved = true;
       state.lastStudioIoError = String(error.message || error);
       studioActionStatus(saved ? 'Project saved, but reporting failed: '+state.lastStudioIoError
         : 'Project Write failed: '+state.lastStudioIoError,true);
@@ -3728,8 +3732,9 @@
       responses.push({content:'Write · ' + entry.operation + ' · ' + entry.at,
         rawResponse:entry.rawResponse});
     });
-    if (state.lastStudioIoError && state.lastStudioIoRaw)
-      responses.push({content:'Failed response',rawResponse:state.lastStudioIoRaw});
+    if (state.lastStudioIoRaw && !responses.some(function(message) {
+      return (message.rawResponse || message.content) === state.lastStudioIoRaw;
+    })) responses.push({content:'Latest Write response',rawResponse:state.lastStudioIoRaw});
     chooser.replaceChildren();
     responses.forEach(function(message,index){
       var option=document.createElement('option');
@@ -3757,7 +3762,11 @@
       return 'Event ' + (index+1) + '\n' + message.content;
     }).join('\n\n') : 'No recorded Read or Apply payloads in this conversation.';
     var hasRequest=!!(state.requestDiagnostic && Array.isArray(state.requestDiagnostic.messages));
-    el('studio-director-io-request').disabled=!hasRequest;
+    var requestDetails = el('studio-director-io-request');
+    requestDetails.classList.toggle('hidden', !hasRequest);
+    requestDetails.open = false;
+    el('studio-director-io-request-messages').textContent = hasRequest
+      ? JSON.stringify(state.requestDiagnostic.messages, null, 2) : '';
     el('studio-director-io-status').textContent = (state.lastStudioIoError
       ? 'Latest request failed: ' + state.lastStudioIoError + ' '
       : '') + (hasRequest
@@ -3957,9 +3966,6 @@
     });
     el('studio-director-inspect').onclick = studioDirectorOpenIo;
     el('studio-director-io-close').onclick = function(){el('studio-director-io-dialog').close();};
-    el('studio-director-io-request').onclick = function(){
-      openDirectorRequestInspector(state.requestDiagnostic,'Director request (latest)');
-    };
     stop.onclick = stopJob;
     copy.onclick = function () {
       openDirectorRequestInspector(state.requestDiagnostic, 'Director Chat Request');

@@ -88,14 +88,14 @@ test('manual Read and Write remain available through the on-demand Studio Action
   assert.match(rail,/\? toggle\(which\) : Promise\.resolve\(\)/);
 });
 
-test('operational errors reveal Advanced and preserve the shared Console detail',()=>{
+test('operational errors preserve Console detail without reopening dismissed actions',()=>{
   const nodes={},classes=new Set(),logs=[];
   const el=id=>nodes[id] ||= {dataset:{},attrs:{},classList:{toggle(){},add:x=>classes.add(x)},setAttribute(k,v){this.attrs[k]=v;}};
   const scope=vm.createContext({el,window:{reportConsoleError:(label,error)=>logs.push(error.message),reportConsoleInfo:()=>{}}});
   vm.runInContext(section(rail,'  function status(message, error, showSuccess) {','  function option('),scope);
   scope.status('Draft failed: exact backend error',true);
-  assert.equal(classes.has('studio-actions-open'),true);
-  assert.equal(el('studio-dw-open-tools').attrs['aria-expanded'],'true');
+  assert.equal(classes.has('studio-actions-open'),false);
+  assert.equal(el('studio-dw-open-tools').attrs['aria-expanded'],undefined);
   assert.equal(el('studio-dw-status').textContent,'Draft failed: exact backend error');
   assert.deepEqual(logs,['Draft failed: exact backend error']);
   scope.status('Saved Scene 1',false,true);

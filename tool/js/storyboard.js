@@ -4309,7 +4309,10 @@
     if (!activeHtml) activeHtml = '<div class="storyboard-library-empty">No Scenes yet. Add the first generatable scene.</div>';
 
     host.innerHTML = activeHtml + removedScenesHtml(removedScenes);
-    if (focusedSceneId) syncPromptTakeStatus(focusedSceneId);
+    if (focusedSceneId) {
+      window.webcapTextareaRevisions.captureInitial(host.querySelector('textarea[data-scene-field="prompt"]'));
+      syncPromptTakeStatus(focusedSceneId);
+    }
     syncDirectorPendingControls();
     if (storyState.director.busy && storyState.director.activityTarget) positionDirectorActivity();
   }
@@ -4338,11 +4341,14 @@
     syncStoryIconPicker();
     el('storyboard-story-concept').value = storyState.story.concept || '';
     el('storyboard-story-style').value = storyState.story.style || '';
+    window.webcapTextareaRevisions.captureInitial(el('storyboard-story-concept'));
+    window.webcapTextareaRevisions.captureInitial(el('storyboard-story-style'));
     renderStoryStylePresetSelector();
     renderAtmosphereProposal();
     renderStoryInvariants();
     document.querySelectorAll('[data-story-guideline]').forEach(function (input) {
       input.value = (storyState.story.guidelines || {})[input.dataset.storyGuideline] || '';
+      if (input.matches('textarea')) window.webcapTextareaRevisions.captureInitial(input);
     });
     el('storyboard-story-status').value = storyState.story.status || 'active';
     var targetSceneCount = storyState.story.targetSceneCount;

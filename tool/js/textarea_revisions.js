@@ -395,6 +395,15 @@
     return h;
   }
 
+  // Seed the saved/loaded text as revision one before the editor is first used.
+  // Rendering the same field again must never append a duplicate revision.
+  function captureInitial(field, initialValue) {
+    if (!enabledFor(field)) return;
+    var key = identity(field);
+    if (!histories.has(key))
+      capture(key, arguments.length > 1 ? initialValue : field.value);
+  }
+
   // Explicit WebCap-controlled textarea edits do not fire browser input events.
   // Record both sides of a successful change, even if the editor is unfocused.
   function recordChange(field, previousValue) {
@@ -471,7 +480,7 @@
     var key = identity(field);
     if (active && active.field === field && active.key === key) return;
     detach();
-    if (!histories.has(key)) capture(key,field.value);
+    captureInitial(field);
     active = {field:field,key:key,live:field.value};
     originalPaddingBottom = field.style.paddingBottom;
     if (field.getBoundingClientRect().width >= 100) {
@@ -635,7 +644,7 @@
     renderSettings();
   }
 
-  window.webcapTextareaRevisions = {identity:identity,capture:capture,recordChange:recordChange,history:function (key) {return histories.get(key);}, fieldTypes:fieldTypes, enabledFor:enabledFor, setEnabled:setEnabled, setMasterEnabled:setMasterEnabled, renderSettings:renderSettings};
+  window.webcapTextareaRevisions = {identity:identity,capture:capture,captureInitial:captureInitial,recordChange:recordChange,history:function (key) {return histories.get(key);}, fieldTypes:fieldTypes, enabledFor:enabledFor, setEnabled:setEnabled, setMasterEnabled:setMasterEnabled, renderSettings:renderSettings};
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded',initialize);
   else initialize();
 })();

@@ -84,3 +84,21 @@ def test_relocation_rejects_missing_or_illegal_destinations(generation, destinat
     with pytest.raises((ValueError, FileNotFoundError)):
         generate_store.relocate_result_media("2026-11-20/job-1", destination)
     assert original.exists()
+
+def test_owned_relocation_http_route_and_media_playback(generation):
+    from tool.server import app as app_module
+    root, directory, manifest, original = generation
+    client = app_module.app.test_client()
+    move = client.post("/fs/generate/result/move", json={
+        "storageIds": ["2026-11-20/job-1"], "destination": "Keepers"
+    })
+    assert move.status_code == 200, move.get_json()
+    assert move.get_json()["moved"] == 1
+    media = client.get("/fs/generate/result/media?storageId=2026-11-20/job-1")
+    assert media.status_code == 200
+    assert media.data == b"original video"
+    unsafe = client.post("/fs/generate/result/move", json={
+        "storageIds": ["2026-11-20/job-1"], "destination": "../outside"
+    })
+    assert unsafe.status_code == 400
+    assert (root / "Keepers" / move.get_json()["results"][0]["location"].split("/")[-1]).is_file()

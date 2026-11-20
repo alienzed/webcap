@@ -234,7 +234,7 @@
       folder.placeholder = 'Existing folder path (relative to root)';
       folder.setAttribute('aria-label','Destination folder for '+entry.label);
       folder.dataset.shortcutField = 'folder';
-      row.append(key,label,folder);
+      row.appendChild(key); row.appendChild(label); row.appendChild(folder);
       host.appendChild(row);
     });
     el('media-explorer-shortcuts-status').textContent = '';
@@ -245,9 +245,9 @@
     var rows = Array.from(el('media-explorer-shortcuts-rows').children);
     var config = rows.map(function (row) {
       return {
-        key:row.querySelector('[data-shortcut-field="key"]').value.trim().toLowerCase(),
-        label:row.querySelector('[data-shortcut-field="label"]').value.trim(),
-        folder:row.querySelector('[data-shortcut-field="folder"]').value.trim().replace(/\\/g,'/')
+        key:row.children[0].value.trim().toLowerCase(),
+        label:row.children[1].value.trim(),
+        folder:row.children[2].value.trim().replace(/\\/g,'/')
       };
     });
     var keys = config.map(function (entry) {return entry.key;});

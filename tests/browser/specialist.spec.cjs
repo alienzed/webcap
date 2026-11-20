@@ -9,9 +9,10 @@ test('Flow 9 optional checkpoint — discover Coherence via current Director Rev
   });
   await openDirector(page);
   await openProject(page,project.id);
+  await page.locator('#director-studio-actions-toggle').click();
+  await page.locator('[data-studio-tool="revision"]').click();
   const mode=page.locator('#director-studio-composer-mode-select');
-  await expect(mode).toBeVisible();
-  await mode.selectOption('revision');
+  await expect(mode).toHaveValue('revision');
   await expect(page.locator('#director-studio-revision-controls')).toBeVisible();
   await page.locator('#director-studio-revision-preset').selectOption('coherence');
   await expect(page.locator('#director-chat-send')).toHaveText('Check Coherence');

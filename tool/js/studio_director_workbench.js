@@ -1614,6 +1614,7 @@
     document.addEventListener('keydown', function (event) {
       if (event.key === 'Escape' && !menu.classList.contains('hidden')) {
         event.preventDefault();
+        event.stopPropagation();
         closeMenu();
         launcherButton.focus();
       }
@@ -1621,6 +1622,7 @@
     rail.addEventListener('keydown',function(event){
       if(event.key==='Escape' && el('director-chat-drawer').classList.contains('studio-actions-open')) {
         event.preventDefault();
+        event.stopPropagation();
         el('studio-dw-close-actions').click();
       }
     });

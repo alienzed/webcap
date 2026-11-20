@@ -36,7 +36,12 @@ async function attachProject(page,project){
   if(await mode.isVisible() && await mode.inputValue()!=='conversation')
     await mode.selectOption('conversation');
   const tools=page.locator('#studio-dw-open-tools');
-  if(await tools.getAttribute('aria-expanded')!=='true') await tools.click();
+  if(await tools.isVisible()) {
+    if(await tools.getAttribute('aria-expanded')!=='true') await tools.click();
+  } else {
+    await page.locator('#director-studio-actions-toggle').click();
+    await page.locator('[data-studio-tool="read"]').click();
+  }
   const attach=page.locator('#director-studio-attach-current');
   if(await attach.isVisible()) await attach.click();
   await expect(page.locator('#director-chat-title')).toContainText(project.title);

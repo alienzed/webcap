@@ -6137,7 +6137,7 @@
       var empty = document.createElement("p");
       empty.className = "storyboard-assist-empty";
       empty.textContent = promptAssistSession && promptAssistSession.discardedFindingCount
-        ? "The model returned suggestions, but none had a unique, usable text replacement. Review the model output or retry."
+        ? promptAssistSession.discardedFindingCount + " suggestion(s) lacked a unique, usable text replacement. Review the model output or retry."
         : "This Scene has no meaningful text corrections to suggest.";
       host.appendChild(empty);
       return;

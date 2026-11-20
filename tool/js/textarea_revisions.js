@@ -395,10 +395,20 @@
     return h;
   }
 
-  function checkpoint() {
-    if (!active || showingPreview) return;
-    capture(active.key, active.field.value);
-    draw();
+  // Explicit WebCap-controlled textarea edits do not fire browser input events.
+  // Record both sides of a successful change, even if the editor is unfocused.
+  function recordChange(field, previousValue) {
+    if (!enabledFor(field)) return;
+    var key = identity(field);
+    clearTimeout(timers.get(key));
+    timers.delete(key);
+    capture(key, previousValue);
+    capture(key, field.value);
+    if (active && active.field === field && active.key === key) {
+      showingPreview = false;
+      active.live = field.value;
+      draw();
+    }
   }
 
   function schedule(key, value) {
@@ -445,6 +455,11 @@
 
   function detach() {
     if (!active) return;
+    if (!showingPreview) {
+      clearTimeout(timers.get(active.key));
+      timers.delete(active.key);
+      capture(active.key, active.field.value);
+    }
     restorePreview();
     active.field.style.paddingBottom = originalPaddingBottom;
     active = null;
@@ -620,7 +635,7 @@
     renderSettings();
   }
 
-  window.webcapTextareaRevisions = {identity:identity,capture:capture,history:function (key) {return histories.get(key);}, fieldTypes:fieldTypes, enabledFor:enabledFor, setEnabled:setEnabled, setMasterEnabled:setMasterEnabled, renderSettings:renderSettings};
+  window.webcapTextareaRevisions = {identity:identity,capture:capture,recordChange:recordChange,history:function (key) {return histories.get(key);}, fieldTypes:fieldTypes, enabledFor:enabledFor, setEnabled:setEnabled, setMasterEnabled:setMasterEnabled, renderSettings:renderSettings};
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded',initialize);
   else initialize();
 })();

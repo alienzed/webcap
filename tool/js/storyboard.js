@@ -6339,7 +6339,9 @@
         ? "Correction applied. Continue with the next finding."
         : "All suggested corrections applied.";
       el("storyboard-prompt-assist-position").focus();
-      return refreshLibrary();
+      // The correction is already saved. A library refresh error is separate
+      // and must not make a successful Apply look like a failed mutation.
+      return refreshLibrary().catch(function (error) { reportError(error); });
     }).catch(function (error) {
       promptAssistSession.applying = false;
       syncPromptAssistNavigator();

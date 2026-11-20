@@ -369,8 +369,10 @@ def discover_storyboards():
                 use = {"storageId": str(scene_id), "role": label, "source": "storyboard", "label": str(scene.get("title") or scene_id)}
                 if role != "reference":
                     use["takeId"] = label
+                    use["selected"] = str(scene.get("selectedTakeId") or "") == str(label)
                 if identity in found:
                     found[identity]["uses"].append(use)
+                    if use.get("selected"): found[identity]["selectedTake"] = True
                     if role not in found[identity]["roles"]:
                         found[identity]["roles"].append(role)
                     continue
@@ -387,6 +389,7 @@ def discover_storyboards():
                     "contextLabel": str(story.get("title") or story_id) + " / " + str(scene.get("title") or scene_id),
                     "roles": [role], "fileSize": file.stat().st_size,
                     "uses": [use],
+                    "selectedTake": bool(use.get("selected")),
                 }
                 if role != "reference":
                     found[identity]["rating"] = entry.get("rating")

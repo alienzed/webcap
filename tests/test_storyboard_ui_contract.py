@@ -275,11 +275,13 @@ def test_storyboard_revise_scenes_uses_studio_composer_and_keeps_sparse_scene_he
     assert "window.openStudioDirectorRevision()" in storyboard
     assert "window.startStudioRevision = function (options)" in storyboard
     assert '<option value="continuity">Continuity pass</option>' in html
-    assert "DIRECTOR_PASS_PRESETS.continuity.instruction" in storyboard
-    assert "function runDirectorToolsRevision()" in storyboard
-    assert "var revision = reviseScenes(" in storyboard
+    assert "DIRECTOR_PASS_PRESETS[key].instruction" in storyboard
+    assert "window.storyboardRevisionPreset = function (key)" in storyboard
+    assert "return reviseScenesWithOptions(options.instruction, options.modelId" in storyboard
     assert "continuityContext: continuityContext === true" in storyboard
-    assert "el('storyboard-director-tools-preset').value === 'continuity'" in storyboard
+    assert "options.preset === 'continuity'" in storyboard
+    assert "options.selectedSceneIds" in storyboard
+    assert "options.preset === 'coherence'" in storyboard
     assert '"continuityContext": data.get("continuityContext") is True' in app
     assert "id: 'revise-scenes'" not in storyboard
 

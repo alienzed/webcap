@@ -43,7 +43,7 @@ test('New Director conversation is passive until the author explicitly sends', (
   assert.doesNotMatch(newChat, /startStudioWorkshop\(/);
   assert.match(newChat, /flushSessionSave/);
   assert.match(newChat, /state\.modeMessages\.storyboard = \[\]/);
-  assert.match(source, /director-studio-retry'\)\.classList\.add\('hidden'\)/);
+  // Startup retry control was retired; new chats remain passive until Send.
 });
 
 test('Only explicitly supplied conversation content is sent; legacy snapshots are not silently re-injected', async () => {

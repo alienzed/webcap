@@ -12,7 +12,8 @@ test('Director navigation supplies identity and Scene order without saved creati
     source.indexOf('  function openStoryboardActivity(target) {')),scope);
   const navigation=scope.getStudioDirectorNavigation();
   assert.deepEqual(JSON.parse(JSON.stringify(navigation)),{
-    projectId:'p1',projectTitle:'Current Project',sceneId:'b',sceneNumber:2,sceneTitle:'',sceneOrder:['a','b']});
+    projectId:'p1',projectTitle:'Current Project',sceneId:'b',sceneNumber:2,sceneTitle:'',
+    sceneOrder:['a','b'],sceneTitles:['Untitled Scene','Untitled Scene']});
   assert.doesNotMatch(JSON.stringify(navigation),/Private/);
   navigation.sceneOrder.push('c');
   assert.deepEqual(story.sceneOrder,['a','b'],'navigation cannot mutate saved order');

@@ -38,6 +38,7 @@ test('Advisor prepares a field-scoped Project Write but only the normal Write bu
   const advisor=page.locator('#studio-action-advisor-actions');
   await expect(advisor.locator('button')).toHaveCount(1,{timeout:30000});
   await expect(advisor).toContainText('Revise the lighting');
+  await expect(advisor).not.toContainText('Shift only the visual atmosphere toward soft golden light.');
   expect((await story(page,project.id)).style).toBe('Blue twilight.');
   await advisor.locator('button').click();
   await expect(page.locator('#studio-dw-write-panel')).toBeVisible();

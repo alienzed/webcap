@@ -384,3 +384,14 @@ test('legacy Workshop request context never treats stored Scene Intent as a crea
   const workshopDraft = part('  function prepareWorkshopRevision() {', '  function applyWorkshopRevision() {');
   assert.doesNotMatch(workshopDraft, /sceneIntent|sceneSummary/);
 });
+
+test('Action Advisor hints show concise labels while preserving instructions for Write', () => {
+  const section = workbench.slice(
+    workbench.indexOf('  function offerActionAdvice(scope) {'),
+    workbench.indexOf('  function setOperation() {')
+  );
+  assert.match(section, /label\.textContent = action\.label/);
+  assert.match(section, /row\.append\(label,button\)/);
+  assert.doesNotMatch(section, /detail\.textContent = action\.instruction/);
+  assert.match(workbench, /el\('studio-dw-write-instruction'\)\.value = action\.instruction/);
+});

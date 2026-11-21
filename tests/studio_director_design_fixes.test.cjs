@@ -292,13 +292,28 @@ test('Studio Revision mode dispatches the existing Storyboard revision operation
   const el=id=>{
     if (!nodes.has(id)) nodes.set(id,{
       value:'',checked:false,focus(){},classList:{toggle(){}},textContent:'',
-      dispatchEvent(){},readOnly:false
+      dispatchEvent(){},readOnly:false,children:[],
+      replaceChildren(...items){this.children=items;},
+      appendChild(item){this.children.push(item);},
+      querySelectorAll(selector){
+        return selector==='input.director-studio-revision-scene'
+          ? this.children.flatMap(label=>label.children||[])
+            .filter(child=>child.className==='director-studio-revision-scene')
+          : [];
+      }
     });
     return nodes.get(id);
   };
+  const document={
+    createElement:()=>({
+      children:[],type:'',checked:false,appendChild(child){this.children.push(child);},
+      addEventListener(){}
+    }),
+    createTextNode:text=>({textContent:text})
+  };
   const calls=[];
   const scope=vm.createContext({
-    el,state:{activeMode:'storyboard',modelId:'director-model'},
+    el,document,state:{activeMode:'storyboard',modelId:'director-model'},
     window:{
       getStudioDirectorNavigation:()=>({projectId:'project-1',projectTitle:'Test',sceneOrder:['scene-a','scene-b']}),
       startStudioRevision:async options=>{calls.push(options);},
@@ -316,6 +331,7 @@ test('Studio Revision mode dispatches the existing Storyboard revision operation
   await new Promise(resolve=>setImmediate(resolve));
   assert.equal(calls.length,1);
   assert.equal(calls[0].projectId,'project-1');
+  assert.deepEqual(Array.from(calls[0].selectedSceneIds),['scene-a','scene-b']);
   assert.equal(calls[0].modelId,'director-model');
   assert.equal(calls[0].preset,'continuity');
   assert.equal(calls[0].generateFreshTakes,true);

@@ -44,6 +44,15 @@ _WORKSHOP = (
     "Use the saved Project and Scene facts actually supplied as context; treat earlier "
     "unsaved ideas as proposals that the author may refine. "
     "Conversation can develop material, but only WebCap saves Project and Scene records.\n"
+    "STUDIO STRUCTURE: A Project has a Title, Concept / overview (story.concept), "
+    "Visual / atmosphere (story.style), and Invariants (story.invariants) for recurring "
+    "identities and stable facts. Each independently generatable Scene has a Title, "
+    "durationSeconds, and a complete H3 Prompt (scene.prompt) used for its Take. "
+    "Scene Prompts establish the subject, environment / continuity anchors, and visual "
+    "treatment; integrated_multimodal_description contains consecutive timed [Shot N] "
+    "beats, followed by overall_soundscape and non_diegetic_music. "
+    "Discuss this structure competently; the detailed H3 production reference is "
+    "provided separately when authoring a Scene Prompt.\n"
 )
 
 

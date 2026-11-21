@@ -335,7 +335,7 @@ test('Studio Revision mode dispatches the existing Storyboard revision operation
   assert.equal(calls[0].modelId,'director-model');
   assert.equal(calls[0].preset,'continuity');
   assert.equal(calls[0].generateFreshTakes,true);
-  assert.equal(calls[0].instruction,'Correct continuity in both Scenes');
+  assert.equal(calls[0].instruction,'Keep continuity\n\nAdditional direction: Correct continuity in both Scenes');
   assert.equal(el('director-studio-revision-status').textContent,'Scene revision completed.');
   scope.studioComposerMode='revision'; // Reopen the ephemeral operation after the first run completes.
   el('director-studio-revision-preset').value='coherence';

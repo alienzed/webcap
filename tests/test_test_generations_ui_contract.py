@@ -108,7 +108,7 @@ def test_test_generation_previews_are_fluid_with_natural_media_height():
     css = (ROOT / "tool/css/styles.css").read_text(encoding="utf-8")
     results_rule = css.split(".test-generations-results {", 1)[1].split("}", 1)[0]
     assert "display: grid;" in results_rule
-    assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in results_rule
+    assert "grid-template-columns: repeat(3, minmax(0, 1fr));" in results_rule
     assert 'data-columns="3"' in css
     assert 'data-columns="4"' in css
     assert "@container test-preview (max-width: 780px)" in css

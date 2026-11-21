@@ -19,14 +19,14 @@ def test_writer_workshop_keeps_creative_identity_separate_from_h3_playbook(monke
     assert "DISCUSSION: Develop ideas and make useful recommendations" in system
     assert "Explicit Write functions" in system
     assert "full H3 production" not in system
-    assert "Concept (story.concept)" not in system
-    assert "Invariants (story.invariants)" not in system
-    assert "complete H3 Prompt (scene.prompt)" not in system
+    assert "story.concept" in system
+    assert "story.invariants" in system
+    assert "complete H3 Prompt (scene.prompt)" in system
     assert "4–15 seconds" not in system
     assert "integrated_multimodal_description" in reference
     assert "Keep risky hand-to-hand interactions simple." in reference
     assert "Keep risky hand-to-hand interactions simple." not in system
-    assert "[Shot 1]" not in system
+    assert "[Shot N]" in system
     assert len(system) < 4000
 
 def test_studio_guidance_teaches_only_focused_creative_workflows():
@@ -109,7 +109,7 @@ def test_unconfigured_h3_studio_still_has_production_expertise(monkeypatch):
     assert "complete standalone H3 Prompt" not in system
     assert "USER'S H3 PRODUCTION PLAYBOOK" not in system
     assert "USER'S H3 PRODUCTION PLAYBOOK" not in reference
-    assert "[Shot 1]" not in system
+    assert "[Shot N]" in system
     assert "[Shot 1]" in reference
 
 def test_h3_runtime_reference_uses_current_studio_fields_and_conditional_legacy_guidelines():
@@ -129,16 +129,18 @@ def test_freeform_workshop_does_not_claim_hidden_context_or_mutations():
     assert "CURRENT PROJECT NAVIGATION" not in system
     assert "WebCap resolved Project" not in system
 
-def test_chat_role_excludes_project_fields_and_h3_production_instructions():
+def test_chat_knows_project_scene_fields_and_h3_shape_without_full_production_reference():
     result = guidance("minimax_h3")
     system, reference = result["system"], result["promptContract"]
     assert "STUDIO DIRECTOR | CREATIVE PARTNER" in system
     assert "meaningful ideas" in system
     for phrase in ("story.concept", "story.style", "story.invariants",
-                   "scene.prompt", "durationSeconds", "H3 PROMPT",
-                   "integrated_multimodal_description"):
-        assert phrase.casefold() not in system.casefold()
-    assert "integrated_multimodal_description" in reference
+                   "scene.prompt", "durationSeconds", "H3 Prompt",
+                   "integrated_multimodal_description", "[Shot N]",
+                   "overall_soundscape", "non_diegetic_music"):
+        assert phrase.casefold() in system.casefold()
+    assert "[Shot 1]" in reference
+    assert "CENTRAL EVENT." not in system
 
 
 def test_h3_playbook_review_uses_existing_config_and_checks_conflicts(monkeypatch):

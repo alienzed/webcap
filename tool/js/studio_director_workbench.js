@@ -479,15 +479,14 @@
       host.replaceChildren();
       actions.forEach(function (action) {
         var row = document.createElement('div'), label = document.createElement('strong');
-        var button = document.createElement('button'), detail = document.createElement('p');
+        var button = document.createElement('button');
         row.className = 'studio-action-advisor-item';
         label.textContent = action.label;
-        detail.textContent = action.instruction || (action.kind === 'read' ?
-          'Prepare selected saved material for Read.' : '');
+        // The full instruction remains available in the prepared Write form.
         button.type = 'button';
         button.textContent = action.kind === 'read' ? 'Prepare Read' : 'Prepare Write';
         button.onclick = function () {return prepareAdvisorAction(action,scope);};
-        row.append(label,detail,button);
+        row.append(label,button);
         host.appendChild(row);
       });
       host.classList.toggle('hidden',!actions.length);

@@ -2365,6 +2365,8 @@ def director_chat_route():
                     "revise_scenes, or read. Use a short, meaningful label for the UI button. "
                     "Copy actionContext.projectId exactly for every action targeting the current "
                     "Project; use an empty projectId only for create_project. "
+                    "Use brief, action-oriented labels of about 3 to 8 words. "
+                    "Keep the complete authoring direction in instruction for the Write form. "
                     "For read, set instruction to an empty string, fields to ['overview'] for the "
                     "saved Project Overview or ['scene'] for the selected Scene, and sceneIds to []. "
                     "For revise_project, select only the requested fields from title, concept, "

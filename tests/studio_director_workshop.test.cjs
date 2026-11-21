@@ -43,7 +43,7 @@ test('New Director conversation is passive until the author explicitly sends', (
   assert.doesNotMatch(newChat, /startStudioWorkshop\(/);
   assert.match(newChat, /flushSessionSave/);
   assert.match(newChat, /state\.modeMessages\.storyboard = \[\]/);
-  assert.match(source, /director-studio-retry'\)\.classList\.add\('hidden'\)/);
+  // Startup retry control was retired; new chats remain passive until Send.
 });
 
 test('Only explicitly supplied conversation content is sent; legacy snapshots are not silently re-injected', async () => {
@@ -383,4 +383,15 @@ test('legacy Workshop request context never treats stored Scene Intent as a crea
   assert.match(source, /Author a complete usable H3 Prompt when writing a new Scene/);
   const workshopDraft = part('  function prepareWorkshopRevision() {', '  function applyWorkshopRevision() {');
   assert.doesNotMatch(workshopDraft, /sceneIntent|sceneSummary/);
+});
+
+test('Action Advisor hints show concise labels while preserving instructions for Write', () => {
+  const section = workbench.slice(
+    workbench.indexOf('  function offerActionAdvice(scope) {'),
+    workbench.indexOf('  function setOperation() {')
+  );
+  assert.match(section, /label\.textContent = action\.label/);
+  assert.match(section, /row\.append\(label,button\)/);
+  assert.doesNotMatch(section, /detail\.textContent = action\.instruction/);
+  assert.match(workbench, /el\('studio-dw-write-instruction'\)\.value = action\.instruction/);
 });

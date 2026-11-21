@@ -19,18 +19,19 @@ test('Revise & Generate remains available in the existing Project utilities', ()
   assert.match(storyboard, /el\('storyboard-director-tools-btn'\)\.onclick = function \(\) \{\s*window\.openStudioDirectorRevision\(\)/);
 });
 
-test('Revise & Generate retains the existing production operation with explicit destination', () => {
-  assert.match(markup, /id="storyboard-director-tools-target"/);
-  assert.match(markup, /id="storyboard-director-tools-generate-takes"/);
-  assert.match(markup, /revisions can save while the job runs/);
-  assert.match(storyboard, /storyState\.story\.sceneOrder\.length \+ ' Scenes'/);
+test('Revise Scenes retains the production operations through the current Director drawer', () => {
+  // The retired Storyboard tools modal has become the Director revision composer.
+  assert.match(markup, /id="director-studio-revision-target"/);
+  assert.match(markup, /id="director-studio-revision-scenes"/);
+  assert.match(markup, /id="director-studio-revision-fresh"/);
+  assert.match(markup, /id="director-studio-revision-input"/);
+  assert.doesNotMatch(markup, /id="storyboard-director-tools-target"/);
+  assert.match(chat, /selectedSceneIds:.*selectedSceneIds/);
+  assert.match(chat, /generateFreshTakes:el\('director-studio-revision-fresh'\)\.checked/);
   assert.match(storyboard, /operation: 'revise_scenes_sequence'/);
   assert.match(storyboard, /generateFreshTakes: generateFreshTakes === true/);
   assert.match(storyboard, /operation: 'check_coherence_sequence'/);
   assert.match(storyboard, /sceneRevisionHistory\.remember/);
-  assert.match(storyboard, /function syncDirectorToolsRunLabel\(\)/);
-  assert.match(storyboard, /'Revise & Generate Takes'/);
-  assert.match(storyboard, /generate-takes'\)\.onchange = syncDirectorToolsRunLabel/);
 });
 
 test('frontend and backend agree on freeform Studio chat and task-scoped Write operations', () => {

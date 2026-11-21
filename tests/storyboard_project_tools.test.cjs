@@ -39,8 +39,8 @@ test('Header preserves generation, revision presets and direct Find & Replace',(
   assert.match(html,/id="director-studio-revision-preset"/);
   assert.match(source,/el\('storyboard-find-replace-btn'\)\.onclick = openProjectReplace/);
   assert.match(source,/el\('storyboard-cancel-takes-btn'\)\.onclick = cancelStoryTakes/);
-  assert.match(source,/this\.value === 'continuity'/);
-  assert.match(source,/this\.value === 'coherence'/);
+  assert.match(source,/options\.preset === 'continuity'/);
+  assert.match(source,/options\.preset === 'coherence'/);
   assert.match(source,/el\('storyboard-generate-scenes-btn'\)\.classList\.toggle\('hidden', sequenceMode\)/);
   assert.match(html,/id="studio-dw-coherence-check"/);
 });

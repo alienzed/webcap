@@ -17,7 +17,11 @@ def test_video_context_actions_include_fps_conversion():
     convert_action = script.index("label: 'Convert to...'")
 
     assert convert_action > video_block_start
-    assert "/media/convert_fps" in script[convert_action:]
+    # Both actions invoke the shared helper, where the endpoint is implemented.
+    assert "function convertVideoToFps(fps)" in script[video_block_start:convert_action]
+    assert "fetch('/media/convert_fps'" in script[video_block_start:convert_action]
+    assert "convertVideoToFps(24)" in script[video_block_start:convert_action]
+    assert "convertVideoToFps(Number(String(fpsText).trim()))" in script[convert_action:]
 
 
 def test_webp_context_action_exposes_png_conversion_without_menu_grouping():

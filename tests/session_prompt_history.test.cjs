@@ -149,6 +149,6 @@ test('helper is loaded before Generate and Storyboard and wired only to instruct
   const storyboard = fs.readFileSync('tool/js/storyboard.js', 'utf8');
   assert.match(generate, /promptAssistantInstructionHistory\.bind\(el\('generate-director-instruction'\)\)/);
   assert.match(storyboard, /sceneRefineHistory\.handleKeydown\(event\)/);
-  assert.match(storyboard, /sceneRevisionHistory\.bind\(el\('storyboard-director-tools-instruction'\)\)/);
+  assert.match(storyboard, /sceneRevisionHistory\.bind\(el\('director-studio-revision-input'\)\)/);
   assert.match(storyboard, /sceneCreationHistory\.bind\(el\('storyboard-scene-creation-instruction'\)\)/);
 });

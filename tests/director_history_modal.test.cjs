@@ -56,3 +56,13 @@ test('I/O retains complete structured responses and legacy plain replies',()=>{
   assert.equal(nodes['studio-director-io-raw'].textContent,legacy);
   assert.equal(nodes['studio-director-io-parsed'].textContent,legacy);
 });
+
+
+test('Chat History renders Rename and Delete side by side without a More menu',()=>{
+  const render=part('  function renderSessionHistory() {','  function showSessionFailure(error) {');
+  assert.match(render,/actions\.className = 'director-chat-history-actions'/);
+  assert.match(render,/actions\.appendChild\(rename\)/);
+  assert.match(render,/actions\.appendChild\(remove\)/);
+  assert.match(render,/item\.appendChild\(actions\)/);
+  assert.doesNotMatch(render,/document\.createElement\('details'\)|textContent = 'More'/);
+});

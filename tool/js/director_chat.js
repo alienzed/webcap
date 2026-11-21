@@ -753,13 +753,9 @@
           if (event.key === 'Escape') renderSessionHistory();
         };
       };
-      var menu = document.createElement('details');
-      menu.className = 'director-chat-history-menu';
-      var summary = document.createElement('summary');
-      summary.textContent = 'More';
-      summary.setAttribute('aria-label', 'Conversation actions for ' + historyDisplayTitle(chat));
-      menu.appendChild(summary);
-      menu.appendChild(rename);
+      var actions = document.createElement('div');
+      actions.className = 'director-chat-history-actions';
+      actions.appendChild(rename);
 
       var remove = document.createElement('button');
       remove.type = 'button';
@@ -767,8 +763,8 @@
       remove.textContent = 'Delete';
       remove.title = 'Permanently delete this saved conversation';
       remove.onclick = function () { deleteSession(chat.id); };
-      menu.appendChild(remove);
-      item.appendChild(menu);
+      actions.appendChild(remove);
+      item.appendChild(actions);
       list.appendChild(item);
     });
     if (!matches.length && state.sessionList.length) {

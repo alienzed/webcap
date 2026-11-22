@@ -4614,8 +4614,12 @@
         var instruction = JSON.stringify({
           task:'Create the requested independently generatable H3 Scenes for this Project. ' +
             'Give each Scene a useful title, complete H3 Prompt and durationSeconds. ' +
-            'Follow the author\'s specified timing. When timing is unspecified, choose a ' +
-            'duration that supports the supplied actions, shot transitions and dialogue. ' +
+            'H3 can generate clips between 4 and 15 seconds. Give every Scene a ' +
+            'durationSeconds within that range, honoring the author\'s requested timing ' +
+            'when it fits. Choose each duration independently to support its action, ' +
+            'shot transitions and dialogue rather than making every Scene the same length. ' +
+            'Match the final timed H3 shot to the selected durationSeconds. ' +
+            'For longer developments, use connected short Scenes with clear continuity. ' +
             'Deliver the authored Scenes now.',
           authorDirection:launch.authorRequest || launch.instruction,
           project:creativeContext
@@ -4698,10 +4702,17 @@
             }).then(function(){return window.refreshStudioDirectorStoryIfOpen(storyId);})
               .catch(function(error){error.saved=true;throw error;})
               .then(function(){
+                var warnings = incomplete.concat(notMapped);
+                saved.forEach(function (scene, index) {
+                  if (scene.durationSeconds < 4 || scene.durationSeconds > 15) {
+                    warnings.push('Scene ' + (index + 1) + ' is ' +
+                      scene.durationSeconds + ' seconds; H3 supports 4–15 seconds. ' +
+                      'Revise the duration and shot timings before generating');
+                  }
+                });
                 studioActionStatus(saved.length+' Scene(s) saved.'+
-                  (incomplete.length || notMapped.length
-                    ? ' ' + incomplete.concat(notMapped).join('; ') + '. Inspect raw I/O.' : ''),
-                  !!(incomplete.length || notMapped.length));
+                  (warnings.length ? ' ' + warnings.join('; ') + '. Inspect raw I/O.' : ''),
+                  !!warnings.length);
                 return result;
               });
           });
@@ -4753,7 +4764,9 @@
         var instruction = JSON.stringify({
           task:'Revise the requested Scene fields in the author\'s direction. ' +
             'Return complete replacement values for requestedFields, including a standalone H3 Prompt ' +
-            'when prompt is selected. Preserve all unaffected creative content and fields. ' +
+            'when prompt is selected. Keep saved duration when unchanged; when a new durationSeconds ' +
+            'is requested, choose within the H3-supported 4–15 seconds and align its timed shots. ' +
+            'Preserve all unaffected creative content and fields. ' +
             'Deliver the actual authored values in one JSON object.',
           authorDirection:launch.authorRequest || launch.instruction,
           requestedFields:requestedFields,

@@ -2,6 +2,12 @@ MINIMAX H3 GENERATION PROMPT
 
 Write a directly usable prompt for one video Scene, at most 15 seconds.
 
+SCENE DURATION.
+MiniMax H3 generates clips from 4 to 15 seconds. For a new Scene, choose durationSeconds
+within this supported range to suit its particular action, pacing and dialogue. Scenes
+may have different durations. Make the final timed shot end at durationSeconds.
+For an existing Scene, match its saved duration unless the author requests a change.
+
 AUTHORING STRUCTURE.
 State persistent identities and starting conditions once. Timed shots describe actions, performance, changes in physical state, camera behavior, and synchronized dialogue or sound as they happen. Use supplied Project Concept, Visual / atmosphere, relevant Invariants, and the saved Scene Prompt when revising; honor legacy Story Guidelines only when explicitly supplied.
 

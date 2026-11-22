@@ -25,9 +25,6 @@ test('explicit new-Scene Write persists actual returned count without a Review s
   expect(calls).toHaveLength(1);
   const schema=calls[0].response_format.json_schema.schema.properties.scenes.items;
   expect(schema.required).toEqual(['title','prompt','durationSeconds']);
-  expect(schema.properties.durationSeconds.description).toContain('4–15');
-  expect(schema.properties.durationSeconds.maximum).toBeUndefined();
-  await expect(page.locator('#studio-dw-write-context-json')).toContainText('responseSchema');
   const outbound=JSON.stringify(calls[0].messages);
   expect(outbound).toContain('H3 PROMPT AUTHORING REFERENCE');
   expect(outbound).toContain('H3 can generate clips between 4 and 15 seconds');

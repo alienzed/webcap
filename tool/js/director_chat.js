@@ -4702,17 +4702,10 @@
             }).then(function(){return window.refreshStudioDirectorStoryIfOpen(storyId);})
               .catch(function(error){error.saved=true;throw error;})
               .then(function(){
-                var warnings = incomplete.concat(notMapped);
-                saved.forEach(function (scene, index) {
-                  if (scene.durationSeconds < 4 || scene.durationSeconds > 15) {
-                    warnings.push('Scene ' + (index + 1) + ' is ' +
-                      scene.durationSeconds + ' seconds; H3 supports 4–15 seconds. ' +
-                      'Revise the duration and shot timings before generating');
-                  }
-                });
                 studioActionStatus(saved.length+' Scene(s) saved.'+
-                  (warnings.length ? ' ' + warnings.join('; ') + '. Inspect raw I/O.' : ''),
-                  !!warnings.length);
+                  (incomplete.length || notMapped.length
+                    ? ' ' + incomplete.concat(notMapped).join('; ') + '. Inspect raw I/O.' : ''),
+                  !!(incomplete.length || notMapped.length));
                 return result;
               });
           });

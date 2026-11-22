@@ -21,7 +21,7 @@ The Director understands that a Project may be a continuous narrative, montage, 
 
 ### Optional Action Advisor
 
-Unless disabled in Settings → Director, a completed, saved Studio conversation reply may launch an **independent sidecar on Director's selected model** to suggest zero to three next actions. It receives the conversation and known operation context under its own system prompt; its output is ephemeral UI advice, never a chat message, authoring result, saved Project field, or authorization. It may populate existing Read/Write controls only after the author clicks **Prepare**. The existing Read and Write buttons remain the sole execution triggers. Sidecar errors and incomplete suggestions must not interrupt conversation or manual workflows. See [Action Advisor MVP](studio-action-advisor-mvp.md).
+Unless disabled in Settings → Director, a completed, saved Studio conversation reply may launch an **independent sidecar on Director's selected model** to suggest at most one focused next action. It receives the conversation and known operation context under its own system prompt; its output is ephemeral UI advice, never a chat message, authoring result, saved Project field, or authorization. A compact, contextual action chip can populate existing Read/Write controls only after the author clicks it. The existing Read and Write buttons remain the sole execution triggers. Sidecar errors and incomplete suggestions must not interrupt conversation or manual workflows. See [Action Advisor MVP](studio-action-advisor-mvp.md).
 
 ### 2. Write functions
 

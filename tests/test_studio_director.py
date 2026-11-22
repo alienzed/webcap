@@ -12,7 +12,7 @@ def test_writer_workshop_keeps_creative_identity_separate_from_h3_playbook(monke
         "config",
         {"generation_model_guidance": {"minimax_h3": "Keep risky hand-to-hand interactions simple."}},
     )
-    result = guidance("minimax_h3")
+    result = guidance("minimax_h3", "current")
     system, reference = result["system"], result["promptContract"]
     assert "STUDIO DIRECTOR | CREATIVE PARTNER" in system
     assert "imaginative, capable creative director" in system
@@ -30,7 +30,7 @@ def test_writer_workshop_keeps_creative_identity_separate_from_h3_playbook(monke
     assert len(system) < 4000
 
 def test_studio_guidance_teaches_only_focused_creative_workflows():
-    result = guidance("minimax_h3")
+    result = guidance("minimax_h3", "current")
     actions = {entry["name"]: entry["description"] for entry in result["actions"]}
     assert set(actions) == {"context.read", "project.write", "scenes.write"}
     assert "explicitly approved" in actions["context.read"]
@@ -43,7 +43,7 @@ def test_studio_guidance_teaches_only_focused_creative_workflows():
     assert len(result["system"]) < 4000
 
 def test_chat_director_matches_reply_depth_without_hiding_requested_scene_material():
-    system = guidance("minimax_h3")["system"]
+    system = guidance("minimax_h3", "current")["system"]
     assert "matching depth and length to the author's request" in system
     assert "one or two short paragraphs" in system
     assert "structured formatting when it adds clarity" in system
@@ -53,7 +53,7 @@ def test_chat_director_matches_reply_depth_without_hiding_requested_scene_materi
 
 
 def test_director_role_is_creative_partner_not_webcap_workflow_engine():
-    system = guidance("minimax_h3")["system"]
+    system = guidance("minimax_h3", "current")["system"]
     assert "elevate the author's" in system
     assert "meaningful ideas" in system
     assert "sound creative judgment" in system
@@ -102,7 +102,7 @@ def test_unsupported_generation_model_fails_instead_of_misapplying_h3_guidance()
 
 def test_unconfigured_h3_studio_still_has_production_expertise(monkeypatch):
     monkeypatch.setattr(app_config, "config", {"generation_model_guidance": {}})
-    result = guidance("minimax_h3")
+    result = guidance("minimax_h3", "current")
     system, reference = result["system"], result["promptContract"]
     assert "short generative-video Projects and Scenes" in system
     assert "4–15 seconds" not in system
@@ -113,14 +113,14 @@ def test_unconfigured_h3_studio_still_has_production_expertise(monkeypatch):
     assert "[Shot 1]" in reference
 
 def test_h3_runtime_reference_uses_current_studio_fields_and_conditional_legacy_guidelines():
-    prompt = guidance("minimax_h3")["promptContract"]
+    prompt = guidance("minimax_h3", "current")["promptContract"]
     assert "Use supplied Project Concept, Visual / atmosphere, relevant Invariants, and the saved Scene Prompt" in prompt
     assert "legacy Story Guidelines only when explicitly supplied" in prompt
     assert "integrated_multimodal_description:" in prompt
 
 
 def test_freeform_workshop_does_not_claim_hidden_context_or_mutations():
-    system = guidance("minimax_h3")["system"]
+    system = guidance("minimax_h3", "current")["system"]
     assert "saved Project and Scene facts actually supplied" in system
     assert "treat earlier unsaved ideas as proposals" in system
     assert "only WebCap saves Project and Scene records" in system
@@ -130,7 +130,7 @@ def test_freeform_workshop_does_not_claim_hidden_context_or_mutations():
     assert "WebCap resolved Project" not in system
 
 def test_chat_knows_project_scene_fields_and_h3_shape_without_full_production_reference():
-    result = guidance("minimax_h3")
+    result = guidance("minimax_h3", "current")
     system, reference = result["system"], result["promptContract"]
     assert "STUDIO DIRECTOR | CREATIVE PARTNER" in system
     assert "meaningful ideas" in system
@@ -147,7 +147,7 @@ def test_chat_knows_project_scene_fields_and_h3_shape_without_full_production_re
 
 
 def test_studio_guidance_understands_distinct_creative_structures_and_judgment():
-    system = guidance("minimax_h3")["system"]
+    system = guidance("minimax_h3", "current")["system"]
     for phrase in ("continuous story", "montage", "thematic collection",
                    "repeating format", "parallel moments", "independent clips",
                    "connected Scenes continuity", "standalone Scenes",
@@ -160,12 +160,12 @@ def test_studio_guidance_understands_distinct_creative_structures_and_judgment()
     # The shared role informs creative discussion; production formatting remains
     # scoped to explicit Scene authoring rather than every chat turn.
     assert "H3 PROMPT AUTHORING REFERENCE" not in system
-    assert "integrated_multimodal_description:" in guidance()["promptContract"]
+    assert "integrated_multimodal_description:" in guidance(profile="current")["promptContract"]
     assert len(system) < 4000
 
 
 def test_creative_field_judgment_keeps_invariants_relevant_and_variations_flexible():
-    system = guidance("minimax_h3")["system"]
+    system = guidance("minimax_h3", "current")["system"]
     for phrase in ("Concept defines the premise, appeal, structure and Scene relationships",
                    "Visual / atmosphere sets the shared look",
                    "Invariants hold only intentionally fixed",
@@ -344,8 +344,8 @@ def test_studio_chat_is_conversation_only_without_writing_schema():
 
 
 def test_studio_guidance_keeps_project_and_h3_authoring_out_of_chat():
-    system = guidance()["system"]
-    reference = guidance()["promptContract"]
+    system = guidance(profile="current")["system"]
+    reference = guidance(profile="current")["promptContract"]
     assert "STUDIO DIRECTOR | CREATIVE PARTNER" in system
     assert "H3 PROMPT AUTHORING REFERENCE" not in system
     assert "integrated_multimodal_description:" in reference
@@ -440,3 +440,35 @@ def test_studio_action_advisor_is_an_isolated_optional_llm_operation(monkeypatch
     assert "props, and timing" in prompt
     assert "if none apply return" in prompt
 
+
+
+def test_studio_creative_profiles_are_versioned_and_preserve_production_contract():
+    from tool.server.studio_director import PROFILES
+    assert [p["id"] for p in PROFILES] == ["classic", "current", "imaginative", "render"]
+    assert all(p["version"] for p in PROFILES)
+    payloads = [guidance(profile=p["id"]) for p in PROFILES]
+    assert guidance()["profile"] == "classic"
+    assert all(p["promptContract"] == payloads[0]["promptContract"] for p in payloads)
+    assert all(p["actions"] == payloads[0]["actions"] for p in payloads)
+    assert "reviewed Apply" not in payloads[0]["system"]
+    assert "scene.summary" not in payloads[0]["system"]
+    assert "workflows" not in payloads[0]["system"].lower()
+    assert "Invariants" in payloads[0]["system"]
+    assert payloads[1]["system"] != payloads[0]["system"]
+    assert "IMAGINATIVE AUTHOR v1" in payloads[2]["system"]
+    assert "RENDER-FOCUSED v1" in payloads[3]["system"]
+
+
+def test_studio_creative_profile_endpoint_and_unknown_id():
+    from tool.server.app import app
+    client = app.test_client()
+    default = client.get("/fs/studio/director/guidance")
+    assert default.status_code == 200
+    assert default.json["profile"] == "classic"
+    selected = client.get("/fs/studio/director/guidance?profile=current")
+    assert selected.status_code == 200
+    assert selected.json["profile"] == "current"
+    assert selected.json["system"] != default.json["system"]
+    unknown = client.get("/fs/studio/director/guidance?profile=nonexistent")
+    assert unknown.status_code == 400
+    assert "Unknown Studio Director creative profile" in unknown.json["error"]

@@ -35,6 +35,23 @@ test('explicit new-Scene Write persists actual returned count without a Review s
   expect((await story(page,project.id)).sceneOrder).toEqual(saved.sceneOrder);
 });
 
+test('unsupported authored Scene duration remains visible instead of being silently corrected',async({page,request})=>{
+  await resetModel(request);
+  const project=await seedProject(page,'Director timing warning '+Date.now());
+  await openDirector(page);
+  await openProject(page,project.id);
+  await queueModel(request,{scenes:[
+    {title:'Too long',prompt:'[Shot 1] (0s–20s) A long tracking shot.',durationSeconds:20}
+  ]});
+  await runWrite(page,{projectId:project.id,operation:'scene-write',sceneMode:'create',
+    instruction:'Create one cinematic Scene.'});
+  await expect.poll(async()=> (await story(page,project.id)).sceneOrder.length).toBe(1);
+  const saved=await story(page,project.id);
+  expect(saved.scenes[saved.sceneOrder[0]].durationSeconds).toBe(20);
+  await expect(page.locator('#director-studio-action-status')).toContainText('H3 supports 4–15 seconds');
+  expect((await observedModels(request)).calls).toHaveLength(1);
+});
+
 test('repeated explicit Scene Writes each author a fresh record in the same Project',async({page,request})=>{
   await resetModel(request);
   const project=await seedProject(page,'Repeated Scenes '+Date.now());

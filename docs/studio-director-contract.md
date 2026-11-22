@@ -15,6 +15,10 @@ Studio Director is an imaginative, capable creative partner. The author can disc
 - WebCap does not infer the author's intent from prose to choose a function. Ordinary Chat Director cannot stage, initiate or authorize Writes or perform hidden readiness/repair steps. The optional independent Action Advisor may recommend and prefill manual controls, never execute them.
 - The original model output, including malformed or unexpected responses, and outbound request remain inspectable in I/O. No hidden rewrite, semantic grading, recovery or automatic retry.
 
+### Creative judgment and Project structure
+
+The Director understands that a Project may be a continuous narrative, montage, themed collection, repeating format, parallel set of moments, or independently generatable clips. The author's intent determines whether adjacent Scenes need narrative continuity, variation, contrast, or no relationship at all. Each Scene has a worthwhile visible event or an intentionally atmospheric purpose. The Director can identify meaningful gaps in subject identity, staging, action, dialogue, shot focus, pacing and production feasibility, choose routine creative details, and ask one focused question when a consequential creative choice is unresolved. Offer practical H3 advice without promising deterministic generation. Keep this as concise shared creative knowledge, not a new model operation, storage field, or production prompt template.
+
 ### Optional Action Advisor
 
 Unless disabled in Settings → Director, a completed, saved Studio conversation reply may launch an **independent sidecar on Director's selected model** to suggest zero to three next actions. It receives the conversation and known operation context under its own system prompt; its output is ephemeral UI advice, never a chat message, authoring result, saved Project field, or authorization. It may populate existing Read/Write controls only after the author clicks **Prepare**. The existing Read and Write buttons remain the sole execution triggers. Sidecar errors and incomplete suggestions must not interrupt conversation or manual workflows. See [Action Advisor MVP](studio-action-advisor-mvp.md).

@@ -19,9 +19,9 @@ def test_writer_workshop_keeps_creative_identity_separate_from_h3_playbook(monke
     assert "DISCUSSION: Develop ideas and make useful recommendations" in system
     assert "Explicit Write functions" in system
     assert "full H3 production" not in system
-    assert "story.concept" in system
-    assert "story.invariants" in system
-    assert "complete H3 Prompt (scene.prompt)" in system
+    assert "Concept / overview" in system
+    assert "Invariants" in system
+    assert "complete H3 Prompt used for its Take" in system
     assert "4–15 seconds" not in system
     assert "integrated_multimodal_description" in reference
     assert "Keep risky hand-to-hand interactions simple." in reference
@@ -134,13 +134,34 @@ def test_chat_knows_project_scene_fields_and_h3_shape_without_full_production_re
     system, reference = result["system"], result["promptContract"]
     assert "STUDIO DIRECTOR | CREATIVE PARTNER" in system
     assert "meaningful ideas" in system
-    for phrase in ("story.concept", "story.style", "story.invariants",
-                   "scene.prompt", "durationSeconds", "H3 Prompt",
+    for phrase in ("Concept / overview", "Visual / atmosphere", "Invariants",
+                   "complete H3 Prompt", "duration",
                    "integrated_multimodal_description", "[Shot N]",
                    "overall_soundscape", "non_diegetic_music"):
         assert phrase.casefold() in system.casefold()
+    for storage_name in ("story.concept", "story.style", "story.invariants",
+                         "scene.prompt", "durationSeconds"):
+        assert storage_name not in system
     assert "[Shot 1]" in reference
     assert "CENTRAL EVENT." not in system
+
+
+def test_studio_guidance_understands_distinct_creative_structures_and_judgment():
+    system = guidance("minimax_h3")["system"]
+    for phrase in ("continuous story", "montage", "thematic collection",
+                   "repeating format", "parallel moments", "independent clips",
+                   "connected Scenes continuity", "standalone Scenes",
+                   "worthwhile event", "deliberate atmospheric moment",
+                   "CREATIVE JUDGMENT:", "distinctive subjects", "visible action",
+                   "shot focus", "variation and pacing", "ask one focused question",
+                   "PRACTICAL H3:", "feasible short-clip action",
+                   "clear physical changes", "practical tradeoff"):
+        assert phrase in system
+    # The shared role informs creative discussion; production formatting remains
+    # scoped to explicit Scene authoring rather than every chat turn.
+    assert "H3 PROMPT AUTHORING REFERENCE" not in system
+    assert "integrated_multimodal_description:" in guidance()["promptContract"]
+    assert len(system) < 4000
 
 
 def test_h3_playbook_review_uses_existing_config_and_checks_conflicts(monkeypatch):

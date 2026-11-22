@@ -2465,7 +2465,7 @@ def director_chat_route():
                 "properties": {
                     "title": {"type": "string"},
                     "prompt": {"type": "string"},
-                    "durationSeconds": {"type": "number"},
+                    "durationSeconds": {"type": "number", "description": "MiniMax H3 Scene duration in seconds (4–15). Match timed shot end to this duration."},
                 },
             }
         if operation == "studio_scenes_draft":
@@ -2483,7 +2483,7 @@ def director_chat_route():
                             "properties": {
                                 "title": {"type": "string"},
                                 "prompt": {"type": "string"},
-                                "durationSeconds": {"type": "number"},
+                                "durationSeconds": {"type": "number", "description": "MiniMax H3 Scene duration in seconds (4–15). Match timed shot end to this duration."},
                             },
                         },
                     },

@@ -390,8 +390,8 @@ test('Action Advisor hints show concise labels while preserving instructions for
     workbench.indexOf('  function offerActionAdvice(scope) {'),
     workbench.indexOf('  function setOperation() {')
   );
-  assert.match(section, /label\.textContent = action\.label/);
-  assert.match(section, /row\.append\(label,button\)/);
+  assert.match(section, /button\.textContent = advisorActionLabel\(action,scope\)/);
+  assert.match(section, /button\.title = action\.label/);
   assert.doesNotMatch(section, /detail\.textContent = action\.instruction/);
   assert.match(workbench, /el\('studio-dw-write-instruction'\)\.value = action\.instruction/);
 });

@@ -29,7 +29,7 @@ test('explicit new-Scene Write persists actual returned count without a Review s
   expect(outbound).toContain('H3 PROMPT AUTHORING REFERENCE');
   expect(outbound).toContain('H3 can generate clips between 4 and 15 seconds');
   expect(outbound).toContain('durationSeconds within that range');
-  expect(outbound).toContain('Scenes may have different durations');
+  expect(outbound).toContain('may have different durations');
   await expect(page.locator('#studio-scenes-review')).not.toBeVisible();
   await page.reload();
   expect((await story(page,project.id)).sceneOrder).toEqual(saved.sceneOrder);

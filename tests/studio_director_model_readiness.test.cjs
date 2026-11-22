@@ -11,6 +11,7 @@ const workbench = fs.readFileSync(path.join(__dirname, '../tool/js/studio_direct
 function directorFixture() {
   const env = {
     window: {},
+    localStorage: {getItem: () => null, setItem: () => {}},
     getDirectorModelPreference: () => '',
     document: {
       getElementById: () => ({}),

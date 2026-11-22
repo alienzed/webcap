@@ -144,6 +144,7 @@ test('LIVE creative judgment — recurring Invariants stay distinct from flexibl
     'Which details should be Project Invariants, and which should remain individual Scene '+
     'details or deliberate variations? Briefly explain your creative reasoning; '+
     'we are discussing the concept, not writing or saving anything.';
+  await page.locator('#director-studio-profile').selectOption('current');
   await sendLive(page,question);
   const receipt=await observed.last();
   const request=observed.requests.at(-1);
@@ -159,6 +160,25 @@ test('LIVE creative judgment — recurring Invariants stay distinct from flexibl
   expect(answer).toMatch(/(apron|oven|baker)/i);
   expect(answer).toMatch(/(rolling pin|umbrella)/i);
   expect(answer).toMatch(/(scene|clip|one.off|variation|flexib)/i);
+});
+
+test('LIVE creative profiles — exact selected role reaches model without changing Write reference',async({page},info)=>{
+  const model=await openLiveDirector(page);
+  const observed=observeLiveCalls(page);
+  const chooser=page.locator('#director-studio-profile');
+  await expect(chooser).toBeVisible();
+  await chooser.selectOption('classic');
+  await sendLive(page,'Suggest one visually distinctive action for a short scene set in a bakery.');
+  const classic=observed.requests.at(-1);
+  await chooser.selectOption('render');
+  await sendLive(page,'Improve that action for reliable short-video rendering.');
+  const render=observed.requests.at(-1);
+  await evidence(info,'live-director-profile-switch',{model,classic,render});
+  expect(classic.operation).toBe('studio_chat');
+  expect(render.operation).toBe('studio_chat');
+  expect(classic.messages[0].content).toContain('CLASSIC CREATIVE PRODUCER');
+  expect(render.messages[0].content).toContain('RENDER-FOCUSED v1');
+  expect(render.messages[0].content).not.toContain('H3 PROMPT AUTHORING REFERENCE');
 });
 
 test('LIVE Scene Write — explicitly chosen destination saves actual returned Scenes, not chat suggestions',async({page},info)=>{

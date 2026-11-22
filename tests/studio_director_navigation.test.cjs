@@ -160,6 +160,7 @@ function assistantRailHarness() {
   const requests=[];
   const ctx=vm.createContext({
     getDirectorModelPreference:()=> '',
+    localStorage:{getItem:()=>null,setItem:()=>{}},
     document:{
       getElementById:id=>elements[id] ||= node(),
       querySelector:selector=>selector==='#storyboard-workspace:not(.hidden)' && studio ? {} : null

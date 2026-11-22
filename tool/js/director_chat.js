@@ -5,6 +5,7 @@
     pending: false,
     modelsLoaded: false,
     modelId: getDirectorModelPreference('webcap.directorChat.model'),
+    studioProfile: localStorage.getItem('webcap.studioDirector.profile') || 'classic',
     activeMode: 'chat',
     // Same Assistant state owns the last surface selected inside Studio.
     lastStudioMode: 'chat',
@@ -1719,6 +1720,9 @@
     var input = el('director-chat-input');
     var model = el('director-chat-model');
     var refresh = el('director-chat-model-refresh');
+    var profile = el('director-studio-profile');
+    profile.classList.toggle('hidden', state.activeMode !== 'storyboard');
+    profile.disabled = state.pending;
     var clear = el('director-chat-clear');
     var revising = studioRevisionActive();
     var revisionInput = el('director-studio-revision-input');
@@ -3158,7 +3162,7 @@
     // Creative requests need the author's task and relevant source material.
     // Navigation, available buttons, IDs and save policy remain WebCap concerns.
     // Keep the existing call signature for contextual Write callers.
-    return requestJson('/fs/studio/director/guidance?targetModel=minimax_h3').then(function (payload) {
+    return requestJson('/fs/studio/director/guidance?targetModel=minimax_h3&profile=' + encodeURIComponent(state.studioProfile)).then(function (payload) {
       if (!payload.system || typeof payload.system !== 'string')
         throw new Error('Studio Director creative guidance is unavailable.');
       if (includePromptContract && (!payload.promptContract || typeof payload.promptContract !== 'string'))
@@ -3843,6 +3847,7 @@
     window.addEventListener('resize', resizeStudioComposer);
     var model = el('director-chat-model');
     var refresh = el('director-chat-model-refresh');
+    var profile = el('director-studio-profile');
     var modeSwitch = el('director-chat-mode-switch');
     var presetsHost = el('director-chat-mode-presets');
     var contextRefresh = el('director-chat-context-refresh');
@@ -3850,6 +3855,12 @@
       throw new Error('Assistant drawer controls are missing.');
     }
 
+    profile.value = state.studioProfile;
+    profile.onchange = function () {
+      if (state.pending) return;
+      state.studioProfile = profile.value;
+      localStorage.setItem('webcap.studioDirector.profile', state.studioProfile);
+    };
     toggle.onclick = function () {
       if (state.open) setOpen(false);
       else setOpen(true, studioWorkspaceVisible() ? state.lastStudioMode : 'chat');

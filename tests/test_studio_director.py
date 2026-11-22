@@ -27,6 +27,8 @@ def test_writer_workshop_keeps_creative_identity_separate_from_h3_playbook(monke
     assert "Keep risky hand-to-hand interactions simple." in reference
     assert "Keep risky hand-to-hand interactions simple." not in system
     assert "[Shot N]" in system
+    assert "MiniMax H3 generates clips from 4 to 15 seconds." in reference
+    assert "Make the final timed shot end at durationSeconds." in reference
     assert len(system) < 4000
 
 def test_studio_guidance_teaches_only_focused_creative_workflows():

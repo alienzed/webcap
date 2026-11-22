@@ -31,6 +31,14 @@ def test_writer_workshop_keeps_creative_identity_separate_from_h3_playbook(monke
     assert "Make the final timed shot end at durationSeconds." in reference
     assert len(system) < 4000
 
+@pytest.mark.parametrize("profile", ["classic", "current", "imaginative", "render"])
+def test_creative_profiles_know_h3_clip_duration_without_write_machinery(profile):
+    system = guidance("minimax_h3", profile)["system"]
+    assert "4–15 seconds" in system
+    assert "durationSeconds" not in system
+    assert "studio_scenes_draft" not in system
+
+
 def test_studio_guidance_teaches_only_focused_creative_workflows():
     result = guidance("minimax_h3", "current")
     actions = {entry["name"]: entry["description"] for entry in result["actions"]}

@@ -22,12 +22,22 @@ def test_writer_workshop_keeps_creative_identity_separate_from_h3_playbook(monke
     assert "Concept / overview" in system
     assert "Invariants" in system
     assert "complete H3 Prompt used for its Take" in system
-    assert "4–15 seconds" not in system
+    assert "4–15 seconds" in system
     assert "integrated_multimodal_description" in reference
     assert "Keep risky hand-to-hand interactions simple." in reference
     assert "Keep risky hand-to-hand interactions simple." not in system
     assert "[Shot N]" in system
+    assert "MiniMax H3 generates clips from 4 to 15 seconds." in reference
+    assert "Make the final timed shot end at durationSeconds." in reference
     assert len(system) < 4000
+
+@pytest.mark.parametrize("profile", ["classic", "current", "imaginative", "render"])
+def test_creative_profiles_know_h3_clip_duration_without_write_machinery(profile):
+    system = guidance("minimax_h3", profile)["system"]
+    assert "4–15 seconds" in system
+    assert "durationSeconds" not in system
+    assert "studio_scenes_draft" not in system
+
 
 def test_studio_guidance_teaches_only_focused_creative_workflows():
     result = guidance("minimax_h3", "current")
@@ -105,7 +115,7 @@ def test_unconfigured_h3_studio_still_has_production_expertise(monkeypatch):
     result = guidance("minimax_h3", "current")
     system, reference = result["system"], result["promptContract"]
     assert "short generative-video Projects and Scenes" in system
-    assert "4–15 seconds" not in system
+    assert "4–15 seconds" in system
     assert "complete standalone H3 Prompt" not in system
     assert "USER'S H3 PRODUCTION PLAYBOOK" not in system
     assert "USER'S H3 PRODUCTION PLAYBOOK" not in reference

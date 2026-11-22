@@ -76,11 +76,12 @@ function actionsFrom(receipt) {
 async function chooseSuggestion(page,item,buttonText){
   expect(typeof item.label).toBe('string');
   expect(item.label.trim().length).toBeGreaterThan(0);
-  const row=advice(page).locator('.studio-action-advisor-item')
-    .filter({hasText:item.label.trim()}).first();
-  await expect(row.locator('strong')).toHaveText(item.label.trim(),{timeout:30000});
-  await expect(row.getByRole('button',{name:buttonText})).toBeVisible();
-  await row.getByRole('button',{name:buttonText}).click();
+  const button=advice(page).locator('.studio-action-advisor-action');
+  await expect(button).toHaveCount(1,{timeout:30000});
+  await expect(button).toHaveAttribute('title',item.label.trim());
+  await expect(button).toHaveText(buttonText);
+  await button.click();
+  await expect(advice(page)).toBeHidden();
 }
 
 test('LIVE advisor — identifies an explicit saved-Overview Read and only reads after approval',
@@ -107,7 +108,7 @@ test('LIVE advisor — identifies an explicit saved-Overview Read and only reads
     expect(advisor.request.model).toBe(model);
     expect(JSON.stringify(advisor.request.messages)).toContain(instruction);
     expect(JSON.stringify(advisor.request.messages)).not.toContain(project.concept);
-    expect(actions.length).toBeLessThanOrEqual(3);
+    expect(actions.length).toBeLessThanOrEqual(1);
     const item=actions.find(action=>action.kind==='read'&&
       action.projectId===project.id&&action.fields?.includes('overview'));
     expect(item,'Real model did not recommend reading the saved Project Overview: '+
@@ -115,7 +116,7 @@ test('LIVE advisor — identifies an explicit saved-Overview Read and only reads
 
     const messages=page.locator('#director-chat-messages');
     await expect(messages).not.toContainText(project.concept);
-    await chooseSuggestion(page,item,'Prepare Read');
+    await chooseSuggestion(page,item,'Read');
     await expect(page.locator('#studio-dw-read-panel')).toBeVisible();
     await expect(page.locator('#studio-dw-read-project')).toHaveValue(project.id);
     await expect(page.locator('#studio-dw-project-fields input[data-group-select]').first())
@@ -153,7 +154,7 @@ test('LIVE advisor — scopes a suggested Overview revision and saves only after
       contentType:'application/json'
     });
     expect(advisor.request.model).toBe(model);
-    expect(actions.length).toBeLessThanOrEqual(3);
+    expect(actions.length).toBeLessThanOrEqual(1);
     const item=actions.find(action=>action.kind==='revise_project'&&
       action.projectId===project.id);
     expect(item,'Real advisor did not suggest revising this Project: '+advisor.raw).toBeTruthy();
@@ -162,7 +163,7 @@ test('LIVE advisor — scopes a suggested Overview revision and saves only after
     expect(item.instruction?.trim().length).toBeGreaterThan(15);
     expect(item.instruction).toMatch(/amber|gold|warm/i);
 
-    await chooseSuggestion(page,item,'Prepare Write');
+    await chooseSuggestion(page,item,'Write Overview');
     await expect(page.locator('#studio-dw-write-panel')).toBeVisible();
     await expect(page.locator('#studio-dw-write-operation')).toHaveValue('project');
     await expect(page.locator('#studio-dw-write-project')).toHaveValue(project.id);
@@ -213,7 +214,7 @@ test('LIVE advisor — proposes an opening Scene and author approval launches a 
       contentType:'application/json'
     });
     expect(advisor.request.model).toBe(model);
-    expect(actions.length).toBeLessThanOrEqual(3);
+    expect(actions.length).toBeLessThanOrEqual(1);
     const item=actions.find(action=>action.kind==='create_scene'&&
       action.projectId===project.id);
     expect(item,'Real advisor did not propose creating the requested Scene: '+
@@ -223,7 +224,7 @@ test('LIVE advisor — proposes an opening Scene and author approval launches a 
 
     const before=await story(page,project.id);
     expect(before.sceneOrder).toHaveLength(0);
-    await chooseSuggestion(page,item,'Prepare Write');
+    await chooseSuggestion(page,item,'Write Scene');
     await expect(page.locator('#studio-dw-write-panel')).toBeVisible();
     await expect(page.locator('#studio-dw-write-project')).toHaveValue(project.id);
     await expect(page.locator('#studio-dw-write-operation')).toHaveValue('scene-write');

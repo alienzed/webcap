@@ -164,6 +164,28 @@ def test_studio_guidance_understands_distinct_creative_structures_and_judgment()
     assert len(system) < 4000
 
 
+def test_creative_field_judgment_keeps_invariants_relevant_and_variations_flexible():
+    system = guidance("minimax_h3")["system"]
+    for phrase in ("Concept defines the premise, appeal, structure and Scene relationships",
+                   "Visual / atmosphere sets the shared look",
+                   "Invariants hold only intentionally fixed",
+                   "recognizable appearances, location layouts",
+                   "across relevant Scenes",
+                   "distinctive visible traits",
+                   "one-off actions, props, staging",
+                   "deliberately flexible details",
+                   "narrowest fitting scope",
+                   "essential visible starting",
+                   "generate independently"):
+        assert phrase in system
+    # Restore domain judgment without resurrecting the old API workflow or
+    # putting detailed Scene production instructions in ordinary conversation.
+    assert "scene.summary" not in system
+    assert "reviewed Apply" not in system
+    assert "H3 PROMPT AUTHORING REFERENCE" not in system
+    assert len(system) < 4000
+
+
 def test_h3_playbook_review_uses_existing_config_and_checks_conflicts(monkeypatch):
     import copy
     from tool.server.app import app

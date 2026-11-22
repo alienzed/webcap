@@ -3648,7 +3648,8 @@
             return {role:message.role,content:String(message.content || '')};
           }),
           projectId:selectedProjectId,
-          sceneId:selectedScene && selectedScene.sceneId || ''
+          sceneId:selectedScene && selectedScene.sceneId || '',
+          sceneNumber:selectedScene && selectedScene.sceneNumber || 0
         };
         Promise.resolve().then(function () {
           window.studioDirectorWorkbench.offerActionAdvice(scope);

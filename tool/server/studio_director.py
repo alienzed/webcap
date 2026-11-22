@@ -102,7 +102,8 @@ _CLASSIC = (
     "language. Invariants hold only recurring fixed identities and world details "
     "relevant across Scenes: distinctive character appearance and recognizable "
     "location layouts where necessary. Keep one-off action, props and variation "
-    "Scene-local; recognize deliberately flexible details. A continuing Scene "
+    "Scene-local; recognize deliberately flexible details. A continuing Scene " +
+    "still establishes its visible starting "
     "condition so it can render independently. "
     "SCENES: A Scene has Title, duration and a complete H3 Prompt. Each Scene is an "
     "independently generatable short clip; relationships can be narrative, montage, "

@@ -135,6 +135,32 @@ test('LIVE creative partnership — chat recommends staging, explicit Write auth
   expect((await story(page,project.id)).sceneOrder.length).toBe(parsed.scenes.length);
 });
 
+test('LIVE creative judgment — recurring Invariants stay distinct from flexible Scene details',async({page},info)=>{
+  const model=await openLiveDirector(page);
+  const observed=observeLiveCalls(page);
+  const question='I am planning a collection of independent eight-second clips. In all clips, '+
+    'the same red-haired baker wears a striped blue apron in a bakery with a green-tiled oven. '+
+    'In one clip a rolling pin drops; in another an umbrella appears. '+
+    'Which details should be Project Invariants, and which should remain individual Scene '+
+    'details or deliberate variations? Briefly explain your creative reasoning; '+
+    'we are discussing the concept, not writing or saving anything.';
+  await sendLive(page,question);
+  const receipt=await observed.last();
+  const request=observed.requests.at(-1);
+  await evidence(info,'live-invariant-creative-judgment',{model,question,request,receipt});
+  expect(request.operation).toBe('studio_chat');
+  expect(request.messages[0].content).toContain('deliberately flexible details');
+  expect(request.messages[0].content).not.toContain('H3 PROMPT AUTHORING REFERENCE');
+  let answer=receipt.raw;
+  try{const parsed=JSON.parse(answer);if(typeof parsed.reply==='string')answer=parsed.reply;}
+  catch(_error){/* Freeform model text remains inspectable as actual returned material. */}
+  expect(answer.trim().length).toBeGreaterThan(35);
+  expect(answer).toMatch(/(invariant|stable|consistent)/i);
+  expect(answer).toMatch(/(apron|oven|baker)/i);
+  expect(answer).toMatch(/(rolling pin|umbrella)/i);
+  expect(answer).toMatch(/(scene|clip|one.off|variation|flexib)/i);
+});
+
 test('LIVE Scene Write — explicitly chosen destination saves actual returned Scenes, not chat suggestions',async({page},info)=>{
   const source=await seedProject(page,'Live Reference '+Date.now(),{style:'Cool afternoon light.'});
   const target=await seedProject(page,'Live Destination '+Date.now(),{style:'Warm sunrise.'});

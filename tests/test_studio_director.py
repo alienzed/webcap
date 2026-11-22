@@ -176,7 +176,8 @@ def test_creative_field_judgment_keeps_invariants_relevant_and_variations_flexib
                    "deliberately flexible details",
                    "narrowest fitting scope",
                    "essential visible starting",
-                   "generate independently"):
+                   "generate independently", "stronger alternatives",
+                   "draft original dialogue when useful"):
         assert phrase in system
     # Restore domain judgment without resurrecting the old API workflow or
     # putting detailed Scene production instructions in ordinary conversation.

@@ -400,7 +400,8 @@ def test_studio_action_advisor_is_an_isolated_optional_llm_operation(monkeypatch
     assert schema["required"] == ["actions"]
     assert schema["additionalProperties"] is False
     actions = schema["properties"]["actions"]
-    assert actions["maxItems"] == 3
+    assert actions["maxItems"] == 1
+    assert "at most one" in contract["messages"][0]["content"]
     item = actions["items"]
     assert item["additionalProperties"] is False
     assert set(item["required"]) == {

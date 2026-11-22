@@ -4851,6 +4851,14 @@
       }).then(function (payload) {
         if (!payload.job || !payload.job.jobId) throw new Error('Director did not queue a draft.');
         state.jobId = payload.job.jobId;
+        state.requestDiagnostic = payload.job.request || null;
+        if (state.requestDiagnostic) {
+          window.studioDirectorWorkbench.showSentWriteContext(
+            operation || 'studio_scene_field_draft',
+            state.requestDiagnostic.messages,
+            state.requestDiagnostic.responseSchema
+          );
+        }
         trackTransientLlmJob(payload.job);
         return waitForJob(payload.job);
       }).then(function (job) {

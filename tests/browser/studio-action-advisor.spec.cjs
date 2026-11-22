@@ -37,10 +37,11 @@ test('Advisor prepares a field-scoped Project Write but only the normal Write bu
   await say(page,'Could we make the opening more inviting?');
   const advisor=page.locator('#studio-action-advisor-actions');
   await expect(advisor.locator('button')).toHaveCount(1,{timeout:30000});
-  await expect(advisor).toContainText('Revise the lighting');
+  await expect(advisor).toContainText('Write Overview');
   await expect(advisor).not.toContainText('Shift only the visual atmosphere toward soft golden light.');
   expect((await story(page,project.id)).style).toBe('Blue twilight.');
   await advisor.locator('button').click();
+  await expect(advisor).toBeHidden();
   await expect(page.locator('#studio-dw-write-panel')).toBeVisible();
   await expect(page.locator('#studio-dw-write-project')).toHaveValue(project.id);
   await expect(page.locator('#studio-dw-write-operation')).toHaveValue('project');
@@ -97,7 +98,9 @@ test('Advisor Read suggestion selects the existing Overview without reading unti
   await say(page,'What should we confirm before revising the Project?');
   const advice=page.locator('#studio-action-advisor-actions');
   await expect(advice.locator('button')).toHaveCount(1,{timeout:30000});
+  await expect(advice.locator('button')).toHaveText('Read');
   await advice.locator('button').click();
+  await expect(advice).toBeHidden();
   await expect(page.locator('#studio-dw-read-panel')).toBeVisible();
   await expect(page.locator('#studio-dw-read-project')).toHaveValue(project.id);
   await expect(page.locator('#studio-dw-project-fields input[data-group-select]').first()).toBeChecked();

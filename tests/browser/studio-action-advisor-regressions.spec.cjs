@@ -35,7 +35,7 @@ test('enabled-by-default advisor sends a separate same-model request with conver
   expect((await story(page,project.id)).concept).toBe(privateConcept);
 });
 
-test('invalid targets and unsupported actions are omitted; only three applicable suggestions appear',async({page,request})=>{
+test('invalid targets are skipped and only the first applicable action appears',async({page,request})=>{
   await resetModel(request);
   const project=await seedProject(page,'Advisor filtering '+Date.now());
   await openDirector(page);
@@ -56,22 +56,20 @@ test('invalid targets and unsupported actions are omitted; only three applicable
   ]});
   await say(page,'Suggest next actions.');
 
-  const rows=advice(page).locator('.studio-action-advisor-item');
-  await expect(rows).toHaveCount(3,{timeout:30000});
-  await expect(advice(page)).toContainText('Scope the lighting');
-  await expect(advice(page)).toContainText('Prepare opening Scene');
-  await expect(advice(page)).toContainText('Inspect Overview');
-  await expect(advice(page)).not.toContainText('Delete everything');
-  await expect(advice(page)).not.toContainText('Wrong Project');
-  await expect(advice(page)).not.toContainText('Invented Scene');
-  await expect(advice(page)).not.toContainText('Fourth valid action');
+  const buttons=advice(page).locator('.studio-action-advisor-action');
+  await expect(buttons).toHaveCount(1,{timeout:30000});
+  await expect(buttons).toHaveText('Write Overview');
+  await expect(buttons).toHaveAttribute('title','Scope the lighting');
+  await expect(advice(page)).not.toContainText('Prepare opening Scene');
+  await expect(advice(page)).not.toContainText('Inspect Overview');
 
-  await rows.filter({hasText:'Prepare opening Scene'}).locator('button').click();
+  await buttons.click();
+  await expect(advice(page)).toBeHidden();
   await expect(page.locator('#studio-dw-write-panel')).toBeVisible();
   await expect(page.locator('#studio-dw-write-project')).toHaveValue(project.id);
-  await expect(page.locator('#studio-dw-write-operation')).toHaveValue('scene-write');
-  await expect(page.locator('#studio-dw-scene-mode')).toHaveValue('create');
-  await expect(page.locator('#studio-dw-write-instruction')).toHaveValue('Create a quiet opening Scene');
+  await expect(page.locator('#studio-dw-write-operation')).toHaveValue('project');
+  await expect(page.locator('#studio-dw-write-project-fields input[value="style"]')).toBeChecked();
+  await expect(page.locator('#studio-dw-write-instruction')).toHaveValue('Warm the light');
   expect((await story(page,project.id)).sceneOrder).toHaveLength(0);
   expect((await observedModels(request)).calls).toHaveLength(2);
 });
@@ -92,7 +90,9 @@ test('Create Project suggestion prefills the ordinary Write form without creatin
   await say(page,'How should we pursue the clockmaker idea?');
   const button=advice(page).locator('button');
   await expect(button).toHaveCount(1,{timeout:30000});
+  await expect(button).toHaveText('Create Project');
   await button.click();
+  await expect(advice(page)).toBeHidden();
 
   await expect(page.locator('#studio-dw-write-panel')).toBeVisible();
   await expect(page.locator('#studio-dw-write-operation')).toHaveValue('new-project');
@@ -184,7 +184,7 @@ test('a late advisor result cannot replace suggestions from a newer Director cha
     await say(page,'Actually, consider a gentler light.');
     await expect(page.locator('#director-chat-messages')).toContainText('Second chat reply.');
     await expect(advice(page).locator('button')).toHaveCount(1,{timeout:30000});
-    await expect(advice(page)).toContainText('Current suggestion');
+    await expect(advice(page).locator('button')).toHaveAttribute('title','Current suggestion');
 
     await queueModel(request,{actions:[{
       kind:'revise_project',label:'Outdated suggestion',projectId:project.id,
@@ -198,8 +198,8 @@ test('a late advisor result cannot replace suggestions from a newer Director cha
     releaseFirst();
     await oldResponse;
 
-    await expect(advice(page)).toContainText('Current suggestion');
-    await expect(advice(page)).not.toContainText('Outdated suggestion');
+    await expect(advice(page).locator('button')).toHaveAttribute('title','Current suggestion');
+    await expect(advice(page).locator('button')).not.toHaveAttribute('title','Outdated suggestion');
     await expect.poll(async()=> (await observedModels(request)).calls.length).toBe(4);
     expect((await story(page,project.id)).style).toBe('Unchanged evening light.');
   } finally {

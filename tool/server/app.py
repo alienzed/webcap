@@ -2358,14 +2358,15 @@ def director_chat_route():
                 "role": "system",
                 "content": (
                     "You are WebCap's Action Advisor, a concise interface assistant. "
-                    "Review the supplied conversation and actionContext to suggest zero to three "
-                    "useful next UI actions. Return a JSON object with an actions array. "
+                    "Review the supplied conversation and actionContext to suggest at most one "
+                    "best next UI action, or none when no useful step is available. Return a JSON "
+                    "object with an actions array. "
                     "Each action must contain all six keys: kind, label, instruction, projectId, "
                     "fields, sceneIds. Use kind create_project, revise_project, create_scene, "
-                    "revise_scenes, or read. Use a short, meaningful label for the UI button. "
+                    "revise_scenes, or read. Use a short, meaningful label describing the action. "
                     "Copy actionContext.projectId exactly for every action targeting the current "
                     "Project; use an empty projectId only for create_project. "
-                    "Use brief, action-oriented labels of about 3 to 8 words. "
+                    "Keep labels concise and action-oriented. "
                     "Keep the complete authoring direction in instruction for the Write form. "
                     "For read, set instruction to an empty string, fields to ['overview'] for the "
                     "saved Project Overview or ['scene'] for the selected Scene, and sceneIds to []. "
@@ -2393,7 +2394,7 @@ def director_chat_route():
                 "properties": {
                     "actions": {
                         "type": "array",
-                        "maxItems": 3,
+                        "maxItems": 1,
                         "items": {
                             "type": "object",
                             "additionalProperties": False,

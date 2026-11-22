@@ -4238,24 +4238,23 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 #director-chat-story-prepare:not(.hidden) { font-weight: 700; min-height: 36px; }
 
 
-/* Action Advisor is optional, compact and independent of the chat composer. */
+/* Action Advisor: one focused next-step chip, without a stacked card. */
 .studio-action-advisor {
-  display:grid; gap:10px; margin:10px 0 12px; padding:10px 12px;
-  border:1px solid var(--border); border-radius:10px; background:var(--panel-soft);
-  color:var(--text); font-size:16px;
+  display:flex; align-items:center; gap:8px; margin:6px 0 10px;
+  padding:0; border:0; background:transparent; color:var(--text);
 }
 .studio-action-advisor.hidden, .studio-action-advisor .hidden { display:none; }
 #studio-action-advisor-status { color:var(--muted); font-size:14px; }
-#studio-action-advisor-actions { display:grid; gap:8px; }
-.studio-action-advisor-item { display:grid; gap:6px; border-top:1px solid var(--border); padding-top:10px; }
-.studio-action-advisor-item strong { font-size:16px; }
-.studio-action-advisor-item p { margin:0; font-size:14px; line-height:1.5; overflow-wrap:anywhere; }
-.studio-action-advisor-item button {
-  justify-self:start; font:inherit; font-size:15px; font-weight:650;
-  border:1px solid var(--border); border-radius:7px; padding:8px 12px;
-  background:var(--panel); color:var(--text); cursor:pointer;
+#studio-action-advisor-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.studio-action-advisor-action {
+  display:inline-flex; align-items:center; justify-content:center;
+  max-width:100%; min-height:36px; padding:6px 12px;
+  border:1px solid var(--border); border-radius:8px;
+  background:var(--panel-soft); color:var(--text);
+  font:inherit; font-size:16px; font-weight:650; cursor:pointer;
 }
-.studio-action-advisor-item button:hover { border-color:var(--accent); }
+.studio-action-advisor-action:hover { background:var(--hover); border-color:var(--accent); }
+.studio-action-advisor-action:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 #studio-dw-write-project-fields { border:1px solid var(--border); border-radius:8px; padding:10px; }
 #studio-dw-write-project-fields.hidden { display:none; }
 #studio-dw-write-project-fields legend { font-size:15px; font-weight:600; padding:0 4px; }

@@ -41,15 +41,12 @@ const candidates=new Function('allowedAdvisorKinds','projectFields',
 test('Advisor only offers applicable existing actions, exact IDs and explicit Project fields',()=>{
   const scope={projectId:'project-one',sceneId:'scene-one'};
   assert.deepEqual(candidates(JSON.stringify({actions:[
-    {kind:'revise_project',label:'Change the lighting',instruction:'Cool dusk',projectId:'project-one',fields:['style','made-up']},
     {kind:'revise_project',label:'Wrong project',instruction:'Change',projectId:'other',fields:['style']},
+    {kind:'revise_project',label:'Change the lighting',instruction:'Cool dusk',projectId:'project-one',fields:['style','made-up']},
     {kind:'revise_scenes',label:'Scene cut',instruction:'Shorten movement',projectId:'project-one',sceneIds:['scene-one','other-scene']},
-    {kind:'read',label:'Read overview',projectId:'project-one',fields:['overview']},
-    {kind:'create_scene',label:'Fourth unreturned card',projectId:'project-one',instruction:'Create'}
+    {kind:'read',label:'Read overview',projectId:'project-one',fields:['overview']}
   ]}),scope).map(x=>({kind:x.kind,fields:x.fields,sceneIds:x.sceneIds})),[
-    {kind:'revise_project',fields:['style'],sceneIds:[]},
-    {kind:'revise_scenes',fields:[],sceneIds:['scene-one']},
-    {kind:'read',fields:['overview'],sceneIds:[]}
+    {kind:'revise_project',fields:['style'],sceneIds:[]}
   ]);
   assert.deepEqual(candidates('{"actions":[{"kind":"revise_project","label":"Change","projectId":"project-one","instruction":"Do it","fields":[]}] }',scope),[]);
   assert.deepEqual(candidates('{"actions":[]}',scope),[]);
@@ -70,7 +67,7 @@ test('Prepare Write preloads existing operation, target, field scope and instruc
   const calls={toggle:[],refresh:0,operation:0,save:0,status:[]};
   const functions=part(bench,'  function revealAdvisorPanel(which) {','  function offerActionAdvice(scope) {');
   const prepare=new Function('el','window','toggle','refreshWrite','setOperation','advisorStatus','loadStory',
-    'readChoices','renderReadStory','projectFields','sceneSelectionManual',
+    'readChoices','renderReadStory','projectFields','sceneSelectionManual','clearActionAdvice',
     functions+'return prepareAdvisorAction;')(
       id=>elements[id],{studioDirectorBridge:{
         isCurrentConversation:id=>id==='chat-one',isReady:()=>true},
@@ -79,7 +76,7 @@ test('Prepare Write preloads existing operation, target, field scope and instruc
       async()=>{calls.refresh++;return true;},
       ()=>calls.operation++,msg=>calls.status.push(msg),
       async()=>assert.fail('Write preload must not fetch a Read snapshot'),
-      {},()=>{},['title','concept','style','invariants'],false
+      {},()=>{},['title','concept','style','invariants'],false,()=>calls.cleared=(calls.cleared||0)+1
     );
   await prepare({kind:'revise_project',projectId:'project-one',fields:['style'],
     instruction:'Make the light warmer'},{conversationId:'chat-one'});
@@ -90,7 +87,8 @@ test('Prepare Write preloads existing operation, target, field scope and instruc
   assert.deepEqual(fields.map(x=>x.checked),[false,false,true,false]);
   assert.equal(elements['studio-dw-write-instruction'].value,'Make the light warmer');
   assert.equal(calls.save,0);
-  assert.ok(calls.status.some(s=>s.includes('Write prepared')));
+  assert.equal(calls.cleared,1);
+  assert.ok(!calls.status.some(s=>s.includes('Unable to prepare')));
 });
 
 test('Director chat invokes sidecar after successful conversation save, not in its own request chain',()=>{
@@ -141,4 +139,15 @@ test('Advisor uses the selected warm Director model and global setting, without 
   assert.match(html,/id="app-settings-studio-action-advisor"/);
   assert.match(settings,/localStorage\.setItem\('webcap\.studio\.actionAdvisor\.enabled'/);
   assert.match(bench,/localStorage\.getItem\('webcap\.studio\.actionAdvisor\.enabled'\) !== 'false'/);
+});
+
+test('Advisor action labels remain compact while the suggestion retains its real scope',()=>{
+  const label=new Function(part(bench,'  function advisorActionLabel(action,scope) {',
+    '  function revealAdvisorPanel(which) {')+'return advisorActionLabel;')();
+  assert.equal(label({kind:'read'},{sceneNumber:5}),'Read');
+  assert.equal(label({kind:'create_project'},{}),'Create Project');
+  assert.equal(label({kind:'revise_project'},{}),'Write Overview');
+  assert.equal(label({kind:'revise_scenes'},{sceneNumber:5}),'Write Scene 5');
+  assert.equal(label({kind:'revise_scenes'},{}),'Write Scene');
+  assert.equal(label({kind:'create_scene'},{}),'Write Scene');
 });

@@ -4,7 +4,7 @@ This is a shipped-MVP implementation supplement to [Studio Director's functional
 
 ## Outcome
 
-After a completed, successfully saved Director chat reply, an **enabled-by-default** independent sidecar on the selected Director model may suggest zero to three actions. Settings → Director provides a browser-wide on/off preference (disabled only when explicitly switched off). Each suggestion can prepare existing **Read** or **Write** controls; only the author can click Read or Write to execute it. The sidecar is never saved Project data or a chat message.
+After a completed, successfully saved Director chat reply, an **enabled-by-default** independent sidecar on the selected Director model may suggest zero or one action. Settings → Director provides a browser-wide on/off preference (disabled only when explicitly switched off). Each suggestion can prepare existing **Read** or **Write** controls; only the author can click Read or Write to execute it. The sidecar is never saved Project data or a chat message.
 
 ## Phase 1 — Isolate the advisor request
 
@@ -17,7 +17,7 @@ After a completed, successfully saved Director chat reply, an **enabled-by-defau
 
 - Sidecar is **enabled by default**, controlled by a browser-wide toggle in Settings → Director and starts only after a successfully saved, user-initiated Director reply.
 - Run it without changing Director's pending flag, job ID, messages, request/response I/O, or Read/Write history.
-- Show up to three applicable actions, validating exact supported operation names, allowed Project field scopes and known destination IDs.
+- Show only the first applicable action, validating exact supported operation names, allowed Project field scopes and known destination IDs. Render it as a compact, single-click action chip (such as `Read`, `Write Overview`, or `Write Scene 5`) that prepares the existing controls, then clear the chip after successful preparation.
 - Keep transient advisor output separate from the conversation. Clear it when a new chat turn or conversation begins; ignore late responses from previous turns/conversations.
 - Sidecar failure is visible in its own status and the Console, without breaking conversation or existing manual actions.
 

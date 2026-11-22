@@ -19,10 +19,10 @@ test('Write receives persisted Read snapshots verbatim without changing explicit
   const requests=[];
   const requestJson=async url=>{
     requests.push(url);
-    assert.equal(url,'/fs/studio/director/guidance?targetModel=minimax_h3');
+    assert.equal(url,'/fs/studio/director/guidance?targetModel=minimax_h3&profile=classic');
     return {system:'Creative partner',promptContract:'H3 writing reference'};
   };
-  const request=new Function('requestJson',segment+'return studioDirectorRequestMessages;')(requestJson);
+  const request=new Function('requestJson','state',segment+'return studioDirectorRequestMessages;')(requestJson,{studioProfile:'classic'});
   const snapshot='[WEBCAP EXPLICIT READ] From Project source: Warm amber source';
   const input=[{role:'user',content:snapshot},
     {role:'user',content:JSON.stringify({task:'Write a Scene',destinationProjectId:'destination'})}];
@@ -39,7 +39,7 @@ test('ordinary conversation does not receive H3 guidance or implicit saved creat
   const section=part(director,
     '  function studioDirectorRequestMessages(messages, includePromptContract, explicitWrite, navigationSnapshot) {',
     '  function studioDirectorChatRequestMessages(');
-  const state={studioApprovedRead:null};
+  const state={studioApprovedRead:null,studioProfile:'classic'};
   const requestJson=async()=>({system:'Creative partner',promptContract:'H3 secret'});
   const window={};
   const build=new Function('state','requestJson','window',section+

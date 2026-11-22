@@ -343,7 +343,7 @@
       throw new Error('Action Advisor returned no actions list. Raw response:\n' + String(raw || ''));
     var out = [], validFields = ['title','concept','style','invariants'];
     parsed.actions.forEach(function (item) {
-      if (out.length >= 3) return;
+      if (out.length >= 1) return;
       if (!item || !allowedAdvisorKinds.includes(item.kind) ||
           typeof item.label !== 'string' || !item.label.trim()) return;
       var action = {
@@ -380,6 +380,14 @@
       out.push(action);
     });
     return out;
+  }
+  function advisorActionLabel(action,scope) {
+    if (action.kind === 'read') return 'Read';
+    if (action.kind === 'create_project') return 'Create Project';
+    if (action.kind === 'revise_project') return 'Write Overview';
+    if (action.kind === 'revise_scenes')
+      return scope.sceneNumber > 0 ? 'Write Scene ' + scope.sceneNumber : 'Write Scene';
+    return 'Write Scene';
   }
   function revealAdvisorPanel(which) {
     el('director-chat-drawer').classList.add('studio-actions-open');
@@ -423,7 +431,7 @@
           if (!paths.size) throw new Error('The suggested saved Read fields are no longer available.');
           readChoices[story.id] = paths;
           renderReadStory(story);
-          advisorStatus('Read selection prepared. Choose Read into conversation to capture it.');
+          clearActionAdvice();
         });
       }
       var op = action.kind === 'create_project' ? 'new-project' :
@@ -451,7 +459,7 @@
         el('studio-dw-write-instruction').value = action.instruction;
         el('studio-dw-write-instruction').dataset.instructionSeeded = 'true';
         setOperation();
-        advisorStatus('Write prepared. Review the selected scope and use Write · Save.');
+        clearActionAdvice();
       });
     }).catch(function (error) {
       advisorStatus('Unable to prepare suggestion: ' + String(error.message || error));
@@ -478,16 +486,14 @@
       var host = el('studio-action-advisor-actions');
       host.replaceChildren();
       actions.forEach(function (action) {
-        var row = document.createElement('div'), label = document.createElement('strong');
         var button = document.createElement('button');
-        row.className = 'studio-action-advisor-item';
-        label.textContent = action.label;
-        // The full instruction remains available in the prepared Write form.
         button.type = 'button';
-        button.textContent = action.kind === 'read' ? 'Prepare Read' : 'Prepare Write';
+        button.className = 'studio-action-advisor-action';
+        button.textContent = advisorActionLabel(action,scope);
+        button.title = action.label;
+        // Only prepare the existing form; Read and Write remain explicit.
         button.onclick = function () {return prepareAdvisorAction(action,scope);};
-        row.append(label,button);
-        host.appendChild(row);
+        host.appendChild(button);
       });
       host.classList.toggle('hidden',!actions.length);
       advisorStatus(actions.length ? '' : '');

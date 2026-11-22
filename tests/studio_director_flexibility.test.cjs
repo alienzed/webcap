@@ -27,6 +27,7 @@ test('cross-Project Reads are ordinary user messages, not auto-refreshed context
     '  // Retain available conversational work across ordinary follow-up questions.');
   const calls=[];
   const scope=vm.createContext({
+    state:{studioProfile:'classic'},
     requestJson:async url=>{calls.push(url);return {system:'Director',promptContract:'H3'};},
     studioAttachedStoryId:()=>'',window:{getStudioDirectorNavigation:()=>({projectId:'c'})}
   });
@@ -39,7 +40,7 @@ test('cross-Project Reads are ordinary user messages, not auto-refreshed context
   const result=await scope.studioDirectorChatRequestMessages(history,null,{projectId:'c'},{});
   history.forEach((entry,index)=>assert.equal(result[index+1].content,entry.content));
   assert.doesNotMatch(result[0].content,/old pacing|blue coat/);
-  assert.deepEqual(calls,['/fs/studio/director/guidance?targetModel=minimax_h3']);
+  assert.deepEqual(calls,['/fs/studio/director/guidance?targetModel=minimax_h3&profile=classic']);
 });
 
 test('a single character Invariant can be supplied without the rest of its Overview',()=>{

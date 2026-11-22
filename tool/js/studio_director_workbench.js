@@ -1466,12 +1466,13 @@
       button.title=detail || 'Read selected Project fields';
     },
     updateContext:function () {updateScope(); showConversationWrite();},
-    showSentWriteContext: function(operation, messages) {
+    showSentWriteContext: function(operation, messages, responseSchema) {
       var preview = el('studio-dw-write-context-json');
       var details = el('studio-dw-write-context');
       details.querySelector('summary').textContent = 'Inspect exact Director request just sent';
       preview.textContent = JSON.stringify({
-        operation:operation,model:window.studioDirectorBridge.modelId(),messages:messages
+        operation:operation,model:window.studioDirectorBridge.modelId(),messages:messages,
+        ...(responseSchema ? {responseSchema:responseSchema} : {})
       }, null, 2);
     },
     resetConversation: function () {

@@ -22,7 +22,7 @@ def test_writer_workshop_keeps_creative_identity_separate_from_h3_playbook(monke
     assert "Concept / overview" in system
     assert "Invariants" in system
     assert "complete H3 Prompt used for its Take" in system
-    assert "4–15 seconds" not in system
+    assert "4–15 seconds" in system
     assert "integrated_multimodal_description" in reference
     assert "Keep risky hand-to-hand interactions simple." in reference
     assert "Keep risky hand-to-hand interactions simple." not in system
@@ -107,7 +107,7 @@ def test_unconfigured_h3_studio_still_has_production_expertise(monkeypatch):
     result = guidance("minimax_h3", "current")
     system, reference = result["system"], result["promptContract"]
     assert "short generative-video Projects and Scenes" in system
-    assert "4–15 seconds" not in system
+    assert "4–15 seconds" in system
     assert "complete standalone H3 Prompt" not in system
     assert "USER'S H3 PRODUCTION PLAYBOOK" not in system
     assert "USER'S H3 PRODUCTION PLAYBOOK" not in reference

@@ -1,6 +1,6 @@
 # App Settings
 
-Settings navigation and locations reconciled with current markup: 2026-11-20; Director runtime limits last checked against configuration/runtime code: 2026-11-06.
+Settings navigation and locations reconciled with current markup: 2026-11-23; Director runtime limits last checked against configuration/runtime code: 2026-11-06.
 
 The app settings modal is the global configuration surface for values stored in `tool/config.json`. Its navigation is organized by user-facing ownership rather than implementation details.
 
@@ -11,8 +11,9 @@ The app settings modal is the global configuration surface for values stored in 
 - **Models → Training Models**: profiles available for new training runs.
 - **Models → LoRA Library**: access to configured Test LoRA profiles.
 - **Training**: Diffusion Pipe/WSL runtime and repeat-reference epochs; **Runtime Environment** and **Test Staging** disclosures contain advanced runtime and Copy-to-Test destination settings.
-- **Director**: Director runtime configuration and model controls.
-- **Advanced**: caption defaults, optional analysis, logging, raw configuration, and reset controls.
+- **Director**: automatic Studio Action Advisor preference, Director runtime configuration, and context/output limits; a Caption Assist section currently also lives here (see IA notes below).
+- **LLM Guidance**: editable Studio creative profiles, H3 creative and technical guidance, specialist instructions, and generation-model playbook notes; module overrides are saved with application settings.
+- **Advanced**: textarea revision-history preferences, optional analysis, logging, raw configuration, and reset controls.
 - **Director**: one local llama.cpp runtime plus zero or more named remote OpenAI-compatible runtimes. Each runtime is presented as a distinct configuration card; unavailable remotes are skipped during discovery. Director model selection is shared across Director-enabled workspaces.
 - **Advanced → Debug Logging**: persistent debug logging. With **Debug mode** enabled, Director LLM calls log effective request metadata and response diagnostics such as model, message size, configured context/output settings, sampling/thinking flags, wall-clock response time, finish reason, usage, and backend timing fields when the runtime supplies them. This is observational only and does not change generation limits or request behavior.
 - **Advanced → Optional Analysis**: persistent Face Focus and MediaPipe enablement. Diagnostics reports whether their dependencies are available; choosing whether WebCap uses them remains a Settings decision.
@@ -23,13 +24,35 @@ The tab labels above are confirmed by `tool/tool.html` and the corresponding sel
 
 ## Information architecture
 
-The top-level tabs are **General**, **Models**, **Training**, **Director**, and **Advanced**.
+The top-level tabs are **General**, **Models**, **Training**, **Director**, **LLM Guidance**, and **Advanced**.
 
 Settings owns persistent configuration. Whole-app resources such as Models Root do not belong to Training merely because Training consumes them. One-off inspection, environment health, repair, calibration, and model benchmarking belong to the separate **Diagnostics** utility surface.
 
 Missing optional analysis dependencies do not make ordinary media metadata loading fail. WebCap skips the unavailable analyzer, keeps normal metadata usable, and reports the feature-specific problem to the global Console with the Diagnostics repair path.
 
 Specialist controls should prefer a local disclosure such as **Runtime Environment**, **Test Staging**, or **Limits** over creating another top-level settings category.
+
+## Studio Director settings entry
+
+The active Director model is selected in the **global application header**, not inside the drawer. Studio Director's header gear opens a small, Studio-only settings panel with the **creative profile** (Classic, Current, Imaginative, Render-focused). The selected profile uses the same existing browser-local `webcap.studioDirector.profile` preference as before.
+
+The panel links to the existing global Settings surfaces, without inventing a second configuration store:
+- **Edit profile instructions** opens **LLM Guidance** with the selected `studio.<profile>` module already chosen. This edits the actual profile guidance; experimental evaluation packages are not presented as available production presets.
+- **Director runtime & options** opens the existing **Director** tab for model endpoints, limits and automatic Action Advisor settings.
+
+Those deep links preserve the normal Settings modal, save behavior, profile selection and global Director model ownership. The local panel is dismissed on Escape, outside interaction, mode change or drawer closure.
+
+## IA audit — November 23, 2026
+
+The drawer's creative profile had become invisible because it was placed inside `.director-chat-model-tools`, a row deliberately hidden after global-header model selection was introduced. The Studio gear now presents it independently without resurrecting a second model selector. This is a confirmed discoverability defect corrected by the focused patch.
+
+Current remaining information-architecture issues, **not part of this targeted fix**:
+
+- **Caption Assist is miscategorized under Director.** Its Vision-model preference and default caption-template settings belong to caption workflows, not the Studio Director. Relocate them only after checking where other caption settings and entry points currently live, without changing the controls' IDs, persistence or ownership.
+- **Director and LLM Guidance overlap conceptually.** Runtime configuration and Studio workflow preferences belong to Director; model-facing instructions are shared across Director and specialists. The new deep link makes the connection discoverable without duplicating a guidance editor or moving every specialist into the Director category.
+- **The application Settings surface remains broad.** Six horizontal top-level tabs are functional but dense, particularly in narrow layouts. Consider regrouping after auditing all consumers; no broad tab or configuration migration should be bundled with this Director discoverability fix.
+
+The current improvement intentionally avoids exposing experimental guidance variants, introducing an alternative profile store, or making rarely used controls permanently visible in Studio.
 
 ## Director output limit
 

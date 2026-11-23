@@ -59,11 +59,13 @@ test('Unpinned Studio Director auto-dismisses; pinned Director remains open',()=
     drawer:{contains:()=>false},toggle:{contains:()=>false},
     document:{querySelector:()=>modal,addEventListener:(name,fn)=>handlers[name]=fn},
     window:{addEventListener:(name,fn)=>handlers[name]=fn},setOpen:()=>closes++});
-  vm.runInContext(part(chat,"    document.addEventListener('pointerdown'", "    window.addEventListener('beforeunload'"),scope);
+  vm.runInContext(part(chat,"    document.addEventListener('pointerdown', function (event) {\n      if (!state.open || state.pinned", "    window.addEventListener('beforeunload'"),scope);
   handlers.pointerdown({target:{}});
   handlers.keydown({key:'Escape'});
   assert.equal(closes,0,'modal click or Escape must leave Director open');
   modal=null;
+  handlers.keydown({key:'Escape',defaultPrevented:true});
+  assert.equal(closes,0,'an Escape already handled by an overlay keeps Director open');
   handlers.pointerdown({target:{}});
   handlers.keydown({key:'Escape'});
   assert.equal(closes,2,'ordinary dismissal remains available');

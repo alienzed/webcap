@@ -4441,3 +4441,106 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   .director-chat-drawer.studio-director .director-studio-contextbar {padding: 10px 16px 0;}
   .director-chat-drawer.studio-director .director-chat-composer {padding: 12px 16px 16px;}
 }
+
+/* Director's infrequently used creative controls live in one small settings sheet.
+   Model selection remains in the global application header. */
+.director-chat-drawer.studio-director .director-chat-drawer-header { position: relative; z-index: 25; }
+.director-chat-drawer .director-studio-settings-toggle.hidden,
+.director-chat-drawer .director-studio-settings-panel.hidden { display: none !important; }
+.director-chat-drawer.studio-director #director-studio-settings-toggle {
+  display: inline-flex;
+  flex: 0 0 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.director-chat-drawer.studio-director #director-studio-settings-toggle:hover,
+.director-chat-drawer.studio-director #director-studio-settings-toggle[aria-expanded="true"] {
+  color: var(--text);
+  border-color: var(--border);
+  background: var(--panel-soft);
+}
+.director-chat-drawer.studio-director #director-studio-settings-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.director-chat-drawer.studio-director #director-studio-settings-toggle svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.director-chat-drawer.studio-director .director-studio-settings-panel:not(.hidden) {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% - 1px);
+  right: 16px;
+  box-sizing: border-box;
+  width: min(330px, calc(100% - 32px));
+  max-height: min(70dvh, 440px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, .24);
+  color: var(--text);
+}
+.director-chat-drawer.studio-director .director-studio-settings-panel strong {
+  font-size: 18px;
+  line-height: 1.25;
+}
+.director-chat-drawer.studio-director .director-studio-settings-panel label {
+  font-size: 16px;
+  font-weight: 600;
+}
+.director-chat-drawer.studio-director .director-studio-settings-panel #director-studio-profile {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 16px;
+}
+.director-chat-drawer.studio-director .director-studio-settings-panel p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.director-chat-drawer.studio-director .director-studio-settings-panel button {
+  min-height: 42px;
+  width: 100%;
+  padding: 8px 12px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+.director-chat-drawer.studio-director .director-studio-settings-panel button:hover {
+  border-color: var(--accent);
+}
+.director-chat-drawer.studio-director .director-studio-settings-panel button:focus-visible,
+.director-chat-drawer.studio-director .director-studio-settings-panel select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

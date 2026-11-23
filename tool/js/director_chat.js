@@ -1796,6 +1796,16 @@
     input.style.overflowY = input.scrollHeight > desired + 2 ? 'auto' : 'hidden';
   }
 
+  function setStudioSettingsOpen(open, restoreFocus) {
+    var button = el('director-studio-settings-toggle');
+    var panel = el('director-studio-settings-panel');
+    var show = !!open && state.open && state.activeMode === 'storyboard';
+    panel.classList.toggle('hidden', !show);
+    button.setAttribute('aria-expanded', show ? 'true' : 'false');
+    if (show) el('director-studio-profile').focus();
+    else if (restoreFocus && !button.classList.contains('hidden')) button.focus();
+  }
+
   function syncControls() {
     var send = el('director-chat-send');
     var inspect = el('studio-director-inspect');
@@ -1804,7 +1814,11 @@
     var model = el('director-chat-model');
     var refresh = el('director-chat-model-refresh');
     var profile = el('director-studio-profile');
-    profile.classList.toggle('hidden', state.activeMode !== 'storyboard');
+    var settingsButton = el('director-studio-settings-toggle');
+    var studio = state.activeMode === 'storyboard';
+    settingsButton.classList.toggle('hidden', !studio);
+    if (!studio) setStudioSettingsOpen(false);
+    profile.classList.toggle('hidden', !studio);
     profile.disabled = state.pending;
     var clear = el('director-chat-clear');
     var revising = studioRevisionActive();
@@ -3771,6 +3785,7 @@
     // Do not show its Studio UI in another workspace while the request finishes.
     if (open && !studioWorkspaceVisible() && state.activeMode === 'storyboard') open = false;
     state.open = !!open;
+    if (!state.open) setStudioSettingsOpen(false);
     if (!state.open && state.pinned) {
       state.pinned = false;
     }
@@ -3931,10 +3946,12 @@
     var model = el('director-chat-model');
     var refresh = el('director-chat-model-refresh');
     var profile = el('director-studio-profile');
+    var settingsButton = el('director-studio-settings-toggle');
+    var settingsPanel = el('director-studio-settings-panel');
     var modeSwitch = el('director-chat-mode-switch');
     var presetsHost = el('director-chat-mode-presets');
     var contextRefresh = el('director-chat-context-refresh');
-    if (!toggle || !drawer || !pin || !close || !clear || !send || !stop || !copy || !input || !model || !refresh || !modeSwitch || !presetsHost || !contextRefresh) {
+    if (!toggle || !drawer || !pin || !close || !clear || !send || !stop || !copy || !input || !model || !refresh || !profile || !settingsButton || !settingsPanel || !modeSwitch || !presetsHost || !contextRefresh) {
       throw new Error('Assistant drawer controls are missing.');
     }
 
@@ -3944,6 +3961,28 @@
       state.studioProfile = profile.value;
       localStorage.setItem('webcap.studioDirector.profile', state.studioProfile);
     };
+    settingsButton.onclick = function () {
+      setStudioSettingsOpen(settingsButton.getAttribute('aria-expanded') !== 'true');
+    };
+    el('director-studio-settings-guidance').onclick = function () {
+      setStudioSettingsOpen(false);
+      openAppSettingsModal('guidance', 'studio.' + state.studioProfile);
+    };
+    el('director-studio-settings-app').onclick = function () {
+      setStudioSettingsOpen(false);
+      openAppSettingsModal('director');
+    };
+    settingsPanel.addEventListener('keydown', function (event) {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      setStudioSettingsOpen(false, true);
+    });
+    document.addEventListener('pointerdown', function (event) {
+      if (!settingsPanel.classList.contains('hidden') &&
+          !settingsPanel.contains(event.target) && !settingsButton.contains(event.target))
+        setStudioSettingsOpen(false);
+    });
     toggle.onclick = function () {
       if (state.open) setOpen(false);
       else setOpen(true, studioWorkspaceVisible() ? state.lastStudioMode : 'chat');
@@ -4206,11 +4245,12 @@
     });
     document.addEventListener('pointerdown', function (event) {
       if (!state.open || state.pinned || document.querySelector('dialog[open]') ||
+          document.querySelector('#app-settings-modal[aria-hidden="false"]') ||
           drawer.contains(event.target) || toggle.contains(event.target)) return;
       setOpen(false);
     });
     window.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && state.open && !state.pinned &&
+      if (event.key === 'Escape' && !event.defaultPrevented && state.open && !state.pinned &&
           !document.querySelector('dialog[open]')) setOpen(false);
     });
 

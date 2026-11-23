@@ -534,10 +534,11 @@ function appSettingsLlamaAction(action) {
   });
 }
 
-function openAppSettingsModal() {
+function openAppSettingsModal(tabName, guidanceModuleId) {
   if (!ui.appSettingsModalEl) return;
+  if (guidanceModuleId) appSettingsGuidanceSelectedId = String(guidanceModuleId);
   setAppSettingsStatus('Loading settings...', false);
-  setAppSettingsTab(appSettingsActiveTab, false);
+  setAppSettingsTab(typeof tabName === 'string' ? tabName : appSettingsActiveTab, false);
   ui.appSettingsModalEl.classList.remove('hidden');
   refreshAppSettingsLlamaRuntime();
   ui.appSettingsModalEl.setAttribute('aria-hidden', 'false');
@@ -827,6 +828,8 @@ function wireAppSettingsUi() {
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
     if (!ui.appSettingsModalEl || ui.appSettingsModalEl.classList.contains('hidden')) return;
+    e.preventDefault();
+    e.stopPropagation();
     closeAppSettingsModal();
   });
 

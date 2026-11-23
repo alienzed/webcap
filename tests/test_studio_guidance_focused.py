@@ -29,6 +29,18 @@ def test_four_packages_share_the_exact_baseline_and_change_one_short_h3_focus():
     assert len({row["authoring_addendum"] for row in resolved.values()}) == 4
 
 
+def test_control_stays_frozen_while_codex_revises_one_candidate_addendum():
+    packages, _ = focused()
+    baseline = evals.resolve_packages(packages)
+    changed = [dict(item) for item in packages]
+    changed[0]["authoring_addendum"] = "A competing phrase that should never reach control."
+    changed[1]["authoring_addendum"] += " Additional visual-state emphasis."
+    resolved = evals.resolve_packages(changed, {"packages": baseline})
+    assert resolved["d-control"] == baseline["d-control"]
+    assert resolved["state-anchor"]["authoring_addendum"] != baseline["state-anchor"]["authoring_addendum"]
+    assert resolved["state-anchor"]["role"] == baseline["state-anchor"]["role"]
+
+
 def test_scenarios_are_disjoint_and_observable_without_scoring_creativity():
     packages, cases = focused()
     assert len(cases) == 12

@@ -6,13 +6,6 @@ const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'tool', 'js', 'director_chat.js'), 'utf8');
 
-function listenerSnippet(eventName, nextMarker) {
-  const start = source.indexOf("    input.addEventListener('" + eventName + "', function (event) {");
-  const end = source.indexOf(nextMarker, start);
-  assert.ok(start >= 0 && end > start, eventName + ' handler exists');
-  return source.slice(start, end);
-}
-
 function setup(initialDraft = 'my unsent\ndraft') {
   const listeners = {};
   const state = {activeMode: 'storyboard', draftByMode: {storyboard: initialDraft},

@@ -61,6 +61,9 @@ def test_specialists_use_selected_roles_and_shared_h3_authoring(monkeypatch):
             "h3.toolkit": "Editable creative toolkit.",
             "storyboard.director": "Editable Storyboard director context.",
             "task.generate": "Editable Generate director role.",
+            "task.storyboard.expand_concept": "Editable expand-concept task.",
+            "task.storyboard.define_invariants": "Editable invariant task.",
+            "task.storyboard.develop_story": "Editable Scene development task.",
         },
         "generation_model_guidance": {},
     })
@@ -70,6 +73,12 @@ def test_specialists_use_selected_roles_and_shared_h3_authoring(monkeypatch):
     assert storyboard_request(story, "", "project_deep_qa")["system_prompt"] == "Only these Project QA instructions."
     expanded = storyboard_request(story, "", "expand_concept")["prompt"]
     assert "Editable Storyboard director context." in expanded
+    assert "[CURRENT TASK]\nEditable expand-concept task." in expanded
+    defined = storyboard_request(story, "", "define_invariants")["prompt"]
+    assert "[CURRENT TASK]\nEditable invariant task." in defined
+    developed = storyboard_request(story, "", "develop_story")["prompt"]
+    assert "[CURRENT TASK]\nEditable Scene development task." in developed
+    assert "[SCENE COUNT]\n" in developed
     scene = storyboard_request(story, "s1", "write_prompt")["prompt"]
     assert "Editable H3 authoring instructions." in scene
     assert "Editable creative toolkit." in scene

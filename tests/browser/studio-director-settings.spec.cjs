@@ -48,6 +48,9 @@ test('Director settings link to the existing guidance editor and runtime setting
   await expect(modal).toBeVisible();
   await expect(page.locator('#app-settings-tab-director')).toHaveAttribute('aria-selected','true');
   await expect(page.locator('#app-settings-studio-action-advisor')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(modal).toBeHidden();
+  await expect(button).toBeVisible();
 });
 
 test('Director settings are not presented in ordinary Assistant mode',async({page})=>{

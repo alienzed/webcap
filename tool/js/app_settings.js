@@ -828,6 +828,8 @@ function wireAppSettingsUi() {
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
     if (!ui.appSettingsModalEl || ui.appSettingsModalEl.classList.contains('hidden')) return;
+    e.preventDefault();
+    e.stopPropagation();
     closeAppSettingsModal();
   });
 

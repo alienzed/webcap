@@ -4245,8 +4245,6 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 
 
 /* Studio Director Quiet Toolbox: chat stays visible; tools appear on demand. */
-.director-chat-drawer.studio-director:not(.studio-revision-mode) #director-chat-history-toggle,
-.director-chat-drawer.studio-director:not(.studio-revision-mode) #director-chat-clear,
 .director-chat-drawer.studio-director:not(.studio-revision-mode) #studio-dw-open-tools,
 .director-chat-drawer.studio-director:not(.studio-revision-mode) #studio-director-inspect,
 .director-chat-drawer.studio-director:not(.studio-revision-mode) .director-studio-composer-mode {
@@ -4258,7 +4256,12 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 }
 .director-chat-drawer.studio-director .director-chat-header-copy strong {font-size: 23px;}
 .director-chat-drawer.studio-director #director-chat-save-status {font-size: 14px;}
-.director-chat-drawer.studio-director .director-chat-header-actions {gap: 10px;}
+.director-chat-drawer.studio-director .director-chat-header-actions {gap: 8px;}
+/* Header navigation remains available in conversation mode, including narrow pinned drawers. */
+.director-chat-drawer.studio-director:not(.studio-revision-mode) #director-chat-history-toggle,
+.director-chat-drawer.studio-director:not(.studio-revision-mode) #director-chat-clear {width:36px;min-width:36px;padding:5px;}
+.director-chat-drawer.studio-director:not(.studio-revision-mode) .director-header-button-label {display:none;}
+.director-chat-drawer.studio-director:not(.studio-revision-mode) .studio-header-icon {display:block;}
 .director-chat-drawer.studio-director:not(.studio-revision-mode) .director-chat-layout {
   grid-template-columns: minmax(0,1fr) !important;
 }
@@ -4345,6 +4348,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   box-shadow: 0 20px 52px rgba(0,0,0,.42);
 }
 .director-studio-actions-menu.hidden {display: none !important;}
+.director-studio-actions-divider {border:0;border-top:1px solid var(--border);margin:5px 4px;}
 .director-studio-actions-menu button {
   display: block;
   text-align: left;

@@ -4244,12 +4244,12 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 
 /* Action Advisor: one focused next-step chip, without a stacked card. */
 .studio-action-advisor {
-  display:flex; align-items:center; gap:8px; margin:6px 0 10px;
+  display:flex; align-items:center; gap:8px; margin:0 0 12px;
   padding:0; border:0; background:transparent; color:var(--text);
 }
 .studio-action-advisor.hidden, .studio-action-advisor .hidden { display:none; }
 #studio-action-advisor-status { color:var(--muted); font-size:14px; }
-#studio-action-advisor-actions { display:flex; flex-wrap:wrap; gap:8px; }
+#studio-action-advisor-actions { display:flex; flex-wrap:wrap; gap:8px; min-width:0; }
 .studio-action-advisor-action {
   display:inline-flex; align-items:center; justify-content:center;
   max-width:100%; min-height:36px; padding:6px 12px;

@@ -60,7 +60,7 @@ class StudioDirectorUiContractTests(unittest.TestCase):
         self.assertIn("openAppSettingsModal('guidance', 'studio.' + state.studioProfile)", CHAT)
         self.assertIn("openAppSettingsModal('director')", CHAT)
         self.assertIn("function openAppSettingsModal(tabName, guidanceModuleId)", SETTINGS)
-        self.assertIn("setAppSettingsTab(tabName || appSettingsActiveTab, false)", SETTINGS)
+        self.assertIn("setAppSettingsTab(typeof tabName === 'string' ? tabName : appSettingsActiveTab, false)", SETTINGS)
 
     def test_controls_are_reachable_at_medium_widths(self):
         self.assertIn("grid-template-columns:minmax(0,1fr) minmax(260px,36%)", SHELL_CSS)

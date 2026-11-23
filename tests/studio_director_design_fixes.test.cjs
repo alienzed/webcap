@@ -202,13 +202,13 @@ test('Write availability shows authored material and no automatic manual task',(
   assert.match(rail,/pendingCreativeAction/);
   assert.match(rail,/authoredFields:action\.authoredFields/);
 });
-test('Studio History and new conversation remain accessible from the compact Actions launcher', () => {
+test('Studio History and new conversation remain accessible in the header', () => {
   assert.match(html,/id="director-chat-history-toggle"[^>]*aria-label="Conversation history"/);
   assert.match(html,/id="director-chat-clear"[^>]*aria-label="New conversation"/);
   assert.match(css,/studio-director \.studio-director-breadcrumb \{display:none;/);
-  assert.match(html,/data-studio-tool="history"/);
-  assert.match(html,/data-studio-tool="new-chat"/);
-  assert.match(rail,/menu.querySelector\('\[data-studio-tool="history"\]'\)\.disabled/);
+  assert.doesNotMatch(html,/data-studio-tool="history"|data-studio-tool="new-chat"/);
+  assert.match(css,/not\(\.studio-revision-mode\) #director-chat-clear \{width:36px/);
+  assert.doesNotMatch(rail,/menu\.querySelector\('\[data-studio-tool="history"\]'\)/);
   assert.match(rail,/function showConversationWrite\(\)/);
   assert.doesNotMatch(section(rail,'  function toggle(which) {','  function parseProposal(raw) {'),
     /seedManualSceneInstruction\(\)/);

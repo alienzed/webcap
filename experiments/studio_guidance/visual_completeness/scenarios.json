@@ -164,7 +164,8 @@
         "The same named object remains recognizable across cuts",
         "The initial button and fastening are present in first shot",
         "Button detaches only at the specified moment",
-        "Subsequent shot establishes the altered physical state"
+        "Subsequent shot establishes the altered physical state",
+        "An intentional change to the established jacket/button baseline is realized instead of overriding the Scene"
       ],
       "history": [
         {
@@ -176,7 +177,13 @@
         "title": "Loose Thread",
         "concept": "A quiet tactile clothing vignette.",
         "style": "Sharp daylight, close detail.",
-        "invariants": [],
+        "invariants": [
+          {
+            "kind": "object",
+            "title": "Canvas jacket",
+            "text": "A brown canvas jacket with a large wooden button held by two loose threads."
+          }
+        ],
         "existingSceneTitles": [],
         "existingScenes": [],
         "previousScene": null

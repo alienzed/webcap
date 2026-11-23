@@ -31,3 +31,16 @@ test('folder action uses the clicked Set path rather than the current parent fol
     .find(a => a.label === 'Find & Replace Captions');
   assert.match(action.run.toString(), /openSetCaptionFindReplace\(setFolderPath\)/);
 });
+
+test('Set caption replacement searches on debounce without a Preview click', () => {
+  const dialogSource = source.slice(
+    source.indexOf('function openSetCaptionFindReplace('),
+    source.indexOf('function buildFolderContextMenuActions(')
+  );
+  assert.doesNotMatch(dialogSource, /data-action=\\"preview\\"/);
+  assert.match(dialogSource, /setTimeout\\(function \\(\\) \\{[\\s\\S]*?send\\(false\\);[\\s\\S]*?\\}, 350\\)/);
+  assert.match(dialogSource, /findInput\\.addEventListener\\('input',function \\(\\) \\{ schedulePreview\\(false\\); \\}\\)/);
+  assert.match(dialogSource, /replacementInput\\.addEventListener\\('input',function \\(\\) \\{ schedulePreview\\(true\\); \\}\\)/);
+  assert.match(dialogSource, /applyButton\\.disabled = data\\.occurrences === 0/);
+  assert.match(dialogSource, /payload\\.signature = current\\.signature/);
+});

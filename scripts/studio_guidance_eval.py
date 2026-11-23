@@ -266,6 +266,8 @@ def prepare_review(args):
     rows = read_jsonl(folder / "trials.jsonl")
     if len(rows) != len(manifest["trials"]):
         raise ValueError("Run is incomplete: collect all trial receipts before blind review.")
+    if any(row["status"] == "planned" for row in rows):
+        raise ValueError("A dry-run plan contains no model evidence; run the actual trials before review.")
     if (folder / "review_cards.jsonl").exists() or (folder / "review_key.json").exists():
         raise ValueError("Review files already exist. Preserve the original blind assignment.")
     order = list(rows)

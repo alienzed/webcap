@@ -490,16 +490,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         existing = _story_invariants_text(story)
         if existing:
             blocks.append("[EXISTING STORY INVARIANTS]\n" + existing)
-        blocks.append(
-            "[CURRENT TASK]\nDefine stable visual identities for recurring characters and locations "
-            "in this Story. Reuse existing invariants and preserve explicit Story facts. "
-            "For characters, describe consistent physical appearance and distinctive visible traits. "
-            "For locations, describe consistent layout, materials, and fixed features. "
-            "Choose grounded details that aid reproducible generation. "
-            "Return only JSON matching the supplied invariant schema, with an empty invariants array "
-            "when no recurring identity needs defining. Preserve existing Project Concept, Visual / atmosphere "
-            "and author-approved legacy Directing Guidelines without creating new guideline fields."
-        )
+        blocks.append("[CURRENT TASK]\n" + llm_guidance_text("task.storyboard.define_invariants"))
         return {
             "operation": operation,
             "output": "json",
@@ -536,12 +527,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         invariants = _story_invariants_text(story)
         if invariants:
             blocks.append("[STORY INVARIANTS]\n" + invariants)
-        blocks.append(
-            "[CURRENT TASK]\nExpand the author's concept into a useful creative overview for Scene planning. "
-            "Develop details that serve the Project Concept / overview. "
-            "Preserve established Story facts, invariants, and Visual / Atmosphere. "
-            "Return the expanded concept as concise polished prose."
-        )
+        blocks.append("[CURRENT TASK]\n" + llm_guidance_text("task.storyboard.expand_concept"))
         return {
             "operation": operation,
             "output": "text",
@@ -573,13 +559,8 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             if target_scene_count is not None
             else "Choose the Scene count that best serves the concept and the amount of useful coverage it supports. "
         )
-        blocks.append(
-            "[CURRENT TASK]\nDevelop the Story into independently generatable MiniMax H3 Scenes. "
-            + scene_count_guidance
-            + "Use the Project Concept, Visual / atmosphere, Invariants and established facts to author "
-            "the Scene content and relationships. Return each Scene's title, optional entry/exit "
-            "state, duration, and complete H3 prompt in the supplied JSON schema."
-        )
+        blocks.append("[SCENE COUNT]\n" + scene_count_guidance)
+        blocks.append("[CURRENT TASK]\n" + llm_guidance_text("task.storyboard.develop_story"))
         return {
             "operation": operation,
             "output": "json",

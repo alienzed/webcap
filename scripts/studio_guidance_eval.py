@@ -78,14 +78,15 @@ def utc_now():
     return datetime.now(timezone.utc).isoformat()
 
 
-def load_design():
-    source_packages = read_json(DESIGN_DIR / "packages.json")
-    source_scenarios = read_json(DESIGN_DIR / "scenarios.json")
+def load_design(design_dir=DESIGN_DIR):
+    design_dir = Path(design_dir)
+    source_packages = read_json(design_dir / "packages.json")
+    source_scenarios = read_json(design_dir / "scenarios.json")
     assert source_packages["version"] == source_scenarios["version"] == 1
     cases, packages = source_scenarios["cases"], source_packages["packages"]
     assert len({item["id"] for item in cases}) == len(cases)
     assert len({item["id"] for item in packages}) == len(packages)
-    assert len(cases) == 12 and len(packages) == 4
+    assert cases and packages
     for item in cases:
         assert item["operation"] in {"studio_chat", "studio_project_draft", "studio_scenes_draft"}
         assert item["split"] in {"development", "holdout"}
@@ -117,9 +118,16 @@ def resolve_packages(packages, baseline_manifest=None):
             role, expertise = item["role"], item["expertise"]
         assert isinstance(role, str) and role.strip()
         assert isinstance(expertise, str)
+        addendum = item.get("authoring_addendum", "")
+        if frozen and item.get("freeze_addendum"):
+            addendum = frozen["packages"][item["id"]].get("authoring_addendum", "")
+        if not isinstance(addendum, str):
+            raise ValueError("Authoring addendum must be a text string.")
         results[item["id"]] = {
             "revision": item["revision"], "hypothesis": item["hypothesis"],
-            "role": role, "expertise": expertise, "sha256": digest([role, expertise])
+            "role": role, "expertise": expertise,
+            "authoring_addendum": addendum,
+            "sha256": digest([role, expertise, addendum])
         }
     return results
 
@@ -130,6 +138,8 @@ def make_messages(case, package, technical):
         system += "\n\n" + package["expertise"].strip()
     if case["operation"] == "studio_scenes_draft":
         system += "\n\nH3 PROMPT AUTHORING REFERENCE:\n" + technical
+        if package.get("authoring_addendum", "").strip():
+            system += "\n\nSCENE AUTHORING FOCUS:\n" + package["authoring_addendum"].strip()
     messages = [{"role": "system", "content": system}] + [
         {"role": m["role"], "content": m["content"]} for m in case["history"]
     ]
@@ -143,7 +153,7 @@ def make_messages(case, package, technical):
 
 
 def prepare_experiment(args):
-    packages_spec, scenarios = load_design()
+    packages_spec, scenarios = load_design(args.design_dir)
     allowed_ids = set(args.package or [p["id"] for p in packages_spec])
     known_packages = {p["id"] for p in packages_spec}
     if not allowed_ids <= known_packages:
@@ -172,13 +182,14 @@ def prepare_experiment(args):
     random.Random(args.seed).shuffle(trials)
     run = {
         "version": 1, "created_at": utc_now(), "mode": args.command,
+        "design_dir": str(Path(args.design_dir).resolve()),
         "model": args.model, "base_url": args.base_url if args.command == "run" else None,
         "seed": args.seed, "split": args.split, "repeats": args.repeats,
         "scenarios_sha256": digest(scenarios),
         "packages": packages, "technical_reference": technical,
         "technical_reference_sha256": digest(technical),
         "cases": selection, "trials": trials,
-        "run_protocol": "same model, operation, case messages, technical contract and sampling; only creative primer varies",
+        "run_protocol": "same model, operation, case messages, base primer, technical contract and sampling; only declared package text varies",
     }
     return run
 
@@ -281,6 +292,8 @@ def prepare_review(args):
                          "repeat": record["repeat"], "record_index": record["index"]}
         cards.append({
             "blind_id": blind_id, "scenario": case["id"], "operation": case["operation"],
+            "category": case["category"], "fidelity_checks": case.get("fidelity_checks", []),
+            "fidelity_results": [None] * len(case.get("fidelity_checks", [])),
             "review_focus": case["focus"], "author_messages": case["history"],
             "author_direction": case.get("instruction"),
             "response": (record.get("result") or {}).get("text", ""),
@@ -309,11 +322,16 @@ def report(args):
     trials = read_jsonl(folder / "trials.jsonl")
     by_index = {row["index"]: row for row in trials}
     results = defaultdict(list)
+    cases = {case["id"]: case for case in manifest["cases"]}
     for card in cards:
         identity = key[card["blind_id"]]
         record = by_index[identity["record_index"]]
         if identity["case_id"] != record["case_id"] or identity["package_id"] != record["package_id"]:
             raise ValueError("Review-to-trial identity does not match.")
+        checks = cases[record["case_id"]].get("fidelity_checks", [])
+        check_results = card.get("fidelity_results", [])
+        if len(checks) != len(check_results) or any(value is not None and type(value) is not bool for value in check_results):
+            raise ValueError("Each fidelity result must be true, false, or blank: " + card["blind_id"])
         for field in RATING_FIELDS:
             value = card[field]
             if value is not None and (type(value) not in (int, float) or not 1 <= value <= 5):
@@ -324,12 +342,12 @@ def report(args):
                 raise ValueError(field + " must be a nonnegative integer or blank")
         if card["usable_first_pass"] is not None and type(card["usable_first_pass"]) is not bool:
             raise ValueError("usable_first_pass must be true, false, or blank")
-        results[identity["package_id"], record["operation"]].append((card, record))
+        results[identity["package_id"], record["operation"], cases[record["case_id"]]["category"]].append((card, record))
     summary = []
-    for (package, operation), pairs in sorted(results.items()):
+    for (package, operation, category), pairs in sorted(results.items()):
         rated = [card for card, rec in pairs if card["usable_first_pass"] is not None]
         row = {
-            "package": package, "operation": operation,
+            "package": package, "operation": operation, "category": category,
             "trials": len(pairs), "responses_ok": sum(rec["status"] == "completed" for card, rec in pairs),
             "reviewed": len(rated), "first_pass_usable_rate": (
                 round(sum(card["usable_first_pass"] for card in rated) / len(rated), 3) if rated else None
@@ -343,6 +361,12 @@ def report(args):
             "avg_actual_revision_rounds": average([
                 card["actual_revision_rounds"] for card, rec in pairs if card["actual_revision_rounds"] is not None
             ]),
+            "literal_checks_reviewed": sum(value is not None for card, rec in pairs for value in card.get("fidelity_results", [])),
+            "literal_checks_pass_rate": (
+                round(sum(value is True for card, rec in pairs for value in card.get("fidelity_results", [])) /
+                      sum(value is not None for card, rec in pairs for value in card.get("fidelity_results", [])), 3)
+                if any(value is not None for card, rec in pairs for value in card.get("fidelity_results", [])) else None
+            ),
             "avg_elapsed_seconds": average([rec["elapsed_seconds"] for card, rec in pairs if rec["status"] == "completed"]),
         }
         summary.append(row)
@@ -361,6 +385,7 @@ def main(argv=None):
         p = commands.add_parser(name, help="Prepare comparable requests" if name == "plan" else "Run actual WebCap model jobs")
         p.add_argument("--output", required=True, help="A new directory for the entire experiment")
         p.add_argument("--model", required=True, help="Exact configured Director model ID")
+        p.add_argument("--design-dir", default=str(DESIGN_DIR), help="Versioned packages.json and scenarios.json directory")
         p.add_argument("--base-url", help="Live WebCap URL; required for run")
         p.add_argument("--split", choices=("development", "holdout", "all"), default="development")
         p.add_argument("--repeats", type=int, default=2)

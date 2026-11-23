@@ -4250,7 +4250,7 @@
       setOpen(false);
     });
     window.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && state.open && !state.pinned &&
+      if (event.key === 'Escape' && !event.defaultPrevented && state.open && !state.pinned &&
           !document.querySelector('dialog[open]')) setOpen(false);
     });
 

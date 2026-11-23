@@ -41,7 +41,7 @@ test('Read and the optional coherence utility stay separate from creative Write'
 
 test('ordinary Chat sends the selected creative role without a hidden suffix',()=>{
   assert.match(roleDefaults,/Talk naturally and proportionately/);
-  assert.match(roleDefaults,/Conversation can explore or draft creative content/);
+  assert.match(roleDefaults,/can explore or draft creative content/);
   assert.match(chat,/includePromptContract=' \+ \(includePromptContract \? '1' : '0'\)/);
   assert.doesNotMatch(chat,/outbound\[0\]\.content \+= '\\n\\nAnswer the author conversationally/);
   assert.doesNotMatch(roleDefaults,/CREATIVE WORK: When asked to create or revise material/);

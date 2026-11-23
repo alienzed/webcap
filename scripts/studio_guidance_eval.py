@@ -119,15 +119,18 @@ def resolve_packages(packages, baseline_manifest=None):
         assert isinstance(role, str) and role.strip()
         assert isinstance(expertise, str)
         addendum = item.get("authoring_addendum", "")
+        creative_addendum = item.get("creative_addendum", "")
         if frozen and item.get("freeze_addendum"):
             addendum = frozen["packages"][item["id"]].get("authoring_addendum", "")
-        if not isinstance(addendum, str):
-            raise ValueError("Authoring addendum must be a text string.")
+            creative_addendum = frozen["packages"][item["id"]].get("creative_addendum", "")
+        if not isinstance(addendum, str) or not isinstance(creative_addendum, str):
+            raise ValueError("Guidance addenda must be text strings.")
         results[item["id"]] = {
             "revision": item["revision"], "hypothesis": item["hypothesis"],
             "role": role, "expertise": expertise,
             "authoring_addendum": addendum,
-            "sha256": digest([role, expertise, addendum])
+            "creative_addendum": creative_addendum,
+            "sha256": digest([role, expertise, addendum, creative_addendum])
         }
     return results
 
@@ -136,6 +139,8 @@ def make_messages(case, package, technical):
     system = package["role"].strip()
     if package["expertise"].strip():
         system += "\n\n" + package["expertise"].strip()
+    if package.get("creative_addendum", "").strip():
+        system += "\n\nCREATIVE DIRECTION:\n" + package["creative_addendum"].strip()
     if case["operation"] == "studio_scenes_draft":
         system += "\n\nH3 PROMPT AUTHORING REFERENCE:\n" + technical
         if package.get("authoring_addendum", "").strip():
@@ -368,6 +373,13 @@ def report(args):
                 if any(value is not None for card, rec in pairs for value in card.get("fidelity_results", [])) else None
             ),
             "avg_elapsed_seconds": average([rec["elapsed_seconds"] for card, rec in pairs if rec["status"] == "completed"]),
+            "avg_response_chars": average([
+                len((rec.get("result") or {}).get("text") or "") for card, rec in pairs if rec["status"] == "completed"
+            ]),
+            "avg_response_words": average([
+                len(((rec.get("result") or {}).get("text") or "").split())
+                for card, rec in pairs if rec["status"] == "completed"
+            ]),
         }
         summary.append(row)
     result = {"version": 1, "model": manifest["model"], "split": manifest["split"],

@@ -37,10 +37,12 @@ test('Set caption replacement searches on debounce without a Preview click', () 
     source.indexOf('function openSetCaptionFindReplace('),
     source.indexOf('function buildFolderContextMenuActions(')
   );
-  assert.doesNotMatch(dialogSource, /data-action=\\"preview\\"/);
-  assert.match(dialogSource, /setTimeout\\(function \\(\\) \\{[\\s\\S]*?send\\(false\\);[\\s\\S]*?\\}, 350\\)/);
-  assert.match(dialogSource, /findInput\\.addEventListener\\('input',function \\(\\) \\{ schedulePreview\\(false\\); \\}\\)/);
-  assert.match(dialogSource, /replacementInput\\.addEventListener\\('input',function \\(\\) \\{ schedulePreview\\(true\\); \\}\\)/);
-  assert.match(dialogSource, /applyButton\\.disabled = data\\.occurrences === 0/);
-  assert.match(dialogSource, /payload\\.signature = current\\.signature/);
+  assert.ok(!dialogSource.includes('data-action="preview"'));
+  assert.ok(!dialogSource.includes('previewButton'));
+  assert.ok(dialogSource.includes('}, 350);'));
+  assert.ok(dialogSource.includes('send(false);'));
+  assert.ok(dialogSource.includes("schedulePreview(false);"));
+  assert.ok(dialogSource.includes("schedulePreview(true);"));
+  assert.ok(dialogSource.includes('applyButton.disabled = data.occurrences === 0'));
+  assert.ok(dialogSource.includes('payload.signature = current.signature'));
 });

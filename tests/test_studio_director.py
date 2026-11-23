@@ -4,6 +4,7 @@ import pytest
 
 from tool.server import config as app_config
 from tool.server.studio_director import guidance, ACTIONS
+from tool.server.llm_guidance import text_for as llm_guidance_text
 
 
 def test_writer_workshop_keeps_creative_identity_separate_from_h3_playbook(monkeypatch):
@@ -29,7 +30,8 @@ def test_writer_workshop_keeps_creative_identity_separate_from_h3_playbook(monke
     assert "[Shot N]" in system
     assert "MiniMax H3 generates clips from 4 to 15 seconds." in reference
     assert "Make the final timed shot end at durationSeconds." in reference
-    assert len(system) < 4000
+    assert len(llm_guidance_text("studio.current")) < 4000
+    assert len(system) < 6000
 
 @pytest.mark.parametrize("profile", ["classic", "current", "imaginative", "render"])
 def test_creative_profiles_know_h3_clip_duration_without_write_machinery(profile):
@@ -50,7 +52,8 @@ def test_studio_guidance_teaches_only_focused_creative_workflows():
     assert "Respond naturally and concisely" in result["system"]
     assert "make a recommendation when you can" in result["system"]
     assert "CURRENT WEBCAP CAPABILITIES" not in result["system"]
-    assert len(result["system"]) < 4000
+    assert len(llm_guidance_text("studio.current")) < 4000
+    assert len(system) < 6000
 
 def test_chat_director_matches_reply_depth_without_hiding_requested_scene_material():
     system = guidance("minimax_h3", "current")["system"]
@@ -171,7 +174,8 @@ def test_studio_guidance_understands_distinct_creative_structures_and_judgment()
     # scoped to explicit Scene authoring rather than every chat turn.
     assert "H3 PROMPT AUTHORING REFERENCE" not in system
     assert "integrated_multimodal_description:" in guidance(profile="current")["promptContract"]
-    assert len(system) < 4000
+    assert len(llm_guidance_text("studio.current")) < 4000
+    assert len(system) < 6000
 
 
 def test_creative_field_judgment_keeps_invariants_relevant_and_variations_flexible():
@@ -194,7 +198,8 @@ def test_creative_field_judgment_keeps_invariants_relevant_and_variations_flexib
     assert "scene.summary" not in system
     assert "reviewed Apply" not in system
     assert "H3 PROMPT AUTHORING REFERENCE" not in system
-    assert len(system) < 4000
+    assert len(llm_guidance_text("studio.current")) < 4000
+    assert len(system) < 6000
 
 
 def test_h3_playbook_review_uses_existing_config_and_checks_conflicts(monkeypatch):

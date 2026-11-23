@@ -13,7 +13,7 @@ function listenerSnippet(eventName, nextMarker) {
   return source.slice(start, end);
 }
 
-function setup(initialDraft = 'my unsent\\ndraft') {
+function setup(initialDraft = 'my unsent\ndraft') {
   const listeners = {};
   const state = {activeMode: 'storyboard', draftByMode: {storyboard: initialDraft},
     sessionReady: true};
@@ -47,9 +47,9 @@ function setup(initialDraft = 'my unsent\\ndraft') {
 }
 
 test('Up in the first line preserves draft and native caret movement', () => {
-  const t = setup('first line\\nsecond line');
+  const t = setup('first line\nsecond line');
   assert.equal(t.key('ArrowUp', 4), false);
-  assert.equal(t.input.value, 'first line\\nsecond line');
+  assert.equal(t.input.value, 'first line\nsecond line');
   assert.equal(t.context.inputHistoryIndex, 2);
   assert.equal(t.saves(), 0);
 });
@@ -70,7 +70,7 @@ test('only a collapsed selection at absolute start can recall history', () => {
 });
 
 test('Up/Down browse sent history and restore the exact unsent draft', () => {
-  const t = setup('draft\\nremains');
+  const t = setup('draft\nremains');
   assert.equal(t.key('ArrowUp', 0), true);
   assert.equal(t.key('ArrowUp', 0), true);
   assert.equal(t.input.value, 'first sent');
@@ -78,8 +78,8 @@ test('Up/Down browse sent history and restore the exact unsent draft', () => {
   assert.equal(t.key('ArrowDown', 0), true);
   assert.equal(t.input.value, 'second sent');
   assert.equal(t.key('ArrowDown', 0), true);
-  assert.equal(t.input.value, 'draft\\nremains');
-  assert.equal(t.state.draftByMode.storyboard, 'draft\\nremains');
+  assert.equal(t.input.value, 'draft\nremains');
+  assert.equal(t.state.draftByMode.storyboard, 'draft\nremains');
   assert.equal(t.input.selectionStart, t.input.value.length);
   assert.equal(t.saves(), 1, 'only restoring the draft schedules persistence');
   assert.equal(t.key('ArrowDown', t.input.value.length), false);
@@ -101,7 +101,7 @@ test('Down does not browse history from a live draft and edits leave originals u
 
 test('Down at the end of recalled multi-line entry restores draft', () => {
   const t = setup('text I was writing');
-  t.context.inputHistory[1] = 'previous\\nmultiline';
+  t.context.inputHistory[1] = 'previous\nmultiline';
   t.key('ArrowUp', 0);
   assert.equal(t.key('ArrowDown', 4), false);
   assert.equal(t.key('ArrowDown', t.input.value.length), true);

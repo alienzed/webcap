@@ -119,7 +119,7 @@ test('identical Invariants are not preselected because JSON properties arrived i
 });
 
 test('ordinary discussion stays conversational with no automatic structured drafts',()=>{
-  assert.match(chat,/Answer the author conversationally/);
+  assert.match(chat,/return studioDirectorRequestMessages\(messages, false, false\);/);
   assert.doesNotMatch(chat,/STUDIO CONVERSATION DELIVERY: Answer the author in the JSON reply field/);
   assert.doesNotMatch(chat,/These are drafts; WebCap decides where and whether to save them/);
 });

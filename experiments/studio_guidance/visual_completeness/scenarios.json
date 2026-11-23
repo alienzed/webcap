@@ -1,0 +1,500 @@
+{
+  "version": 1,
+  "experiment": "creative-completeness-guidance-v1",
+  "description": "13 development and 4 held-out creative decision/visual completeness/continuity/Studio-boundary scenarios. Includes three verbatim regression fixtures from focused_h3, renamed.",
+  "cases": [
+    {
+      "id": "clothing-complete",
+      "split": "development",
+      "category": "visual-completeness",
+      "operation": "studio_scenes_draft",
+      "focus": "A medium-wide full-body character is fully defined; missing garments are creatively specified.",
+      "fidelity_checks": [
+        "Visible head-to-toe outfit covers top, bottoms, shoes and any visible layers",
+        "Character's face, hair, visible accessories and physical state are concrete",
+        "Scene prompt makes a single coherent choice for previously unspecified clothing",
+        "Descriptions are established in Scene text independently of Project"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "I need the woman to look fully defined from head to toe, not like H3 has to decide what she wears."
+        }
+      ],
+      "project": {
+        "title": "Red Lantern",
+        "concept": "A woman carries a lantern into a dark bakery.",
+        "style": "Overcast blue dawn, cinematic realism.",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      },
+      "instruction": "Write one 11-second full-body H3 Scene: an adult woman with black wavy hair and a red wool scarf enters a shuttered bakery carrying a brass lantern, stops and finds the locked back door. The author specified her scarf and hair but left her other clothing and appearance undefined: complete the intended outfit, identity and visible accessories yourself. Quiet footsteps, latch and street wind."
+    },
+    {
+      "id": "material-object-complete",
+      "split": "development",
+      "category": "visual-completeness",
+      "operation": "studio_scenes_draft",
+      "focus": "Concrete forms of a featured prop and its parts, without relying on an unspecified generic object.",
+      "fidelity_checks": [
+        "The featured mechanical music box receives a complete visible form",
+        "Its opening, interior mechanism, external surface and dimensions are concretely described",
+        "The hand-box spatial relationship and physical sequence are clear",
+        "The audible mechanism matches what moves"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "The object is the star. I want a fully realizable object, not the word 'music box' doing the work."
+        }
+      ],
+      "project": {
+        "title": "The Music Box",
+        "concept": "Macro studies of inherited objects.",
+        "style": "Warm late-afternoon sunlight, quiet domestic detail.",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      },
+      "instruction": "Write one 12-second macro H3 Scene. A pair of adult hands opens an old mechanical music box and winds the spring; a tiny rotating cylinder and metal comb produce a delicate melody. Decide and establish the box's shape, material finish, hinge, latch, interior layout and surrounding tabletop so every intended visible part has a coherent physical identity."
+    },
+    {
+      "id": "recurring-location",
+      "split": "development",
+      "category": "visual-completeness",
+      "operation": "studio_scenes_draft",
+      "focus": "Brief recurring location baseline becomes a complete standalone physical environment.",
+      "fidelity_checks": [
+        "Defines layout, important boundaries, materials and fixed features of the room",
+        "Preserves the invariant's green tile and north window",
+        "The shot is independently renderable from this prompt",
+        "Scene-specific activity does not become a new permanent location invariant"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "This is a place we come back to. Describe the whole location consistently in the Scene."
+        }
+      ],
+      "project": {
+        "title": "Neighborhood Bakery",
+        "concept": "Scenes revisiting the same neighborhood bakery.",
+        "style": "Soft amber light, naturalistic realism.",
+        "invariants": [
+          {
+            "kind": "location",
+            "title": "Bakery kitchen",
+            "text": "Green-tiled kitchen with a high window on the north wall."
+          }
+        ],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      },
+      "instruction": "Write one 14-second observational H3 Scene in the recurring bakery kitchen. A baker kneads dough on the central worktable while a tray rises on a rack and heat hazes the air. The room's layout and materials should be fully established here, building on the shared green tiles and high north window."
+    },
+    {
+      "id": "two-character-binding",
+      "split": "development",
+      "category": "multiple-actors",
+      "operation": "studio_scenes_draft",
+      "focus": "Two adults with distinct complete appearance, wardrobe, placement and actions.",
+      "fidelity_checks": [
+        "Both characters have separately specified complete visible appearances",
+        "Clothing of both characters includes visible top and lower garments",
+        "Left/right or other spatial placement is unambiguous",
+        "Each action is correctly bound to its actor across the timed shots"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "They should be obviously different people with unambiguous individual actions."
+        }
+      ],
+      "project": {
+        "title": "Late Shift",
+        "concept": "A café closes for the night.",
+        "style": "Subdued tungsten light, subtle rain outdoors.",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      },
+      "instruction": "Write one 10-second full-body two-person H3 Scene behind a café counter. An older male barista in a navy apron is on the left stacking saucers, while a younger female coworker in a bright orange cap stands on the right folding a floor cloth. Describe complete outfits and distinguishing features for both, then their precise independent actions and sounds."
+    },
+    {
+      "id": "busy-market",
+      "split": "development",
+      "category": "multiple-actors",
+      "operation": "studio_scenes_draft",
+      "focus": "Ambitious crowd preserved; principal and background elements given appropriate distinct identity.",
+      "fidelity_checks": [
+        "A bustling crowd remains clearly present with no invented numerical cap",
+        "The two specified foreground vendors remain distinct and well defined",
+        "Background crowd is collectively coherent without 30 redundant individual biographies",
+        "Individual actions and objects belong to the correct visible actors"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "The crowded image is deliberate. Don't make it only two people."
+        }
+      ],
+      "project": {
+        "title": "Marrakesh Morning",
+        "concept": "A travel mosaic of market life.",
+        "style": "Layered morning light, richly textured colors and sound.",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      },
+      "instruction": "Write one 15-second continuous-wide-shot H3 Scene in a busy covered produce market with around 25 shoppers. Two foreground vendors have distinct appearances: one elderly woman in a yellow headscarf weighs figs on the left, and a tall man with a shaved head stacks green crates on the right. Include active shoppers, stalls, signage without legible text, and rich overlapping sound. Preserve the crowded ambition."
+    },
+    {
+      "id": "state-change-across-shots",
+      "split": "development",
+      "category": "scene-continuity",
+      "operation": "studio_scenes_draft",
+      "focus": "Precise change within Scene keeps stable identity before/after.",
+      "fidelity_checks": [
+        "The same named object remains recognizable across cuts",
+        "The initial button and fastening are present in first shot",
+        "Button detaches only at the specified moment",
+        "Subsequent shot establishes the altered physical state"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "One state changes; the rest of the jacket remains the same."
+        }
+      ],
+      "project": {
+        "title": "Loose Thread",
+        "concept": "A quiet tactile clothing vignette.",
+        "style": "Sharp daylight, close detail.",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      },
+      "instruction": "Write one 9-second H3 Scene of a brown canvas jacket hanging on a peg. Shot 1 (0–3s): a loose wooden button still attached by two threads. Shot 2 (3–6s): a hand pulls the thread and the button falls. Shot 3 (6–9s): the jacket remains hanging with the empty buttonhole and two dangling threads. Define the same jacket consistently through the action."
+    },
+    {
+      "id": "identity-with-costume-change",
+      "split": "development",
+      "category": "scene-continuity",
+      "operation": "studio_scenes_draft",
+      "focus": "Enduring invariant identity survives an intentional Scene-specific clothing change.",
+      "fidelity_checks": [
+        "Invariant face, haircut and distinctive earring preserved",
+        "Scene-specific wet red coat is fully defined",
+        "No invented change to invariant traits",
+        "A standalone Scene includes all character details it needs"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Mara is recognizable, but different weather means different clothes."
+        }
+      ],
+      "project": {
+        "title": "Mara's Walk",
+        "concept": "Episodes from a woman's daily walk.",
+        "style": "Natural rain, muted city lights.",
+        "invariants": [
+          {
+            "kind": "character",
+            "title": "Mara",
+            "text": "Middle-aged woman with short silver hair and a small star-shaped earring in her left ear."
+          }
+        ],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      },
+      "instruction": "Write one 13-second full-body H3 Scene of Mara walking home in heavy rain, wearing a drenched red coat over other suitable clothing and carrying a paper grocery bag. Define her full appearance for this Scene, retaining the star earring and haircut. The coat is a changeable scene-specific choice, not an immutable identity trait."
+    },
+    {
+      "id": "project-invariant-scope",
+      "split": "development",
+      "category": "studio-boundaries",
+      "operation": "studio_project_draft",
+      "focus": "Invariants are recurring baselines, temporary effects remain Scene-level.",
+      "fidelity_checks": [
+        "Project has a meaningful title, Concept and Visual/atmosphere",
+        "Invariants define enduring character or place traits only",
+        "The one-off storm and dropped cup are not elevated to permanent traits",
+        "The Project permits future Scenes to vary naturally"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "I want a series about an old bus driver returning to a modest roadside diner. His chipped gold tooth and the diner's turquoise booths should recur. One episode has a thunderstorm and a spilled coffee; those aren't permanent."
+        }
+      ],
+      "instruction": "Create a Project overview, Visual / atmosphere and useful Invariants. Keep defining recurring details stable while leaving episode-specific weather, clothing and transient events flexible."
+    },
+    {
+      "id": "project-map-not-rule",
+      "split": "development",
+      "category": "studio-boundaries",
+      "operation": "studio_project_draft",
+      "focus": "Project premise is a map, not a mandatory serial plot or rigid action list.",
+      "fidelity_checks": [
+        "Project fields are complete and coherent",
+        "Independent clips remain permissible",
+        "Avoids invented mandatory protagonist or chronology",
+        "Invariants encode only deliberately shared audiovisual facts"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "A collection of independent visual micro-poems using luminous liquids, fluttering fabric, light through glass and very close texture sounds. No shared cast or chronological story."
+        }
+      ],
+      "instruction": "Create a flexible Project overview, visual language and any genuinely appropriate Invariants, preserving the independence of clips and scope for different visual elements."
+    },
+    {
+      "id": "chat-concise-vision",
+      "split": "development",
+      "category": "studio-boundaries",
+      "operation": "studio_chat",
+      "focus": "General creative guidance improves Scene thinking without forcing expansive Chat answers.",
+      "fidelity_checks": [
+        "Answers the user's practical creative question",
+        "Exactly two sentences",
+        "No exhaustive character/outfit specification inserted into the conversation",
+        "Acknowledges that atmospheric stillness can sustain an independent Scene"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Can a single fixed shot of a hand holding a glass globe work as a 12-second Scene, without cuts or a plot? Answer in exactly two sentences."
+        }
+      ]
+    },
+    {
+      "id": "regression-state-pool",
+      "split": "development",
+      "category": "regression-visual-state",
+      "operation": "studio_scenes_draft",
+      "focus": "Regression control from earlier focused H3 trial: The water remains completely still while light, people, and sound supply density.",
+      "fidelity_checks": [
+        "Pool water is explicitly motionless with an undisturbed surface",
+        "No water ripples, drops, or splashes introduced",
+        "The scene remains visually/audio rich without requiring action"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "The water is still for the entire shot. The environmental density should come from the atmosphere."
+        }
+      ],
+      "project": {
+        "title": "Empty Pool",
+        "concept": "A quiet observational short.",
+        "style": "Dusky cyan and sodium amber, rich distant sound.",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      },
+      "instruction": "Write one 12-second H3 Scene: a fixed view of an abandoned indoor pool at blue hour. The pool water has a perfectly still, unbroken surface throughout. Reflections of cracked ceiling tiles stay clear. Distant ventilation, a faint electrical hum, and a low city rumble make the moment sonically textured. No character appears."
+    },
+    {
+      "id": "regression-timing-watch",
+      "split": "development",
+      "category": "regression-shot-timing",
+      "operation": "studio_scenes_draft",
+      "focus": "Regression control from earlier focused H3 trial: Exactly 6 consecutive 2-second shots across a 12-second montage.",
+      "fidelity_checks": [
+        "Exactly six labeled shots",
+        "Each shot is 2s long",
+        "Shots cover 0s to 12s contiguously",
+        "Each shot has tactile image and appropriate sound"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "A very fast, tactile macro montage of careful watch repair."
+        }
+      ],
+      "project": {
+        "title": "Watchmaker",
+        "concept": "Precision craft as visual poetry.",
+        "style": "Warm metal, high-contrast close-ups.",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      },
+      "instruction": "Write one 12-second H3 Scene as exactly six 2-second shots. The six shots, in order: tweezers lift a screw, an oiled gear meshes, a hand steadies a wheel, a spring settles, the second hand jumps, the finished watch clicks shut. Each has synchronized fine mechanical audio."
+    },
+    {
+      "id": "regression-dialogue-ferry",
+      "split": "development",
+      "category": "regression-dialogue-notation",
+      "operation": "studio_scenes_draft",
+      "focus": "Regression control from earlier focused H3 trial: Both precise lines are tagged as spoken text, with correct speaker separation.",
+      "fidelity_checks": [
+        "Both original lines preserved exactly",
+        "Spoken words are inside <d> tags and speaker labels outside",
+        "Every <d> has a matching </d>",
+        "Timing fits clip duration"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Their dialogue is the heart of this Scene."
+        }
+      ],
+      "project": {
+        "title": "The Crossing",
+        "concept": "An emotional reunion.",
+        "style": "Natural light and quiet river sound.",
+        "invariants": [
+          {
+            "kind": "character",
+            "title": "Mara",
+            "text": "Woman with short grey hair and red scarf."
+          }
+        ],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      },
+      "instruction": "Write one 10-second Scene on a dawn ferry. Mara asks exactly 'You still remember the bridge?' A man answers exactly 'Every time it rains.' Assign distinct voices, restrained performances and subtle engine rumble."
+    },
+    {
+      "id": "holdout-clothing",
+      "split": "holdout",
+      "category": "visual-completeness",
+      "operation": "studio_scenes_draft",
+      "focus": "An unspecified outfit is completed without changing prescribed headgear or gesture.",
+      "fidelity_checks": [
+        "Two fully visible people each have distinct complete outfits",
+        "The prescribed feathered hat and blue gloves are retained on the right people",
+        "Any invented garments are rendered as definite choices",
+        "Scene remains a rich, independently generatable visual moment"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Make the people fully visible with all their intended clothes, not isolated hats and gloves."
+        }
+      ],
+      "project": {
+        "title": "Parade Morning",
+        "concept": "Street moments before a village parade.",
+        "style": "Soft documentary realism.",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      },
+      "instruction": "Write a 12-second wide H3 Scene: two adults wait outside a bakery before the parade. A woman wears a tall black hat with a single white feather and holds a paper flag; a man in blue leather gloves holds a brass trumpet. Their outfits and physical appearances beyond those distinctive details are unspecified. Make complete, coherent visible choices for both in the Scene prompt."
+    },
+    {
+      "id": "holdout-ensemble",
+      "split": "holdout",
+      "category": "multiple-actors",
+      "operation": "studio_scenes_draft",
+      "focus": "Several distinct people share crowded staging without losing character identities.",
+      "fidelity_checks": [
+        "Four specified musicians all appear at once",
+        "Each musician has a distinguishable appearance, clothing, instrument and position",
+        "Instruments and musical actions remain correctly assigned",
+        "The surrounding audience remains present and vivid"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "It's a whole group portrait. Each principal performer matters."
+        }
+      ],
+      "project": {
+        "title": "Street Quartet",
+        "concept": "Live performances in public squares.",
+        "style": "Summer dusk, naturalistic stage sound.",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      },
+      "instruction": "Write a 15-second continuous H3 Scene of a street quartet performing before a dozen standing spectators in a busy urban square: violinist on the far left, accordionist center-left, cellist center-right, percussionist far right. Invent coherent, distinct complete appearances and outfits for each musician. Keep the visible audience and distinct instrumental sound."
+    },
+    {
+      "id": "holdout-post-event",
+      "split": "holdout",
+      "category": "scene-continuity",
+      "operation": "studio_scenes_draft",
+      "focus": "A new independent Scene begins in changed conditions while retaining long-term identity.",
+      "fidelity_checks": [
+        "Bicycle already has a visibly bent front wheel in first frame",
+        "Bent wheel stays bent",
+        "Invariant bicycle frame details retained",
+        "The fully defined next Scene does not require seeing the previous Scene"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Start after the collision, as a complete fresh render."
+        }
+      ],
+      "project": {
+        "title": "Blue Bicycle",
+        "concept": "Small mishaps during a summer ride.",
+        "style": "Dusty late afternoon.",
+        "invariants": [
+          {
+            "kind": "object",
+            "title": "Bicycle",
+            "text": "An ocean-blue steel-frame commuter bicycle with cream grips and a brown leather saddle."
+          }
+        ],
+        "existingSceneTitles": [
+          "Collision"
+        ],
+        "existingScenes": [
+          {
+            "id": "prior",
+            "title": "Collision",
+            "prompt": "The bicycle hits a curb and its front wheel bends.",
+            "durationSeconds": 7
+          }
+        ],
+        "previousScene": {
+          "id": "prior",
+          "title": "Collision",
+          "prompt": "The bicycle hits a curb and its front wheel bends.",
+          "durationSeconds": 7
+        }
+      },
+      "instruction": "Write the next 10-second H3 Scene, which starts after the collision. The ocean-blue bicycle's front wheel is already bent at the first frame. Its rider gets off and examines the damage on a gravel lane. Preserve the shared frame design, grips and saddle, and complete the rider and surroundings visually."
+    },
+    {
+      "id": "holdout-project-freedom",
+      "split": "holdout",
+      "category": "studio-boundaries",
+      "operation": "studio_project_draft",
+      "focus": "A recurring space does not become a rigid plot or fixed wardrobe across all Scenes.",
+      "fidelity_checks": [
+        "Recurring archive room is concretely recognizable",
+        "Brief Project overview leaves individual Scene stories open",
+        "Invariants describe the room, not every future event",
+        "No permanent wardrobe or event restrictions invented"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "A series of unrelated short scenes set in the same tiny municipal archive: one high arched window, pale brass shelving and blue-green floor tiles. Each episode features different people and situations."
+        }
+      ],
+      "instruction": "Create the Project title, Concept, Visual / atmosphere and relevant recurring Invariants, keeping the location recognizable while leaving story actions and people variable."
+    }
+  ]
+}

@@ -7,6 +7,7 @@ on:
       - 'scripts/studio_guidance_eval.py'
       - 'tests/test_studio_guidance_eval.py'
       - 'tests/test_studio_guidance_focused.py'
+      - 'tests/test_studio_guidance_completeness.py'
       - 'tool/server/llm_guidance.py'
       - 'tool/server/studio_guidance_defaults.py'
   workflow_dispatch:
@@ -27,7 +28,7 @@ jobs:
       - name: Check source and pure evaluation contracts
         run: |
           python -m compileall -q scripts/studio_guidance_eval.py
-          python -m pytest -q tests/test_studio_guidance_eval.py tests/test_studio_guidance_focused.py
+          python -m pytest -q tests/test_studio_guidance_eval.py tests/test_studio_guidance_focused.py tests/test_studio_guidance_completeness.py
       - name: Verify offline request planning without LLM calls
         run: |
           python scripts/studio_guidance_eval.py plan \
@@ -39,3 +40,8 @@ jobs:
             --model 'test::offline' \
             --split development --repeats 1 --seed 42 \
             --output "$RUNNER_TEMP/focused-h3-plan"
+          python scripts/studio_guidance_eval.py plan \
+            --design-dir experiments/studio_guidance/visual_completeness \
+            --model 'test::offline' \
+            --split development --repeats 1 --seed 42 \
+            --output "$RUNNER_TEMP/completeness-plan"

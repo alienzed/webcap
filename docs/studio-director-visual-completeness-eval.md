@@ -10,6 +10,7 @@ The larger research basis is:
 - Sun et al., *T2V-CompBench* (CVPR 2025): tests **consistent and dynamic attribute binding**, spatial and motion relations, action and object interaction, and counts; compositional control is hard. https://openaccess.thecvf.com/content/CVPR2025/html/Sun_T2V-CompBench_A_Comprehensive_Benchmark_for_Compositional_Text-to-video_Generation_CVPR_2025_paper.html
 - *VBench++* (TPAMI 2025): evaluates dimensions such as subject identity consistency, motion smoothness and spatial relationships. https://pubmed.ncbi.nlm.nih.gov/41247905/
 - Cheng et al., *VPO* (2025): prompt optimization must preserve author intent; changing prompts can lose important details. https://arxiv.org/abs/2503.20491
+- MiniMax H3 official documentation (2026): multimodal context, synchronized audio and up-to-15-second independently generated clips. MiniMax's video prompting guidance explicitly calls for consistent character and speaker descriptions across multiple shots. https://www.minimax.io/blog/minimax-h3 and https://code.minimax.io/tools/minimax-h3-video
 - Existing WebCap specialist guidance `task.visual_direction` already says **“Be exceptionally thorough and specific about the visuals that will actually be rendered.”** That exact phrase is one experimental arm, not a new creative claim.
 
 These are **research-motivated hypotheses**, not proof that any wording improves MiniMax H3. A Scene-writing Director model and the downstream video generator have different error modes.

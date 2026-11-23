@@ -405,6 +405,14 @@ def validate_config_payload(payload):
     if any(key not in allowed or not isinstance(value, str) for key, value in guidance.items()):
         raise ValueError("Config.generation_model_guidance must contain text for supported generation models.")
     out["generation_model_guidance"] = {key: value for key, value in guidance.items() if value.strip()}
+    from .llm_guidance import MODULE_IDS
+    guidance_overrides = out.get("llm_guidance", {})
+    if not isinstance(guidance_overrides, dict):
+        raise ValueError("Config.llm_guidance must be an object.")
+    if any(key not in MODULE_IDS or not isinstance(value, str) for key, value in guidance_overrides.items()):
+        raise ValueError("Config.llm_guidance must contain text for supported guidance modules.")
+    # Empty editor values reset to the built-in default; never persist empty prompts.
+    out["llm_guidance"] = {key: value for key, value in guidance_overrides.items() if value.strip()}
     out["storyboard"] = {"director": normalized_director}
 
     analysis = out.get("analysis")

@@ -291,6 +291,7 @@ def prepare_review(args):
         cards.append({
             "blind_id": blind_id, "scenario": case["id"], "operation": case["operation"],
             "category": case["category"], "fidelity_checks": case.get("fidelity_checks", []),
+            "fidelity_results": [None] * len(case.get("fidelity_checks", [])),
             "review_focus": case["focus"], "author_messages": case["history"],
             "author_direction": case.get("instruction"),
             "response": (record.get("result") or {}).get("text", ""),
@@ -325,6 +326,10 @@ def report(args):
         record = by_index[identity["record_index"]]
         if identity["case_id"] != record["case_id"] or identity["package_id"] != record["package_id"]:
             raise ValueError("Review-to-trial identity does not match.")
+        checks = cases[record["case_id"]].get("fidelity_checks", [])
+        check_results = card.get("fidelity_results", [])
+        if len(checks) != len(check_results) or any(value is not None and type(value) is not bool for value in check_results):
+            raise ValueError("Each fidelity result must be true, false, or blank: " + card["blind_id"])
         for field in RATING_FIELDS:
             value = card[field]
             if value is not None and (type(value) not in (int, float) or not 1 <= value <= 5):
@@ -354,6 +359,12 @@ def report(args):
             "avg_actual_revision_rounds": average([
                 card["actual_revision_rounds"] for card, rec in pairs if card["actual_revision_rounds"] is not None
             ]),
+            "literal_checks_reviewed": sum(value is not None for card, rec in pairs for value in card.get("fidelity_results", [])),
+            "literal_checks_pass_rate": (
+                round(sum(value is True for card, rec in pairs for value in card.get("fidelity_results", [])) /
+                      sum(value is not None for card, rec in pairs for value in card.get("fidelity_results", [])), 3)
+                if any(value is not None for card, rec in pairs for value in card.get("fidelity_results", [])) else None
+            ),
             "avg_elapsed_seconds": average([rec["elapsed_seconds"] for card, rec in pairs if rec["status"] == "completed"]),
         }
         summary.append(row)

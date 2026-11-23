@@ -534,10 +534,11 @@ function appSettingsLlamaAction(action) {
   });
 }
 
-function openAppSettingsModal() {
+function openAppSettingsModal(tabName, guidanceModuleId) {
   if (!ui.appSettingsModalEl) return;
+  if (guidanceModuleId) appSettingsGuidanceSelectedId = String(guidanceModuleId);
   setAppSettingsStatus('Loading settings...', false);
-  setAppSettingsTab(appSettingsActiveTab, false);
+  setAppSettingsTab(tabName || appSettingsActiveTab, false);
   ui.appSettingsModalEl.classList.remove('hidden');
   refreshAppSettingsLlamaRuntime();
   ui.appSettingsModalEl.setAttribute('aria-hidden', 'false');

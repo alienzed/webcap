@@ -3212,6 +3212,7 @@
                     <button id="app-settings-tab-models" type="button" class="app-settings-tab" data-app-settings-tab="models" role="tab" aria-selected="false" aria-controls="app-settings-panel-models" tabindex="-1">Models</button>
                     <button id="app-settings-tab-training" type="button" class="app-settings-tab" data-app-settings-tab="training" role="tab" aria-selected="false" aria-controls="app-settings-panel-training" tabindex="-1">Training</button>
                     <button id="app-settings-tab-director" type="button" class="app-settings-tab" data-app-settings-tab="director" role="tab" aria-selected="false" aria-controls="app-settings-panel-director" tabindex="-1">Director</button>
+                    <button id="app-settings-tab-guidance" type="button" class="app-settings-tab" data-app-settings-tab="guidance" role="tab" aria-selected="false" aria-controls="app-settings-panel-guidance" tabindex="-1">LLM Guidance</button>
                     <button id="app-settings-tab-system" type="button" class="app-settings-tab" data-app-settings-tab="system" role="tab" aria-selected="false" aria-controls="app-settings-panel-system" tabindex="-1">Advanced</button>
                 </div>
                 <div class="app-settings-tab-panels">
@@ -3426,16 +3427,7 @@
                             <p class="app-settings-help">Local models come from <code>&lt;Models Root&gt;/text_encoders</code>. Director model selection remains shared across Director-enabled workspaces.</p>
                             <p class="app-settings-help">Use <strong>Save + Reboot</strong> after changing Director runtime settings.</p>
                         </section>
-                        <section class="app-settings-section">
-                            <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Production Playbook</div>
-                                <div class="app-settings-section-copy">Your practical strengths, weaknesses, techniques, and lessons for each video-generation model. Studio Director reads the selected playbook when you converse; the built-in technical prompt contract stays separate. These notes are not silently appended to generation prompts.</div>
-                            </div>
-                            <div class="app-settings-form-grid">
-                                <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">MiniMax H3 — working methods &amp; lessons</span><textarea id="app-settings-model-guidance-minimax_h3" rows="7" placeholder="Reliable actions, known failure modes, techniques that worked in your Takes…"></textarea></label>
-                                <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Krea 2</span><textarea id="app-settings-model-guidance-krea2_raw" rows="3" placeholder="Optional model-specific guidance"></textarea></label>
-                            </div>
-                        </section>
+
                         <section class="app-settings-section" id="caption-assist-settings">
                             <div class="app-settings-section-header">
                                 <div class="app-settings-section-title">Caption Assist</div>
@@ -3457,6 +3449,41 @@
                                 <span class="app-settings-field-label">Groups not yet in the template</span>
                                 <div id="app-settings-caption-sequence-groups" class="app-settings-caption-sequence-groups"></div>
                                 <span class="app-settings-note">Click a group to insert its template placeholder at the cursor, or append it.</span>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div id="app-settings-panel-guidance" class="app-settings-panel hidden" data-app-settings-panel="guidance" role="tabpanel" aria-labelledby="app-settings-tab-guidance">
+                        <section class="app-settings-section">
+                            <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">LLM Guidance</div>
+                                <div class="app-settings-section-copy">Edit the instructions that actually reach the models. Built-in defaults remain available; custom text replaces that module's default rather than stacking more instructions onto it.</div>
+                            </div>
+                            <div class="app-settings-form-grid">
+                                <label class="app-settings-field app-settings-field-wide">
+                                    <span class="app-settings-field-label">Guidance module</span>
+                                    <select id="app-settings-guidance-module"></select>
+                                </label>
+                                <p id="app-settings-guidance-description" class="app-settings-help"></p>
+                                <label class="app-settings-field app-settings-field-wide">
+                                    <span class="app-settings-field-label">Model-facing instructions</span>
+                                    <textarea id="app-settings-guidance-text" rows="14" spellcheck="false" placeholder="Choose a guidance module to edit its instructions."></textarea>
+                                </label>
+                                <div class="app-settings-section-header">
+                                    <button id="app-settings-guidance-reset" type="button">Reset selected module to default</button>
+                                    <span id="app-settings-guidance-state" class="app-settings-note"></span>
+                                </div>
+                            </div>
+                            <p class="app-settings-help">Profiles govern Studio Chat and Write. H3 creative knowledge is available during creative work; H3 prompt structure is supplied only for prompt-writing tasks. Technical schemas, target selection, saving and workflow contracts remain managed by WebCap. Saves apply to new LLM requests without restarting a model.</p>
+                        </section>
+                        <section class="app-settings-section">
+                            <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">Production Playbook</div>
+                                <div class="app-settings-section-copy">Your practical strengths, weaknesses, techniques, and lessons for each video-generation model. Saved empirical notes are supplied to relevant generation-model authoring tasks; the technical prompt contract stays separate. These notes are not silently appended to generation prompts.</div>
+                            </div>
+                            <div class="app-settings-form-grid">
+                                <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">MiniMax H3 — working methods &amp; lessons</span><textarea id="app-settings-model-guidance-minimax_h3" rows="7" placeholder="Reliable actions, known failure modes, techniques that worked in your Takes…"></textarea></label>
+                                <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Krea 2</span><textarea id="app-settings-model-guidance-krea2_raw" rows="3" placeholder="Optional model-specific guidance"></textarea></label>
                             </div>
                         </section>
                     </div>

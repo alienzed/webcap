@@ -4245,6 +4245,7 @@
     });
     document.addEventListener('pointerdown', function (event) {
       if (!state.open || state.pinned || document.querySelector('dialog[open]') ||
+          document.querySelector('#app-settings-modal[aria-hidden="false"]') ||
           drawer.contains(event.target) || toggle.contains(event.target)) return;
       setOpen(false);
     });

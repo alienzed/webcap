@@ -119,6 +119,8 @@ def resolve_packages(packages, baseline_manifest=None):
         assert isinstance(role, str) and role.strip()
         assert isinstance(expertise, str)
         addendum = item.get("authoring_addendum", "")
+        if frozen and item.get("freeze_addendum"):
+            addendum = frozen["packages"][item["id"]].get("authoring_addendum", "")
         if not isinstance(addendum, str):
             raise ValueError("Authoring addendum must be a text string.")
         results[item["id"]] = {

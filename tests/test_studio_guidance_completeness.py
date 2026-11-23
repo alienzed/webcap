@@ -24,7 +24,7 @@ def test_six_packages_share_the_same_core_and_use_concise_behavioral_language():
     assert packages[0]["freeze_addendum"] is True
     resolved = evaluation.resolve_packages(packages)
     baseline = resolved["d-control"]
-    assert baseline["role"] == evaluation.repo_default("studio.classic")
+    assert baseline["role"] == evaluation.read_json(evaluation.DESIGN_DIR / "frozen-d-20261122.json")["role"]
     assert baseline["expertise"] == evaluation.repo_default("h3.toolkit")
     assert baseline["creative_addendum"] == baseline["authoring_addendum"] == ""
     for variant in resolved.values():

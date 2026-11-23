@@ -27,9 +27,10 @@
       "id": "d-baseline",
       "revision": 1,
       "hypothesis": "Compare candidates with the current repository default Classic + H3 toolkit.",
-      "source": "repository_default",
+      "source": "frozen_default",
       "profile": "studio.classic",
-      "toolkit": "h3.toolkit"
+      "toolkit": "h3.toolkit",
+      "snapshot": "frozen-d-20261122.json"
     }
   ]
 }

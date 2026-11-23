@@ -22,7 +22,7 @@ The existing `generation_model_guidance` remains the empirical playbook in app c
 
 ## Ownership
 
-- `tool/server/studio_guidance_defaults.py` contains the four original profile defaults (preserved).
+- `tool/server/studio_guidance_defaults.py` contains the four versioned profile defaults. Classic v3 retains D plus the [checked coherence sentence](studio-director-creative-charter-results.md); Current, Imaginative and Render-focused retain their previous wording and versions.
 - `tool/server/llm_guidance.py` owns the catalog, H3 creative toolkit, standalone specialist role defaults, and replacement lookup.
 - `docs/mmh3-prompt-runtime-context.txt` remains the canonical H3 prompt reference default. `docs/storyboard-director-context.txt` remains the Storyboard Director default.
 - `config.json.llm_guidance` contains only sparse text overrides, validated against known IDs.

@@ -88,6 +88,10 @@ def load_design(design_dir=DESIGN_DIR):
     assert len({item["id"] for item in cases}) == len(cases)
     assert len({item["id"] for item in packages}) == len(packages)
     assert cases and packages
+    for item in packages:
+        if item.get("source") == "frozen_default":
+            snapshot = read_json(design_dir / item["snapshot"])
+            item["role"], item["expertise"] = snapshot["role"], snapshot["expertise"]
     for item in cases:
         assert item["operation"] in {"studio_chat", "studio_project_draft", "studio_scenes_draft"}
         assert item["split"] in {"development", "holdout"}
@@ -109,10 +113,12 @@ def resolve_packages(packages, baseline_manifest=None):
     frozen = baseline_manifest or {}
     results = {}
     for item in packages:
-        if item.get("source") == "repository_default":
+        if item.get("source") in {"repository_default", "frozen_default"}:
             if frozen:
                 previous = frozen["packages"][item["id"]]
                 role, expertise = previous["role"], previous["expertise"]
+            elif item["source"] == "frozen_default":
+                role, expertise = item["role"], item["expertise"]
             else:
                 role, expertise = repo_default(item["profile"]), repo_default(item["toolkit"])
         else:

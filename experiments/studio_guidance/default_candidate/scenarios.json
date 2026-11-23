@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "experiment": "practical-creative-default-v1",
+  "description": "Three fresh post-selection usability and contribution probes. Not the heldouts used for the original three-way study.",
+  "cases": [
+    {
+      "id": "default-chat-florist",
+      "split": "development",
+      "category": "critical-collaboration",
+      "operation": "studio_chat",
+      "focus": "An independent, proportionate artistic recommendation serving the stated feeling; ambition is chosen rather than automatically affirmed or reduced.",
+      "fidelity_checks": [
+        "Responds to the stated quiet anticipation",
+        "Makes a concrete keep/change recommendation with a reason",
+        "Uses natural conversation rather than unsolicited Project fields"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "A 10-second portrait of a florist opening the shop should feel like quiet anticipation. My draft has three time jumps, a shouted phone call and a fast camera orbit. What would you keep or change, and why?"
+        }
+      ]
+    },
+    {
+      "id": "default-project-fabric",
+      "split": "development",
+      "category": "flexible-project",
+      "operation": "studio_project_draft",
+      "focus": "An inspiring flexible map with meaningful requested fields, a shared visible motif and intentional variation preserved.",
+      "fidelity_checks": [
+        "Meaningful title, concept, visual atmosphere and invariants supplied",
+        "Different places, moods and pacing remain open",
+        "One recurring striped ribbon supplies continuity without forcing a story or house mood"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Create a collection of independent short films about fabric moving through different public spaces. The shared motif is a long red-and-cream striped ribbon. Some films can be playful and exuberant; others grand or quietly contemplative. Locations and people vary freely. I want a recognizable collection with real formal variety."
+        }
+      ],
+      "instruction": "Create one Project with a distinctive title, an inspiring Concept, developed Visual / atmosphere and only enduring Invariants. Give complete values for the requested fields."
+    },
+    {
+      "id": "default-scene-potter",
+      "split": "development",
+      "category": "continuous-audiovisual-work",
+      "operation": "studio_scenes_draft",
+      "focus": "A coherent, concrete continuous performance with chosen identity and clothing, purposeful physical sound and the requested duration.",
+      "fidelity_checks": [
+        "One 13-second Scene",
+        "Continuous fixed-camera work with beginning, shaping and hands released",
+        "Bright airy room; work and room sounds carry the experience",
+        "Chosen potter identity/clothing remain coherent"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "I want the satisfaction to come from a physical process finding its shape, with a patient camera and close attention to sound."
+        }
+      ],
+      "instruction": "Write one complete 13-second H3 Scene: a potter centers an uneven lump of clay on a spinning wheel, steadies it into a low bowl, and removes their hands while the wheel keeps turning. The room is bright and airy. Use one continuous fixed-camera shot. Let the soft scraping of clay, water and room sounds carry the experience. Choose the potter’s identity and clothing and keep them consistent.",
+      "project": {
+        "title": "Working Forms",
+        "concept": "Independent portraits of physical craft, with each material and action determining its own rhythm.",
+        "style": "Tactile naturalism with an alert, patient camera.",
+        "invariants": []
+      }
+    }
+  ]
+}

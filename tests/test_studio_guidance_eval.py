@@ -31,15 +31,27 @@ def test_versioned_design_contains_four_distinct_packages_and_twelve_grounded_ca
     ] < 600
 
 
-def test_explicit_packages_are_independent_and_baseline_uses_repo_defaults(design):
+def test_explicit_packages_are_independent_and_baseline_uses_historical_defaults(design):
     packages, cases = design
     resolved = evaluation.resolve_packages(packages)
     assert resolved["a-minimal"]["role"] == resolved["c-principles"]["role"]
     assert resolved["a-minimal"]["expertise"] == ""
     assert resolved["b-medium"]["expertise"] in resolved["c-principles"]["expertise"]
-    assert resolved["d-baseline"]["role"] == evaluation.repo_default("studio.classic")
+    assert resolved["d-baseline"]["role"] == evaluation.read_json(
+        evaluation.DESIGN_DIR / "frozen-d-20261122.json")["role"]
     assert resolved["d-baseline"]["expertise"] == evaluation.repo_default("h3.toolkit")
     assert all(resolved[key]["sha256"] for key in resolved)
+
+
+def test_historical_designs_remain_frozen_after_production_defaults_change(monkeypatch):
+    folders = [evaluation.DESIGN_DIR, *(evaluation.DESIGN_DIR / name for name in
+               ("focused_h3", "visual_completeness", "creative_charter"))]
+    before = [evaluation.resolve_packages(evaluation.load_design(folder)[0]) for folder in folders]
+    monkeypatch.setattr(evaluation, "repo_default", lambda module: "Changed production " + module)
+    after = [evaluation.resolve_packages(evaluation.load_design(folder)[0]) for folder in folders]
+    assert after == before
+    for packages, control in zip(after, ("d-baseline", "d-control", "d-control", "d-frozen")):
+        assert packages[control]["sha256"] == "7861b0cce4980a6343d0edea254825177c66cd7ef720cb342b71573a5e0a4681"
 
 
 def test_fixed_request_scope_matches_chat_and_write_contracts(design):

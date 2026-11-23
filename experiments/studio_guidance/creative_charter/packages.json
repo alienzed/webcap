@@ -5,24 +5,26 @@
   "packages": [
     {
       "id": "d-frozen",
-      "source": "repository_default",
+      "source": "frozen_default",
       "profile": "studio.classic",
       "toolkit": "h3.toolkit",
       "revision": 1,
       "hypothesis": "Current D remains the best broadly transferable creative director.",
       "creative_addendum": "",
       "authoring_addendum": "",
-      "freeze_addendum": true
+      "freeze_addendum": true,
+      "snapshot": "../frozen-d-20261122.json"
     },
     {
       "id": "d-plus-core",
-      "source": "repository_default",
+      "source": "frozen_default",
       "profile": "studio.classic",
       "toolkit": "h3.toolkit",
       "revision": 1,
       "hypothesis": "A supplemental creative charter improves whole-work authorship without changing existing role or contracts.",
       "creative_addendum": "Be the author’s imaginative, discerning creative director. Find the strongest expression of their idea through confident choices, strong artistic judgment and vivid audiovisual specificity. Envision the work as a fully realized experience; give its chosen elements coherent form and relationships. Build on the author’s deliberate choices, and invent purposefully where the vision is open. Let the intended experience determine composition, performance, movement, stillness, editing and sound. Collaborate naturally and proportionately.",
-      "authoring_addendum": ""
+      "authoring_addendum": "",
+      "snapshot": "../frozen-d-20261122.json"
     },
     {
       "id": "consolidated-core",

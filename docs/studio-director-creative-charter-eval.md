@@ -1,11 +1,13 @@
 # Studio Director creative-charter comparison — isolated live protocol
 
-**Status:** designed, not validated. No new model comparisons have been run, no H3 renders, and no production guidance change.
+**Status:** live comparison completed, with mixed findings and no universal charter winner. The author subsequently requested applying practical lessons to the real default. Classic now retains D plus one separately checked coherence sentence. See [actual results, limitations and full active wording](studio-director-creative-charter-results.md). No H3 renders were feasible; ComfyUI was unavailable. PR #1099's 86 calls were not repeated.
+
+The preference workflow below was the original proposed review protocol. No human ratings were requested or supplied; its blank workbooks are optional and were not a prerequisite for the author's requested implementation. Actual conclusions distinguish operation diagnostics from Codex's unscored observations. They do not claim human preference validation.
 
 ## Purpose and controlled variants
 
 Test transferable creative-director judgment rather than accumulating scene-specific checklists. `packages.json` defines:
-- `d-frozen`: exact unchanged Classic (D) role + H3 toolkit.
+- `d-frozen`: exact historical Classic (D) role + H3 toolkit, now resolved from `experiments/studio_guidance/frozen-d-20261122.json` so subsequent production defaults cannot move the control.
 - `d-plus-core`: same D plus the proposed charter as an all-operation creative addendum.
 - `consolidated-core`: replace D's overlapping role introduction, creative-scope paragraph, and Classic profile paragraph with the charter. Preserve D's **WEBCAP MATERIAL** and **COLLABORATION** sections verbatim, including Project/Scene/Invariants, standalone Scenes, and explicit Write boundaries. The shared H3 toolkit is identical.
 
@@ -23,7 +25,7 @@ There are 12 fresh development and four fresh held-out cases across Chat, Projec
 
 Run only where the real Director endpoint is accessible. Use a newly named output folder for every invocation. Set `BASE_URL` to the running WebCap URL; these commands assume localhost:5000. A `plan` is purely offline; `run` queues actual configured models.
 
-**Gemma pilot: 9 calls** — three representative cases, one pass, all three packages:
+**Optional pilot reference: 9 calls** — three representative cases, one pass, all three packages. The completed execution used a split nine-call Nullguard pilot and proceeded directly on Gemma's established accessibility; the command below is a reference, not another requested run:
 
 ```sh
 python scripts/studio_guidance_eval.py run \
@@ -65,8 +67,8 @@ On development evidence, shortlist only promising charter variants and compare a
 2. **Two author-approved examples:** test no examples versus two contrasting examples, separately from clause ablations. Choose one expansive and one deliberately restrained artistic case. Obtain author approval before calling either a quality reference. Neither example should be an existing evaluation brief. Avoid turning them into fixed visual templates.
 3. **Profile-transfer check:** the repository currently provides Classic, Current/editorial, Imaginative, and Render-focused. After selecting a promising charter, test whether it reinforces or homogenizes these *distinct postures*. Compare each original profile to its own charter treatment on a small fresh, matched subset across Chat/Project/Scene. Keep the baseline four profiles untouched. Candidate profile nudges should follow evidence, not contaminate the first D three-arm test. Current may benefit from calibrated critique; Imaginative from purposeful novelty; Render-focused from comprehensive realized specificity; Classic from balanced direction.
 
-Do not promote based on literal checks, small-model weaknesses, verbosity, or one flattering example. Before production adoption, review actual H3 renders for selected Scene winners under matched generation settings and check user-valued quality, identity, action, audio and continuity.
+Literal checks, small-model weaknesses, verbosity or one flattering example do not validate a creative winner. Render-quality validation requires actual matched H3 outputs and assessment of user-valued quality, identity, action, audio and continuity. The author's later request authorized the limited default refinement documented in the results; it does not turn this text-only study into render-quality validation.
 
 ## Repository safeguards
 
-The new design is confined to `experiments/studio_guidance/creative_charter/` and separate offline-preference script/tests. All older experiments remain in place. CI performs **offline** syntax, request-assembly, immutable-guidance and blind-review tests and a dry-run plan only. Do not add CI live endpoints, model calls or persistence actions. Do not modify `studio_guidance_defaults.py`, `llm_guidance.py` or normal Studio UI/Settings until evidence and separate author approval support promotion.
+The original design remains confined to `experiments/studio_guidance/creative_charter/` and offline-preference script/tests. All older experiments retain their resolved content; their D sources now use the frozen historical snapshot. CI performs **offline** syntax, request-assembly, immutable-guidance and blind-review tests and dry-run plans only, with no live endpoints, model calls or persistence actions. Following the author's explicit request, the separate `default_candidate/` and `coherence_clause/` checks informed the limited Classic default refinement documented in the results. Other profiles, `llm_guidance.py`, Studio UI/Settings behavior and H3 contracts were preserved. A default decision on this evidence is not rendered-quality or human-preference validation.

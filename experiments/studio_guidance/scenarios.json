@@ -1,0 +1,224 @@
+{
+  "version": 1,
+  "description": "Twelve synthetic Studio Chat and explicit Write cases, including four held out from iterative package tuning.",
+  "cases": [
+    {
+      "id": "chat-tableau",
+      "split": "development",
+      "operation": "studio_chat",
+      "category": "atmosphere",
+      "focus": "A rich static image and layered sound without an invented event.",
+      "history": [
+        {
+          "role": "user",
+          "content": "I'm imagining a 12-second view of an abandoned swimming pool at blue hour. The water is still. No character enters. Can you propose one rich audiovisual treatment, concise but specific?"
+        }
+      ]
+    },
+    {
+      "id": "chat-montage",
+      "split": "development",
+      "operation": "studio_chat",
+      "category": "editing",
+      "focus": "Treats one-to-two-second montage as an available choice rather than a universal rule.",
+      "history": [
+        {
+          "role": "user",
+          "content": "I like the rhythmic, short-shot montages in Requiem for a Dream. Could a 15-second sequence make making espresso feel intense? Give me a specific shot sequence with audio rhythm, not a generic summary."
+        }
+      ]
+    },
+    {
+      "id": "chat-dialogue",
+      "split": "development",
+      "operation": "studio_chat",
+      "category": "dialogue",
+      "focus": "Keeps exact words, distinct voices, sound, and staging.",
+      "history": [
+        {
+          "role": "user",
+          "content": "A girl quietly says 'I kept the blue one.' Her father replies 'Then it was always yours.' They are at a kitchen table. Which shot and sound choices would make this dialogue land in 9 seconds? Keep those exact words."
+        }
+      ]
+    },
+    {
+      "id": "chat-judgment",
+      "split": "development",
+      "operation": "studio_chat",
+      "category": "creative-judgment",
+      "focus": "Useful judgment and a concrete recommendation, not automatic agreement.",
+      "history": [
+        {
+          "role": "user",
+          "content": "I'm thinking of a 15-second opening with three visual ideas: a crow watching traffic, a distant train, and a handwritten apology. I'm considering squeezing in a chase too. What would you recommend and why?"
+        }
+      ]
+    },
+    {
+      "id": "chat-invariants",
+      "split": "development",
+      "operation": "studio_chat",
+      "category": "project-ontology",
+      "focus": "Correctly scopes recurring identities and Scene-local variations.",
+      "history": [
+        {
+          "role": "user",
+          "content": "I'm making independent clips about the same masked violinist in an emerald coat and the same narrow copper staircase. Each clip uses a different musical style; sometimes it rains. Which details belong in Project Invariants, Visual / atmosphere, and individual Scenes?"
+        }
+      ]
+    },
+    {
+      "id": "project-sound-series",
+      "split": "development",
+      "operation": "studio_project_draft",
+      "category": "project-writing",
+      "focus": "Creates coherent Project fields with room for flexible sound-driven clips.",
+      "history": [
+        {
+          "role": "user",
+          "content": "I want a collection of tiny audiovisual poems about city sounds. The same old yellow tram appears sometimes, but many clips will have no people or story."
+        }
+      ],
+      "instruction": "Create a useful Project title, Concept, Visual / atmosphere, and only recurring Invariants that would help independent generations. The Project can include distinct sound-led moments."
+    },
+    {
+      "id": "scene-dense-montage",
+      "split": "development",
+      "operation": "studio_scenes_draft",
+      "category": "scene-writing",
+      "focus": "Clear timed shots with dense, rhythmic visuals and synchronized audio at 12 seconds.",
+      "history": [
+        {
+          "role": "user",
+          "content": "This one is deliberately very fast, like a tactile montage that makes repairing a watch feel monumental."
+        }
+      ],
+      "project": {
+        "title": "Watchmaker",
+        "concept": "A tactile celebration of craft and precision.",
+        "style": "Macro details, graphite shadows, warm brass highlights.",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      },
+      "instruction": "Write one 12-second H3 Scene with 1–2-second shots: tweezers lift a tiny screw, an oiled gear turns, a fingertip brushes a wheel, a watch ticks and the finished mechanism catches light. Use precise synchronized mechanical sound. Keep the sequence readable and richly layered."
+    },
+    {
+      "id": "scene-spoken",
+      "split": "development",
+      "operation": "studio_scenes_draft",
+      "category": "dialogue-writing",
+      "focus": "Exact distinct spoken lines, speaker identity, delivery and pacing in a viable 10-second Scene.",
+      "history": [
+        {
+          "role": "user",
+          "content": "The two speakers' lines are the emotional center; the visual treatment should support them."
+        }
+      ],
+      "project": {
+        "title": "After the storm",
+        "concept": "A meeting on a ferry after a long separation.",
+        "style": "Muted dawn, naturalistic acting, gentle engine rumble.",
+        "invariants": [
+          {
+            "kind": "character",
+            "title": "Mara",
+            "text": "A woman in her fifties with a short grey bob and red wool scarf."
+          }
+        ],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      },
+      "instruction": "Write one 10-second H3 Scene. Mara says exactly 'You still remember the bridge?' An adult man answers exactly 'Every time it rains.' Keep natural speaker identity and emotional delivery. Their ferry is moving gently at dawn, with realistic background sound."
+    },
+    {
+      "id": "project-abstract",
+      "split": "holdout",
+      "operation": "studio_project_draft",
+      "category": "abstract-project",
+      "focus": "Describes a flexible nonnarrative collection without forcing protagonists or plot.",
+      "history": [
+        {
+          "role": "user",
+          "content": "I want a Project of short abstract films: iridescent soap films, caustic reflections, dust in light, and close sounds. The clips need no common character or chronology."
+        }
+      ],
+      "instruction": "Create the Project fields for this abstract audiovisual collection. Preserve the independence of each clip, a coherent visual vocabulary, and intentionally flexible materials."
+    },
+    {
+      "id": "scene-state-continuity",
+      "split": "holdout",
+      "operation": "studio_scenes_draft",
+      "category": "continuity",
+      "focus": "Starts with post-change physical state rather than accidentally reverting it; independent scene render.",
+      "history": [
+        {
+          "role": "user",
+          "content": "The previous shot ended with the umbrella turned inside-out. The next Scene should begin from that changed state."
+        }
+      ],
+      "project": {
+        "title": "Rooftop Wind",
+        "concept": "An urban weather vignette.",
+        "style": "Cold grey light, gusting wind and wet concrete.",
+        "invariants": [],
+        "existingSceneTitles": [
+          "Umbrella flips"
+        ],
+        "existingScenes": [
+          {
+            "id": "prior",
+            "title": "Umbrella flips",
+            "prompt": "A gust turns a red umbrella inside-out as the person reaches the roof edge.",
+            "durationSeconds": 8
+          }
+        ],
+        "previousScene": {
+          "id": "prior",
+          "title": "Umbrella flips",
+          "prompt": "A gust turns a red umbrella inside-out as the person reaches the roof edge.",
+          "durationSeconds": 8
+        }
+      },
+      "instruction": "Write the next 8-second Scene. The same person already holds the red umbrella inside-out from the first frame and struggles to close it; the damaged ribs remain visibly bent while rain lashes the rooftop. Make the initial condition explicit and add precise weather sound."
+    },
+    {
+      "id": "scene-ambient-density",
+      "split": "holdout",
+      "operation": "studio_scenes_draft",
+      "category": "visual-density",
+      "focus": "Creates a visually dense single take without compelled progression or extra cuts.",
+      "history": [
+        {
+          "role": "user",
+          "content": "Keep the composition a single unbroken shot. The density should come from the environment, not plot."
+        }
+      ],
+      "project": {
+        "title": "Winter Station",
+        "concept": "A series of observed places with rich sound.",
+        "style": "35mm look, restrained movements, winter dusk.",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      },
+      "instruction": "Write one 15-second H3 Scene in a continuous wide shot of a train platform with drifting snow, warm window reflections, passengers waiting at different depths, vapor and intricate station sound. Keep the framing fixed and the scene observational."
+    },
+    {
+      "id": "chat-brief",
+      "split": "holdout",
+      "operation": "studio_chat",
+      "category": "conversation",
+      "focus": "Short, natural answer that still contributes specific creative insight.",
+      "history": [
+        {
+          "role": "user",
+          "content": "Do you think a single extreme close-up of a hand releasing a paper boat could carry an entire 15-second Scene? Just give me your view in two sentences."
+        }
+      ]
+    }
+  ]
+}

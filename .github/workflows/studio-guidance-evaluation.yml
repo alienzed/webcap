@@ -1,0 +1,35 @@
+name: Studio guidance evaluation harness
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/studio-guidance-evaluation.yml'
+      - 'experiments/studio_guidance/**'
+      - 'scripts/studio_guidance_eval.py'
+      - 'tests/test_studio_guidance_eval.py'
+      - 'tool/server/llm_guidance.py'
+      - 'tool/server/studio_guidance_defaults.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guidance-harness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install test runner
+        run: python -m pip install pytest
+      - name: Check source and pure evaluation contracts
+        run: |
+          python -m compileall -q scripts/studio_guidance_eval.py
+          python -m pytest -q tests/test_studio_guidance_eval.py
+      - name: Verify offline request planning without LLM calls
+        run: |
+          python scripts/studio_guidance_eval.py plan \
+            --model 'test::offline' \
+            --split development --repeats 1 --seed 42 \
+            --output "$RUNNER_TEMP/guidance-plan"

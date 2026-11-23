@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "experiment": "h3-scene-authoring-focused-v1",
+  "description": "Same Classic role + H3 toolkit and unchanged H3 technical reference for all four packages; only one brief Scene Write addendum varies.",
+  "packages": [
+    {
+      "id": "d-control",
+      "revision": 1,
+      "hypothesis": "Current Classic + H3 toolkit and the unchanged H3 reference are sufficient.",
+      "source": "repository_default",
+      "profile": "studio.classic",
+      "toolkit": "h3.toolkit",
+      "authoring_addendum": ""
+    },
+    {
+      "id": "state-anchor",
+      "revision": 1,
+      "hypothesis": "A short affirmative instruction about the image's starting and sustained states improves literal state preservation.",
+      "source": "repository_default",
+      "profile": "studio.classic",
+      "toolkit": "h3.toolkit",
+      "authoring_addendum": "Make author-specified visual states explicit at their first visible frame. Describe fixed conditions in directly observable terms and carry them through every relevant timed shot. When a state changes, describe its new appearance as the starting condition for the next shot. Give deliberately still elements concrete visual stability and place surrounding activity in other elements."
+    },
+    {
+      "id": "timed-cuts",
+      "revision": 1,
+      "hypothesis": "Explicit shot interval accounting improves the requested 1–2-second montage rhythm.",
+      "source": "repository_default",
+      "profile": "studio.classic",
+      "toolkit": "h3.toolkit",
+      "authoring_addendum": "Translate the author's requested cut lengths into numbered, consecutive [Shot N] intervals. Give each requested 1–2-second shot an explicit start and end time of that length, covering the entire clip from 0s through durationSeconds. Associate a clear visual beat and synchronized audio with each interval. Make the end of one interval the start of the next."
+    },
+    {
+      "id": "spoken-lines",
+      "revision": 1,
+      "hypothesis": "A positive miniature notation example improves exact dialogue and H3 tag placement.",
+      "source": "repository_default",
+      "profile": "studio.classic",
+      "toolkit": "h3.toolkit",
+      "authoring_addendum": "Represent each spoken line inside its timed shot with the speaker identity and performance outside the dialogue tag, and the exact spoken words inside the complete H3 tag. Example: Speaker 1 (softly, breathless): <d>[English] We made it.</d> Keep the author's wording, language, speaker assignment and punctuation, with enough on-screen time for the delivery."
+    }
+  ]
+}

@@ -96,12 +96,13 @@ def test_preference_review_is_blinded_requires_real_receipts_and_keeps_gaps(tmp_
     records = evaluator.read_jsonl(folder / "trials.jsonl")
     for row in records:
         row["status"] = "completed"
-        row["result"] = {"text": "Controlled synthetic response " + row["package_id"]}
+        row["result"] = {"text": "Controlled synthetic response " + str(row["index"])}
     evaluator.save_jsonl(folder / "trials.jsonl", records)
     preferences.build(folder)
     cards = evaluator.read_jsonl(folder / "preference_cards.jsonl")
     assert len(cards) == 3 * 2
     assert all("d-frozen" not in json.dumps(card) for card in cards)
+    assert all(set(card["left"]) == {"response", "completed", "status", "error"} for card in cards)
     assert all(card["preference"] is None for card in cards)
     with pytest.raises(ValueError, match="exists"):
         preferences.build(folder)
@@ -111,8 +112,55 @@ def test_preference_review_is_blinded_requires_real_receipts_and_keeps_gaps(tmp_
     assert all(row["rated"] == 0 and row["unrated"] == 2 for row in report["pairwise"])
     cards[0]["preference"] = "left"
     cards[1]["preference"] = "tie"
+    cards[2]["preference"] = "both_unusable"
     evaluator.save_jsonl(folder / "preference_cards.jsonl", cards)
     preferences.report(folder)
     report = evaluator.read_json(folder / "preference_report.json")
-    assert sum(row["rated"] for row in report["pairwise"]) == 2
+    assert sum(row["rated"] for row in report["pairwise"]) == 3
+    assert sum(row["ties"] for row in report["pairwise"]) == 1
+    assert sum(row["both_unusable"] for row in report["pairwise"]) == 1
+    key = evaluator.read_json(folder / "preference_key.json")["entries"]
+    winning_package = key[cards[0]["blind_id"]]["left"]
+    winning_row = next(row for row in report["pairwise"]
+                       if set(row["packages"]) == set((key[cards[0]["blind_id"]]["left"],
+                                                      key[cards[0]["blind_id"]]["right"])))
+    field = "first_package_wins" if winning_row["packages"][0] == winning_package else "second_package_wins"
+    assert winning_row[field] == 1
     assert report["winner"] is None
+
+
+def test_review_assignments_are_independent_of_trial_order_and_keep_raw_material(tmp_path, monkeypatch):
+    folders = [tmp_path / "first-model", tmp_path / "second-model"]
+    for index, folder in enumerate(folders):
+        evaluator.main(["plan", "--design-dir", str(DESIGN), "--model", "model-" + str(index),
+                        "--case", "scene-museum-gesture", "--repeats", "2", "--seed", "84",
+                        "--output", str(folder)])
+        receipts = evaluator.read_jsonl(folder / "trials.jsonl")
+        for receipt in receipts:
+            receipt["status"] = "completed"
+            receipt["result"] = {"text": "Raw authored words mentioning d-frozen " + str(receipt["index"])}
+        receipts[0].update(status="failed", error="Provider connection failed: concrete detail", result={})
+        evaluator.save_jsonl(folder / "trials.jsonl", receipts)
+
+    seeds = iter([101, 202, 303, 404])
+    monkeypatch.setattr(preferences.secrets, "randbits", lambda bits: next(seeds))
+    for folder in folders:
+        preferences.build(folder)
+        evaluator.main(["review", "--run-dir", str(folder)])
+        cards = evaluator.read_jsonl(folder / "preference_cards.jsonl")
+        sides = [card[side] for card in cards for side in ("left", "right")]
+        assert any("d-frozen" in side["response"] for side in sides)
+        assert any(side["error"] == "Provider connection failed: concrete detail" for side in sides)
+        single = evaluator.read_jsonl(folder / "review_cards.jsonl")
+        assert all(card["project"]["title"] == "Blue Bird" for card in single)
+        assert any(card["request_error"] == "Provider connection failed: concrete detail" for card in single)
+        assert all(card["usable_first_pass"] is None for card in single)
+
+    first_pairs = evaluator.read_json(folders[0] / "preference_key.json")
+    second_pairs = evaluator.read_json(folders[1] / "preference_key.json")
+    assert first_pairs["review_seed"] != second_pairs["review_seed"]
+    assert first_pairs["entries"] != second_pairs["entries"]
+    first_single = evaluator.read_json(folders[0] / "review_key.json")
+    second_single = evaluator.read_json(folders[1] / "review_key.json")
+    assert first_single["review_seed"] != second_single["review_seed"]
+    assert first_single["entries"] != second_single["entries"]

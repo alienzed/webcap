@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import random
+import secrets
 import sys
 import time
 from collections import defaultdict
@@ -287,7 +288,8 @@ def prepare_review(args):
     if (folder / "review_cards.jsonl").exists() or (folder / "review_key.json").exists():
         raise ValueError("Review files already exist. Preserve the original blind assignment.")
     order = list(rows)
-    random.Random(manifest["seed"] + 4103).shuffle(order)
+    review_seed = args.review_seed if args.review_seed is not None else secrets.randbits(64)
+    random.Random(review_seed).shuffle(order)
     cases = {s["id"]: s for s in manifest["cases"]}
     cards, key = [], {}
     for index, record in enumerate(order, 1):
@@ -301,15 +303,17 @@ def prepare_review(args):
             "fidelity_results": [None] * len(case.get("fidelity_checks", [])),
             "review_focus": case["focus"], "author_messages": case["history"],
             "author_direction": case.get("instruction"),
+            "project": case.get("project"),
             "response": (record.get("result") or {}).get("text", ""),
             "request_succeeded": record["status"] == "completed",
+            "request_status": record["status"], "request_error": record.get("error", ""),
             "usable_first_pass": None,
             "intent_fidelity": None, "creative_value": None, "h3_readiness": None,
             "estimated_correction_rounds": None, "actual_revision_rounds": None,
             "notes": ""
         })
     save_jsonl(folder / "review_cards.jsonl", cards)
-    write_json(folder / "review_key.json", {"version": 1, "entries": key})
+    write_json(folder / "review_key.json", {"version": 1, "review_seed": review_seed, "entries": key})
     print("Review", len(cards), "blinded responses in", folder / "review_cards.jsonl")
     print("Keep review_key.json separate from reviewers until all ratings are recorded.")
 
@@ -409,6 +413,8 @@ def main(argv=None):
     for name in ("review", "report"):
         p = commands.add_parser(name)
         p.add_argument("--run-dir", required=True)
+        if name == "review":
+            p.add_argument("--review-seed", type=int, help="Optional reproducible blind assignment; default is independent of trial order")
     args = parser.parse_args(argv)
     if args.command in ("plan", "run"):
         if args.repeats < 1 or args.timeout < 1:

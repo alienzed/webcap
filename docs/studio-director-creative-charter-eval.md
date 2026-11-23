@@ -35,7 +35,7 @@ python scripts/studio_guidance_eval.py run \
   --output experiments/studio_guidance/runs/charter-gemma-pilot-01
 ```
 
-If assembly and response behavior are sound, run the full **Gemma development: 72 calls** (12 cases × three arms × two repeats), then the same 72-call design with one **preselected, confirmed stronger model**. Record exact model ID, runtime/sampling settings, and immutable input hashes. A seed here controls trial ordering, not generation determinism. Comparing model strengths is exploratory; do not combine raw score totals across different models and claim a universal winner.
+If assembly and response behavior are sound, run the full **Gemma development: 72 calls** (12 cases × three arms × two repeats). Check the running Director's discovered models for an accessible alternative such as Nullguard, and establish usability with a small Chat/Project/Scene pilot before running the same design separately. A larger model is **not required**. Smaller local models provide relative within-model comparisons; their limitations do not define the creative quality ceiling or invalidate an abstract creative approach. Record exact model IDs, runtime/sampling settings, and immutable input hashes. A seed here controls trial ordering, not generation determinism. Do not combine raw score totals across different models and claim a universal winner.
 
 ```sh
 python scripts/studio_guidance_eval.py run \
@@ -52,6 +52,10 @@ python scripts/studio_guidance_eval.py review \
 ```
 
 Separate `preference_key.json` and `review_key.json` from reviewers. Fill the preference cards **before** running `studio_charter_preference.py report` and the other reviewed cards **before** `studio_guidance_eval.py report`. Both reports preserve missing human scores and make no automatic selection. Keep all run evidence in the ignored local run folder. The earlier 86-call findings are previous evidence, not outputs of this new design.
+
+Each new review uses an independent random assignment, even when trial-order seeds match across models. The assignment seed is retained only in the private key; `--review-seed` optionally reproduces a specified assignment. Never overwrite existing cards or keys. Preference reports distinguish `tie` from `both_unusable`; `first_package_wins` and `second_package_wins` refer to the ordered `packages` array, not the randomized left/right positions. Failed operations retain their actual status and error in pair cards, and single-output cards include the supplied Project context. Preserve raw model wording even if it happens to mention a package-like term.
+
+Keep three evidence sources distinct: objective operation/length diagnostics, **Codex's qualitative observations**, and **actual human preferences**. Codex may inspect outputs blind and record its own unscored observations separately; those observations must not populate human vote/score fields. Reports with no human input remain unrated. A small-model shortfall can motivate a hypothesis, not a growing list of subject-specific fixes.
 
 On development evidence, shortlist only promising charter variants and compare against frozen D on **four untouched holdout briefs**, with two repeats on each confirmed model. For three arms, full holdout costs 24 calls per model. Preserve frozen D and technical reference from the corresponding development `manifest.json`; the existing runner's `--baseline-from` locks the control and rejects scenario changes.
 

@@ -4242,7 +4242,7 @@
             applyingHistoryValue = false;
           }
           // Keep recalled entries at the start for repeated Up/Down navigation.
-          // Returning to the live draft restores the caret to its editing position.
+          // Returning to the live draft places the caret at the end for editing.
           var caret = inputHistoryIndex === inputHistory.length ? input.value.length : 0;
           input.setSelectionRange(caret, caret);
         }

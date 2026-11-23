@@ -7,6 +7,7 @@ const html = fs.readFileSync(path.join(root, 'tool/tool.html'), 'utf8');
 const rail = fs.readFileSync(path.join(root, 'tool/js/studio_director_workbench.js'), 'utf8');
 const chat = fs.readFileSync(path.join(root, 'tool/js/director_chat.js'), 'utf8');
 const backend = fs.readFileSync(path.join(root, 'tool/server/studio_director.py'), 'utf8');
+const roleDefaults = fs.readFileSync(path.join(root, 'tool/server/studio_guidance_defaults.py'), 'utf8');
 
 test('Write exposes exactly three creative workflows', () => {
   const choices = html.split('id="studio-dw-write-operation">')[1].split('</select>')[0];
@@ -40,8 +41,8 @@ test('Read and the optional coherence utility stay separate from creative Write'
 
 test('ordinary chat guidance is concise and has no H3 production or Write instructions',()=>{
   assert.match(chat,/Answer the author conversationally/);
-  assert.match(backend,/CONVERSATION: Respond naturally and concisely/);
-  assert.doesNotMatch(backend,/CREATIVE WORK: When asked to create or revise material/);
-  assert.match(backend,/Explicit Write functions/);
+  assert.match(roleDefaults,/CONVERSATION: Respond naturally and concisely/);
+  assert.doesNotMatch(roleDefaults,/CREATIVE WORK: When asked to create or revise material/);
+  assert.match(roleDefaults,/Explicit Write functions/);
 });
 

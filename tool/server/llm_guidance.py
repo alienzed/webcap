@@ -43,18 +43,30 @@ MODULES = (
 MODULE_IDS = frozenset(row[0] for row in MODULES)
 
 
+def default_for(module_id):
+    """Resolve one default, without loading unrelated prompt documents."""
+    if module_id == "studio.classic":
+        return _CLASSIC
+    if module_id == "studio.current":
+        return _WORKSHOP
+    if module_id == "studio.imaginative":
+        return _IMAGINATIVE
+    if module_id == "studio.render":
+        return _RENDER
+    if module_id == "h3.toolkit":
+        return H3_TOOLKIT
+    if module_id == "h3.authoring":
+        return (DOCS_ROOT / "mmh3-prompt-runtime-context.txt").read_text(encoding="utf-8").strip()
+    if module_id == "storyboard.director":
+        return (DOCS_ROOT / "storyboard-director-context.txt").read_text(encoding="utf-8").strip()
+    if module_id in SPECIALIST_DEFAULTS:
+        return SPECIALIST_DEFAULTS[module_id]
+    raise ValueError("Unknown LLM guidance module: " + module_id)
+
+
 def default_texts():
-    """Single authoritative defaults; existing material is kept byte-for-byte."""
-    return {
-        "studio.classic": _CLASSIC,
-        "studio.current": _WORKSHOP,
-        "studio.imaginative": _IMAGINATIVE,
-        "studio.render": _RENDER,
-        "h3.toolkit": H3_TOOLKIT,
-        "h3.authoring": (DOCS_ROOT / "mmh3-prompt-runtime-context.txt").read_text(encoding="utf-8").strip(),
-        "storyboard.director": (DOCS_ROOT / "storyboard-director-context.txt").read_text(encoding="utf-8").strip(),
-        **SPECIALIST_DEFAULTS,
-    }
+    """Enumerate built-in defaults for Settings; request assembly uses default_for."""
+    return {module_id: default_for(module_id) for module_id, *_ in MODULES}
 
 
 def text_for(module_id):
@@ -66,8 +78,7 @@ def text_for(module_id):
         raise ValueError("Config.llm_guidance must be an object.")
     if module_id in overrides:
         return overrides[module_id]
-    return default_texts()[module_id]
-
+    return default_for(module_id)
 
 def catalog():
     from . import config as app_config

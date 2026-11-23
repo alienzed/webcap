@@ -364,8 +364,8 @@
     if (revision) {
       drawer.classList.remove('studio-actions-open');
       el('studio-dw-open-tools').setAttribute('aria-expanded','false');
-      el('director-chat-title').textContent = 'Revise Scenes';
     }
+    if (studio) el('director-chat-title').textContent = revision ? 'Revise Scenes' : studioWorkingStoryLabel();
     el('director-chat-history-toggle').classList.toggle('hidden', revision);
     el('director-chat-clear').classList.toggle('hidden', revision);
     el('studio-dw-open-tools').classList.toggle('hidden', revision);
@@ -673,6 +673,8 @@
     // Keep stored titles intact, including deliberate renames.
     if (/^Read the selected saved context and acknowledge receipt\./.test(chat.title))
       return chat.projectTitle ? chat.projectTitle + ' · context' : 'Project context';
+    if (/^Saved[:\s].*\[WEBCAP APP/.test(chat.title))
+      return chat.projectTitle ? chat.projectTitle + ' · saved changes' : 'Saved Scene changes';
     if (chat.title === 'New chat') return 'New conversation';
     return chat.title;
   }
@@ -1303,10 +1305,18 @@
 
     var requestLabel = formatRequestDiagnostic(state.requestDiagnostic);
     copy.classList.toggle('hidden', !requestLabel);
-    copy.textContent = requestLabel;
-    copy.title = requestLabel ? 'Inspect the exact messages WebCap sent to the LLM' : '';
+    copy.textContent = state.activeMode === 'storyboard' && requestLabel ? 'Inspect request' : requestLabel;
+    copy.title = requestLabel ? requestLabel + '\n' + String(activity && activity.model || state.modelId || '') : '';
 
     phaseEl.textContent = directorPhaseLabel(phase);
+    if (state.activeMode === 'storyboard') {
+      phaseEl.textContent = 'Director · ' + directorPhaseLabel(phase);
+      // The request inspector retains runtime identity; the live surface leads
+      // with the phase and measured activity rather than backend routing IDs.
+      if (phase === 'loading_model') detail = loadDetail || '';
+      else if (phase === 'generating') detail = liveParts.slice(0, -1).join(' · ');
+      else if (phase === 'preparing') detail = '';
+    }
     detailEl.textContent = detail;
     elapsedEl.textContent = formatElapsed(performance.now() - state.requestStartedAt);
     progress.dataset.phase = phase;
@@ -1419,6 +1429,46 @@
       (restored.authoredFields && Object.keys(restored.authoredFields).length) ? restored : null;
   }
 
+  // Display app-authored protocol messages without changing their stored text
+  // or the exact context supplied to subsequent Director requests.
+  function studioMessageCard(message) {
+    if (message.role !== 'user') return null;
+    var text = String(message.content || '');
+    if (text.startsWith('[WEBCAP EXPLICIT READ')) {
+      var summary = 'Read Project snapshot';
+      var start = text.indexOf('{'), end = text.lastIndexOf('}');
+      var payload;
+      try { payload = JSON.parse(text.slice(start, end + 1)); }
+      catch (error) { /* Older free-form snapshots remain available in full. */ }
+      if (payload && typeof payload === 'object') {
+        var project = payload.project || {};
+        var title = project.title || payload.projectTitle;
+        var parts = [];
+        var fields = ['concept','style','invariants'];
+        if (fields.every(function (key) { return Object.prototype.hasOwnProperty.call(project, key); }))
+          parts.push('Overview');
+        else fields.forEach(function (key) {
+          if (!Object.prototype.hasOwnProperty.call(project, key)) return;
+          parts.push(key === 'concept' ? 'Concept' : key === 'style' ? 'Visual / atmosphere' :
+            Array.isArray(project.invariants) ? project.invariants.length +
+              (project.invariants.length === 1 ? ' Invariant' : ' Invariants') : 'Invariants');
+        });
+        if (Array.isArray(payload.scenes) && payload.scenes.length) parts.push(payload.scenes.map(function (scene, index) {
+          return 'Scene ' + (scene && scene.number || index + 1);
+        }).join(', '));
+        summary = 'Read ' + (title || 'Project snapshot') + (parts.length ? ' · ' + parts.join(' + ') : '');
+      }
+      return {label:'WebCap · Read', summary:summary, details:'View snapshot'};
+    }
+    if (text.includes('[WEBCAP APPLIED FIELD VALUES]')) {
+      var receipt = text.split('[WEBCAP APPLIED FIELD VALUES]')[0].trim();
+      if (!receipt || receipt === 'Saved: Scene changes. Reviewed values are now authoritative.')
+        receipt = 'Saved Scene changes';
+      return {label:'✓ Saved', summary:receipt, details:'View saved details'};
+    }
+    return null;
+  }
+
   function renderMessages() {
     var host = el('director-chat-messages');
     var empty = el('director-chat-empty');
@@ -1428,7 +1478,9 @@
     var suggestion = el('studio-dw-suggestions');
     host.before(suggestion);
     suggestion.classList.add('hidden');
-    host.innerHTML = '';
+    var previousRows = Array.from(host.children);
+    var rows = [];
+    var followLatest = host.scrollHeight - host.scrollTop - host.clientHeight < 80;
     empty.classList.toggle('hidden', currentMessages().length > 0);
 
     var suggestionRow = null;
@@ -1444,8 +1496,22 @@
       }
       if (studioReply && !visibleText.trim())
         return;
+      var elapsedMap = currentElapsedMap();
+      var metricsMap = currentMetricsMap();
+      var renderKey = JSON.stringify([state.activeMode, message.role, visibleText,
+        elapsedMap[index], metricsMap[index]]);
+      var existing = previousRows.find(function (item) {
+        return item.dataset.messageIndex === String(index) && item.dataset.renderKey === renderKey;
+      });
+      if (existing) {
+        rows.push(existing);
+        if (studioReply && index === state.studioActionIndex) suggestionRow = existing;
+        return;
+      }
       var row = document.createElement('div');
       row.className = 'director-chat-message director-chat-message-' + message.role;
+      row.dataset.messageIndex = String(index);
+      row.dataset.renderKey = renderKey;
 
       var label = document.createElement('div');
       label.className = 'director-chat-message-label';
@@ -1457,32 +1523,40 @@
       var body = document.createElement('div');
       body.className = 'director-chat-message-body';
       body.textContent = visibleText;
-      if (studioReply && visibleText.length > 1200) {
+      if (studioReply && visibleText.length > 2400) {
         var preview = document.createElement('div');
         preview.className = 'director-chat-reply-preview';
-        var opening = visibleText.split(/\n\s*\n/)[0];
-        preview.textContent = opening.length > 480 ? opening.slice(0,480).replace(/\s+\S*$/, '') + '…' : opening;
+        preview.textContent = visibleText.slice(0,1200).replace(/\s+\S*$/, '') + '…';
         var fullReply = document.createElement('details'), fullHeading = document.createElement('summary'),
           fullText = document.createElement('div');
         fullReply.className = 'director-chat-long-reply';
-        fullHeading.textContent = 'Full Director reply';
+        fullHeading.textContent = 'Show more';
+        fullReply.addEventListener('toggle', function () {
+          fullHeading.textContent = fullReply.open ? 'Show less' : 'Show more';
+        });
         fullText.textContent = visibleText;
         fullReply.append(fullHeading,fullText);
         body.replaceChildren(preview,fullReply);
       }
-      if (message.role === 'user' && message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]') !== -1) {
-        row.classList.add('director-chat-save-receipt');
-        label.textContent = '✓ Saved';
+      var card = studioMessageCard(message);
+      if (card) {
+        row.classList.add('director-chat-protocol-card');
+        if (message.content.includes('[WEBCAP APPLIED FIELD VALUES]')) row.classList.add('director-chat-save-receipt');
+        label.textContent = card.label;
+        var summary = document.createElement('div');
+        summary.className = 'director-chat-protocol-summary';
+        summary.textContent = card.summary;
+        var details = document.createElement('details');
+        var heading = document.createElement('summary');
+        heading.textContent = card.details;
+        var raw = document.createElement('pre');
+        raw.textContent = message.content;
+        details.append(heading, raw);
+        body.replaceChildren(summary, details);
       }
-      // The full Read message is exactly what subsequent LLM requests receive.
-      // Do not collapse it into a receipt or alter its source values.
-      if (message.role === 'user' && message.content.startsWith('[WEBCAP EXPLICIT READ'))
-        body.textContent = message.content;
 
       row.appendChild(label);
       if (body.textContent || body.children.length) row.appendChild(body);
-      var elapsedMap = currentElapsedMap();
-      var metricsMap = currentMetricsMap();
       if (message.role === 'assistant' && Object.prototype.hasOwnProperty.call(elapsedMap, index)) {
         var meta = document.createElement('div');
         meta.className = 'director-chat-message-meta';
@@ -1491,15 +1565,20 @@
       }
       // Saved historical action metadata remains readable, but conversation
       // responses no longer launch implicit Write/Review operations.
-      host.appendChild(row);
+      rows.push(row);
       if (studioReply && index === state.studioActionIndex) suggestionRow = row;
+    });
+
+    previousRows.forEach(function (row) { if (!rows.includes(row)) row.remove(); });
+    rows.forEach(function (row, index) {
+      if (host.children[index] !== row) host.insertBefore(row, host.children[index] || null);
     });
 
     if (state.activeMode === 'storyboard' && suggestionRow && suggestion.children.length) {
       suggestionRow.appendChild(suggestion);
       suggestion.classList.remove('hidden');
     }
-    host.scrollTop = host.scrollHeight;
+    if (followLatest) host.scrollTop = host.scrollHeight;
   }
 
   function renderStudioOperations() {
@@ -1668,7 +1747,10 @@
     });
     var flow = el('director-studio-flow');
     flow.classList.toggle('hidden', !studio);
-    if (!studio) return;
+    if (!studio) {
+      el('director-studio-flow-target').classList.add('hidden');
+      return;
+    }
     var attached = studioAttachedStoryId();
     var open = window.getStoryboardRouteTarget();
     var openId = String(open && open.storyId || '');
@@ -1681,11 +1763,12 @@
     capture.disabled = state.pending || state.attachmentPending || !state.sessionReady || !state.modelId || !discussed;
     var useOpen = el('director-studio-flow-target');
     var canAttachOpen = !!openId && openId !== attached;
+    useOpen.classList.toggle('is-unattached', !attached);
     useOpen.classList.toggle('hidden', !canAttachOpen);
     if (canAttachOpen) {
       el('director-studio-flow-target-label').textContent = attached
-        ? 'A different Project is open in Studio.'
-        : 'Already have a Project open?';
+        ? 'Conversation: ' + studioWorkingStoryLabel() + ' · Open: ' + window.getStudioDirectorNavigation().projectTitle
+        : 'Open Project: ' + window.getStudioDirectorNavigation().projectTitle;
       el('director-studio-attach-current').disabled = state.pending || state.attachmentPending;
     }
   }
@@ -3348,6 +3431,7 @@
     if (!modal) throw new Error('Scene Workshop review dialog is missing.');
     modal.dataset.mode = 'proposal';
     el('storyboard-workshop-review-title').textContent = 'Review Scene Revision';
+    el('storyboard-workshop-diff-heading').textContent = 'Timed shots · proposed changes';
     el('storyboard-workshop-review-target').textContent = state.workshop.sceneTitle + ' · Timed shots';
     el('storyboard-workshop-review-summary').textContent = state.workshopProposal.summary;
     el('storyboard-workshop-review-error').textContent = '';
@@ -3364,6 +3448,7 @@
     if (!modal) throw new Error('Scene Workshop review dialog is missing.');
     modal.dataset.mode = 'history';
     el('storyboard-workshop-review-title').textContent = 'Last Scene Changes';
+    el('storyboard-workshop-diff-heading').textContent = 'Prompt · saved changes';
     el('storyboard-workshop-review-target').textContent = title || 'Generation prompt';
     el('storyboard-workshop-review-summary').textContent = 'Comparison with the previously saved prompt.';
     el('storyboard-workshop-review-error').textContent = '';

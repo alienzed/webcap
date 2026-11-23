@@ -106,7 +106,7 @@ test('Write opens the explicit operation picker without launching a model reques
   const nodes={};
   function node(id) {
     const classes=new Set();
-    return nodes[id] ||= {attrs:{},classList:{add:x=>classes.add(x),remove:x=>classes.delete(x),contains:x=>classes.has(x),toggle(x,on){if(on)classes.add(x);else classes.delete(x);}},
+    return nodes[id] ||= {attrs:{},dataset:{},classList:{add:x=>classes.add(x),remove:x=>classes.delete(x),contains:x=>classes.has(x),toggle(x,on){if(on)classes.add(x);else classes.delete(x);}},
       setAttribute(k,v){this.attrs[k]=v;},focus(){this.focused=true;},click(){this.onclick();},
       querySelectorAll(){return [];},contains(){return false;}};
   }
@@ -115,7 +115,8 @@ test('Write opens the explicit operation picker without launching a model reques
   node('director-studio-action-launcher').classList.add('hidden');
   const a=rail.indexOf('    function openDirectAction(which) {');
   const b=rail.indexOf("    rail.addEventListener('keydown'",a);
-  const scope=vm.createContext({el:node,document:{addEventListener(){}},lastQuickAction:'write',updateScope(){},showConversationWrite(){availability++;},refreshWrite:async()=>{selected++;}});
+  let feedbackCleared=0;
+  const scope=vm.createContext({el:node,status:()=>feedbackCleared++,document:{addEventListener(){}},lastQuickAction:'write',updateScope(){},showConversationWrite(){availability++;},refreshWrite:async()=>{selected++;}});
   vm.runInContext(section(rail,'  function toggle(which) {','  function parseProposal(raw) {')+rail.slice(a,b),scope);
   node('studio-dw-write').onclick=()=>scope.toggle('write');
   node('studio-dw-open-tools').click();
@@ -129,6 +130,7 @@ test('Write opens the explicit operation picker without launching a model reques
   assert.equal(node('studio-dw-open-tools').focused,true);
   node('studio-dw-open-tools').click();
   assert.equal(selected,1,'reopening Write reuses the visible picker without starting a model');
+  assert.ok(feedbackCleared>0,'opening an action clears old success feedback');
 });
 
 test('Read remains explicitly accessible without a standing approval badge',()=>{

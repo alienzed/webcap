@@ -1943,7 +1943,7 @@
                                         </span>
                                     </summary>
                                     <div class="storyboard-story-section-body">
-                                        <label class="storyboard-field"><span>Title</span><input id="storyboard-story-title" type="text" maxlength="200"></label>
+                                        <label class="storyboard-field storyboard-project-title-field"><span>Title</span><input id="storyboard-story-title" type="text" maxlength="200"></label>
                                         <div class="storyboard-field storyboard-story-icon-field">
                                             <span>Icon</span>
                                             <div class="storyboard-icon-picker">
@@ -2128,6 +2128,10 @@
                         <button id="director-chat-close" type="button" class="director-chat-close" aria-label="Close Assistant">×</button>
                     </div>
                 </header>
+                <div id="director-studio-flow-target" class="director-studio-flow-target hidden">
+                    <span id="director-studio-flow-target-label"></span>
+                    <button id="director-studio-attach-current" type="button" class="review-captions-btn">Use open Project</button>
+                </div>
                 <dialog id="director-chat-history-panel" class="director-chat-history-panel" aria-labelledby="director-chat-history-title">
                     <header class="director-chat-history-heading"><h2 id="director-chat-history-title">Conversations</h2><button id="director-chat-history-close" type="button" class="review-captions-btn">Close</button></header>
                     <div class="director-chat-history-filter"><input id="director-chat-history-search" type="search" aria-label="Filter conversations" placeholder="Filter by title or Project"></div>
@@ -2325,10 +2329,6 @@
                             <p id="director-studio-flow-description">Concept / overview · Visual / atmosphere · Invariants</p>
                         </div>
                         <button id="director-studio-capture" type="button" class="studio-primary-action">Review new Project</button>
-                    </div>
-                    <div id="director-studio-flow-target" class="director-studio-flow-target hidden">
-                        <span id="director-studio-flow-target-label"></span>
-                        <button id="director-studio-attach-current" type="button" class="review-captions-btn">Use open Project</button>
                     </div>
                     <div class="director-studio-flow-secondary">
                         <section id="director-studio-access" class="director-studio-access hidden" aria-label="Story read access">
@@ -2543,7 +2543,7 @@
                 </div>
                 <div class="storyboard-workshop-review-content">
                     <p id="storyboard-workshop-review-summary"></p>
-                    <div class="storyboard-workshop-diff-heading">Timed shots · proposed changes</div>
+                    <div id="storyboard-workshop-diff-heading" class="storyboard-workshop-diff-heading">Timed shots · proposed changes</div>
                     <div id="storyboard-workshop-review-diff" class="storyboard-workshop-diff" aria-label="Changes to timed shots"></div>
                     <p class="storyboard-workshop-review-note">Subject, Scene Overview, Environment, Style and audio remain unchanged. Applying checks the saved original before replacing the approved shots.</p>
                     <p id="storyboard-workshop-review-error" class="storyboard-workshop-review-error" role="alert"></p>

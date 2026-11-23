@@ -125,20 +125,50 @@ test('ordinary discussion stays conversational with no automatic structured draf
 });
 
 test('compact Director replies keep the exact full text and leave General Chat alone',()=>{
-  const code=part(chat,"      if (studioReply && visibleText.length > 1200) {",
-    "      if (message.role === 'user' && message.content.indexOf('[WEBCAP APPLIED FIELD VALUES]')");
-  const node=()=>({children:[],append(...children){this.children.push(...children);},replaceChildren(...children){this.children=children;}});
-  const message={role:'assistant',content:'A useful opening recommendation.\n\n'+('Complete creative details with "quotes" and line breaks.\n').repeat(40)};
+  const code=part(chat,"      if (studioReply && visibleText.length > 2400) {",
+    "      var card = studioMessageCard(message);");
+  const node=()=>({children:[],addEventListener(){},append(...children){this.children.push(...children);},replaceChildren(...children){this.children=children;}});
+  const message={role:'assistant',content:'A useful opening recommendation.\n\n'+('Complete creative details with "quotes" and line breaks.\n').repeat(60)};
   const body=node();
   const scope=vm.createContext({studioReply:true,visibleText:message.content,message,body,document:{createElement:node}});
   vm.runInContext(code,scope);
-  assert.equal(body.children[0].textContent,'A useful opening recommendation.');
+  assert.ok(body.children[0].textContent.length>1100,'creative prose gets a substantial preview');
+  assert.equal(body.children[1].children[0].textContent,'Show more');
   assert.equal(body.children[1].children[1].textContent,message.content);
   const general=node();
   scope.body=general;
   scope.studioReply=false;
   vm.runInContext(code,scope);
   assert.equal(general.children.length,0);
+});
+
+test('Studio progress keeps real phases and throughput while technical routing remains inspectable',()=>{
+  const nodes=new Map();
+  const el=id=>{
+    if(!nodes.has(id))nodes.set(id,{classList:{toggle(){}},dataset:{}});
+    return nodes.get(id);
+  };
+  const state={activeMode:'storyboard',pending:true,jobId:'job',modelId:'remote-1::example/model',
+    requestStartedAt:0,generationStartedAt:1000,lastGeneratedTokens:0,
+    requestDiagnostic:{messageCount:3,contentChars:12000}};
+  const scope=vm.createContext({el,state,performance:{now:()=>2000},
+    activityForCurrentJob:activity=>activity,updateModelLoadProgress:()=> '4 GiB loaded',
+    positiveNumber:Number,activeContextMode:()=>null,directorPhaseLabel:phase=>phase,
+    formatElapsed:()=> '2s'});
+  vm.runInContext(part(chat,'  function formatRequestDiagnostic(request) {','  function stopProgressPolling() {'),scope);
+  scope.renderProgress({phase:'generating',model:state.modelId,slot:{generatedTokens:32}});
+  assert.equal(el('director-chat-progress-phase').textContent,'Director · generating');
+  assert.equal(el('director-chat-progress-detail').textContent,'32 tokens · 32.0 tok/s');
+  assert.equal(el('director-chat-prompt-copy').textContent,'Inspect request');
+  assert.match(el('director-chat-prompt-copy').title,/3 msgs · 12,000 chars/);
+  assert.match(el('director-chat-prompt-copy').title,/remote-1::example\/model/);
+  scope.renderProgress({phase:'queued',queuePosition:3});
+  assert.equal(el('director-chat-progress-detail').textContent,'Queue #3');
+  scope.renderProgress({phase:'loading_model',model:state.modelId});
+  assert.equal(el('director-chat-progress-detail').textContent,'4 GiB loaded');
+  state.activeMode='chat';
+  scope.renderProgress({phase:'preparing',model:state.modelId});
+  assert.equal(el('director-chat-progress-detail').textContent,state.modelId,'General Chat presentation is preserved');
 });
 
 test('Apply receipt names the actual scoped Scene fields and retains authoritative values',async()=>{

@@ -1693,11 +1693,10 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 }
 
 .storyboard-lora-status {
-  overflow: hidden;
   color: var(--muted);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 16px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .storyboard-scene-quick .storyboard-generate-btn {
@@ -2805,8 +2804,12 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 }
 
 .storyboard-story-section[data-story-section="story"] > .storyboard-story-section-body {
-  grid-template-columns: minmax(0, 1fr) 132px 150px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
+
+.storyboard-project-title-field { grid-column: 1 / -1; }
+#storyboard-story-title { min-width: 0; font-size: 24px; font-weight: 650; }
+.storyboard-story-section[data-story-section="story"] .storyboard-field > span { font-size: 16px; }
 
 .storyboard-story-icon-field {
   position: relative;
@@ -4092,7 +4095,8 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 .storyboard-scenes-heading { flex-wrap: wrap; }
 .storyboard-scenes-heading-left { flex: 1 1 220px; }
 .storyboard-scenes-heading-actions {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   margin-left: auto;
   flex-wrap: nowrap;
   overflow: visible;
@@ -4354,7 +4358,7 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 
 /* Scene heading: context stays left, scoped actions use the available right edge. */
 .storyboard-scenes-heading {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 12px;
 }
 .storyboard-scenes-heading-left {
@@ -4371,11 +4375,12 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   max-width: none;
 }
 .storyboard-scenes-heading-actions {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   margin-left: auto;
 }
 .storyboard-project-tool-bar {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 #storyboard-project-tool-bar > .storyboard-tool-icon,
 #storyboard-project-tool-bar .storyboard-header-menu > .storyboard-tool-icon {
@@ -4389,12 +4394,13 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 /* Project tools are specialized actions: keep their text labels visible alongside icons. */
 .storyboard-tool-label {
   display: inline;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.2;
   font-weight: 600;
 }
 #storyboard-project-tool-bar {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   gap: 6px;
 }
 @container (max-width: 760px) {

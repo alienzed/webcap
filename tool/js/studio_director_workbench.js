@@ -579,6 +579,7 @@
   function toggle(which) {
     var other = which === 'read' ? 'write' : 'read', panel = el('studio-dw-' + which + '-panel'),
       button = el('studio-dw-' + which), show = panel.classList.contains('hidden');
+    if (show && el('studio-dw-status').dataset.error !== 'true') status('', false);
     panel.classList.toggle('hidden', !show);
     button.setAttribute('aria-expanded', show ? 'true' : 'false');
     el('studio-dw-' + other + '-panel').classList.add('hidden');
@@ -1543,6 +1544,7 @@
     };
     function openDirectAction(which) {
       lastQuickAction = which;
+      if (el('studio-dw-status').dataset.error !== 'true') status('', false);
       el('director-chat-drawer').classList.add('studio-actions-open');
       // Keep the original deterministic Read/Write controls and initialization.
       var pending = el('studio-dw-' + which + '-panel').classList.contains('hidden')

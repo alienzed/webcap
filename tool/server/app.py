@@ -2316,6 +2316,7 @@ def studio_director_guidance_route():
         return jsonify({"ok": True, **studio_director_guidance(
             str(request.args.get("targetModel") or "minimax_h3").strip(),
             str(request.args.get("profile") or "classic").strip(),
+            include_prompt_contract=request.args.get("includePromptContract") != "0",
         )})
     except Exception as exc:
         app.logger.exception("STUDIO DIRECTOR GUIDANCE FAILED: %s", exc)

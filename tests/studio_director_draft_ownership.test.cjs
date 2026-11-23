@@ -19,7 +19,7 @@ test('Write receives persisted Read snapshots verbatim without changing explicit
   const requests=[];
   const requestJson=async url=>{
     requests.push(url);
-    assert.equal(url,'/fs/studio/director/guidance?targetModel=minimax_h3&profile=classic');
+    assert.equal(url,'/fs/studio/director/guidance?targetModel=minimax_h3&profile=classic&includePromptContract=1');
     return {system:'Creative partner',promptContract:'H3 writing reference'};
   };
   const request=new Function('requestJson','state',segment+'return studioDirectorRequestMessages;')(requestJson,{studioProfile:'classic'});

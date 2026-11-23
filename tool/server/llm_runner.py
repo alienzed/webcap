@@ -1023,8 +1023,8 @@ def _execute_claimed(job_id, gpu_reserved):
             messages = contract.get("messages")
             caption_operation = str(contract.get("operation") or "").strip()
             if client == "chat" and caption_operation == "studio_chat":
-                # Match concept expansion without changing General Chat or precision-focused drafting.
-                chat_kwargs["sampling_profile"] = "expand_concept"
+                # Explicit Studio conversation sampling; other chat and Write paths retain their own settings.
+                chat_kwargs["sampling_profile"] = "studio_chat"
             if client == "caption" and (
                 caption_operation == "vision_image_caption"
                 or (caption_operation == "vision_question" and context.get("vlUserQuestion") is True)

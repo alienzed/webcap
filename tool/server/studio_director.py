@@ -33,25 +33,25 @@ def chat_response_schema():
         },
     }
 
-def guidance(target_model="minimax_h3", profile="classic"):
-    """Return concise Studio expertise plus the distinct prompt-authoring contract."""
+def guidance(target_model="minimax_h3", profile="classic", include_prompt_contract=True):
+    """Compose the selected creative role and expertise, loading H3 format only for writing."""
     if target_model != "minimax_h3":
         raise ValueError("Studio Writer's Workshop currently supports MiniMax H3.")
-    try:
-        prompt_contract = llm_guidance_text("h3.authoring")
-    except OSError as exc:
-        raise RuntimeError("Studio production prompt guidance is unavailable.") from exc
-    configured = app_config.config.get("generation_model_guidance", {})
-    if not isinstance(configured, dict):
-        raise RuntimeError("Generation model guidance must be an object.")
-    lessons = str(configured.get(target_model) or "").strip()
-    # Ordinary conversation receives the creative role, not Scene production guidance.
-    # The complete H3 reference is added exclusively by explicit Scene-writing callers.
     if profile not in _PROFILE_IDS:
         raise ValueError("Unknown Studio Director creative profile.")
     system = llm_guidance_text("studio." + profile) + "\n\n" + llm_guidance_text("h3.toolkit")
-    if lessons:
-        prompt_contract += "\n\nUSER'S H3 PRODUCTION PLAYBOOK (empirical methods):\n" + lessons
+    prompt_contract = ""
+    if include_prompt_contract:
+        try:
+            prompt_contract = llm_guidance_text("h3.authoring")
+        except OSError as exc:
+            raise RuntimeError("Studio production prompt guidance is unavailable.") from exc
+        configured = app_config.config.get("generation_model_guidance", {})
+        if not isinstance(configured, dict):
+            raise RuntimeError("Generation model guidance must be an object.")
+        lessons = str(configured.get(target_model) or "").strip()
+        if lessons:
+            prompt_contract += "\n\nUSER'S H3 PRODUCTION PLAYBOOK (empirical methods):\n" + lessons
     return {
         "targetModel": target_model,
         "profile": profile,

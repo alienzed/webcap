@@ -214,7 +214,7 @@ def test_studio_chat_response_schema_reaches_model_without_changing_freeform(llm
     else:
         assert calls[0]["response_schema"] == schema
     if operation == "studio_chat":
-        assert calls[0]["sampling_profile"] == "expand_concept"
+        assert calls[0]["sampling_profile"] == "studio_chat"
         profile = storyboard_llm_runtime._sampling_profile(calls[0]["sampling_profile"])
         assert profile["temperature"] == 0.35
         assert profile["top_p"] == 0.9

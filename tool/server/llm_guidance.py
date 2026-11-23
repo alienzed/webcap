@@ -10,7 +10,7 @@ from .studio_guidance_defaults import _CLASSIC, _WORKSHOP, _IMAGINATIVE, _RENDER
 
 DOCS_ROOT = Path(__file__).resolve().parents[2] / "docs"
 
-H3_TOOLKIT = "MINIMAX H3 CREATIVE TOOLKIT\nDevelop strong, visually substantial and audiovisually rich Scenes for H3's short generation window. Give generous creative density while preserving legibility and the author's concept.\nChoose techniques to serve the intended result: rapid 1–2-second montage and rhythmic juxtaposition, multi-shot coverage, continuous cinematic takes, dialogue-led performance, layered atmospheric tableaux, and audio-led sequences. Select and combine these techniques according to the author's intended result.\nDescribe every visually consequential subject, state, relationship, and change explicitly enough to produce the intended render. Establish continuity where unexpected changes would be distracting or unnatural.\nWhen dialogue is present, treat the exact spoken words, speaker identity, voice, emotional delivery, pace, and audiovisual synchronization as central creative material. Use sound effects, ambient sound, and music deliberately to enrich the Scene.\nUse H3's available time, shot structure, camera behavior, and synchronized sound confidently. Translate ambitious concepts into clear, renderable audiovisual direction while preserving their full creative ambition."
+H3_TOOLKIT = "H3 | CREATIVE MEDIUM KNOWLEDGE\nMiniMax H3 generates independent audiovisual clips of up to 15 seconds. Scenes need strong visual substance. Composition, layered activity, expressive performance, intricate movement, sustained atmosphere, rhythmic juxtaposition and timed views can all provide it. Use the window generously, tailoring density to each concept.\nAvailable visual structures include a continuous fixed or moving shot, a few complementary shots, rapid 1–2-second montage, dialogue-led coverage and reactions, visually rich tableaux, and images cut to sound or music. These techniques can combine; pacing, editing and camera treatment serve the author's purpose.\nH3 generates synchronized audio alongside the image. When dialogue matters, give the exact spoken words, speakers, language, vocal identity, emotional delivery and timing creative attention. Develop purposeful effects, ambience, music and silence as elements of the audiovisual design.\nFor authored generation prompts, communicate consequential visible details unambiguously: what and who appears, how they look and relate, essential starting states, significant changes, framing and timing. Establish continuity where an unintended variation would distort the result. Specificity makes a rich idea producible; the detailed H3 prompt structure and notation are supplied with actual prompt-writing tasks."
 
 SPECIALIST_DEFAULTS = {
     "task.visual_direction": "You are refining prompts for a text-to-video model. Your job is to describe the intended moving visuals so the model can render them accurately. Be exceptionally thorough and specific about the visuals that will actually be rendered. Explicitly establish relevant visual details that are implied by context or not yet specified. Video prompting requires explicit descriptions of relevant visual elements and their states throughout the intended progression. Exhaustively establish what is visible before and after changes, including what changes and what remains. Do not rely on the model to infer visual details or transitions from context alone. Prioritize details that materially affect what the viewer will see or how the intended actions will be rendered. Make appropriate creative decisions to complete the intended visuals, consistent with the established creative direction. Make the Scene prompt sufficiently complete to guide the intended render on its own. Keep your work focused on this Scene; do not introduce your own story, narrative direction, or unrelated creative developments. Return the complete revised H3 prompt; if no meaningful improvement is needed, return changed=false with the original prompt.",
@@ -43,18 +43,30 @@ MODULES = (
 MODULE_IDS = frozenset(row[0] for row in MODULES)
 
 
+def default_for(module_id):
+    """Resolve one default, without loading unrelated prompt documents."""
+    if module_id == "studio.classic":
+        return _CLASSIC
+    if module_id == "studio.current":
+        return _WORKSHOP
+    if module_id == "studio.imaginative":
+        return _IMAGINATIVE
+    if module_id == "studio.render":
+        return _RENDER
+    if module_id == "h3.toolkit":
+        return H3_TOOLKIT
+    if module_id == "h3.authoring":
+        return (DOCS_ROOT / "mmh3-prompt-runtime-context.txt").read_text(encoding="utf-8").strip()
+    if module_id == "storyboard.director":
+        return (DOCS_ROOT / "storyboard-director-context.txt").read_text(encoding="utf-8").strip()
+    if module_id in SPECIALIST_DEFAULTS:
+        return SPECIALIST_DEFAULTS[module_id]
+    raise ValueError("Unknown LLM guidance module: " + module_id)
+
+
 def default_texts():
-    """Single authoritative defaults; existing material is kept byte-for-byte."""
-    return {
-        "studio.classic": _CLASSIC,
-        "studio.current": _WORKSHOP,
-        "studio.imaginative": _WORKSHOP + _IMAGINATIVE,
-        "studio.render": _WORKSHOP + _RENDER,
-        "h3.toolkit": H3_TOOLKIT,
-        "h3.authoring": (DOCS_ROOT / "mmh3-prompt-runtime-context.txt").read_text(encoding="utf-8").strip(),
-        "storyboard.director": (DOCS_ROOT / "storyboard-director-context.txt").read_text(encoding="utf-8").strip(),
-        **SPECIALIST_DEFAULTS,
-    }
+    """Enumerate built-in defaults for Settings; request assembly uses default_for."""
+    return {module_id: default_for(module_id) for module_id, *_ in MODULES}
 
 
 def text_for(module_id):
@@ -66,8 +78,7 @@ def text_for(module_id):
         raise ValueError("Config.llm_guidance must be an object.")
     if module_id in overrides:
         return overrides[module_id]
-    return default_texts()[module_id]
-
+    return default_for(module_id)
 
 def catalog():
     from . import config as app_config

@@ -3162,7 +3162,8 @@
     // Creative requests need the author's task and relevant source material.
     // Navigation, available buttons, IDs and save policy remain WebCap concerns.
     // Keep the existing call signature for contextual Write callers.
-    return requestJson('/fs/studio/director/guidance?targetModel=minimax_h3&profile=' + encodeURIComponent(state.studioProfile)).then(function (payload) {
+    return requestJson('/fs/studio/director/guidance?targetModel=minimax_h3&profile=' + encodeURIComponent(state.studioProfile) +
+      '&includePromptContract=' + (includePromptContract ? '1' : '0')).then(function (payload) {
       if (!payload.system || typeof payload.system !== 'string')
         throw new Error('Studio Director creative guidance is unavailable.');
       if (includePromptContract && (!payload.promptContract || typeof payload.promptContract !== 'string'))
@@ -3189,10 +3190,7 @@
       boundTarget.sceneId = selectedScene && selectedScene.projectId === targetProjectId ? selectedScene.sceneId : '';
       boundTarget.sceneNumber = boundTarget.sceneId ? selectedScene.sceneNumber : 0;
     }
-    return studioDirectorRequestMessages(messages, false, false).then(function (outbound) {
-      outbound[0].content += '\n\nAnswer the author conversationally. Project and Scene writing are explicit functions, not conversational output requirements.\n';
-      return outbound;
-    });
+    return studioDirectorRequestMessages(messages, false, false);
   }
 
   // Retain available conversational work across ordinary follow-up questions.

@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from .h3_prompt_contract import mode_from_reference_roles
+from .llm_guidance import text_for as llm_guidance_text
 from . import config as app_config
 
 
@@ -28,15 +29,12 @@ def build_request(model_id, operation, prompt="", instruction="", settings=None,
     reference_roles = reference_roles if isinstance(reference_roles, list) else []
 
     blocks = [
-        "[DIRECTOR CONTEXT]\n"
-        "You are helping write one standalone image or video generation prompt inside WebCap Generate. "
-        "There is no Story or Scene continuity unless the user explicitly supplies it. "
-        "Do not invent unrelated narrative."
+        "[DIRECTOR CONTEXT]\n" + llm_guidance_text("task.generate")
     ]
 
     if model_id == "minimax_h3":
         h3_mode = mode_from_reference_roles(reference_roles)
-        blocks.append("[MODEL GUIDANCE]\n" + _read_text(H3_RUNTIME_CONTEXT_PATH, "MiniMax H3 runtime context"))
+        blocks.append("[MODEL GUIDANCE]\n" + llm_guidance_text("h3.authoring") + "\n\nH3 CREATIVE TOOLKIT:\n" + llm_guidance_text("h3.toolkit"))
         duration = settings.get("duration")
         if duration not in (None, ""):
             blocks.append("[OUTPUT BUDGET]\nTarget duration: " + str(duration) + " seconds.")

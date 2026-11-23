@@ -6,7 +6,6 @@ arguments remain owned by each operation. No hidden model calls or routing.
 
 from pathlib import Path
 
-from . import config as app_config
 from .studio_guidance_defaults import _CLASSIC, _WORKSHOP, _IMAGINATIVE, _RENDER
 
 DOCS_ROOT = Path(__file__).resolve().parents[2] / "docs"
@@ -53,6 +52,7 @@ def default_texts():
 
 
 def text_for(module_id):
+    from . import config as app_config
     if module_id not in MODULE_IDS:
         raise ValueError("Unknown LLM guidance module: " + module_id)
     overrides = app_config.config.get("llm_guidance", {})
@@ -64,6 +64,7 @@ def text_for(module_id):
 
 
 def catalog():
+    from . import config as app_config
     defaults = default_texts()
     overrides = app_config.load_config_from_disk().get("llm_guidance", {})
     return [

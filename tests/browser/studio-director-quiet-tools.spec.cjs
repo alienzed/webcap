@@ -2,14 +2,14 @@
 const {test,expect}=require('./test.cjs');
 const {openDirector,seedProject}=require('./helpers.cjs');
 
-test('Studio Director exposes its tools beside the composer instead of the header', async({page})=>{
+test('Studio Director keeps conversation navigation in header and tools beside composer', async({page})=>{
   await openDirector(page);
   const drawer=page.locator('#director-chat-drawer');
   await expect(drawer).toHaveClass(/studio-director/);
   await expect(page.locator('#director-studio-actions-toggle')).toBeVisible();
   await expect(page.locator('#studio-dw-open-tools')).toBeHidden();
-  await expect(page.locator('#director-chat-history-toggle')).toBeHidden();
-  await expect(page.locator('#director-chat-clear')).toBeHidden();
+  await expect(page.locator('#director-chat-history-toggle')).toBeVisible();
+  await expect(page.locator('#director-chat-clear')).toBeVisible();
   await expect(page.locator('#studio-dw-read-panel')).toBeHidden();
 
   const launcher=page.locator('#director-studio-actions-toggle');
@@ -17,7 +17,8 @@ test('Studio Director exposes its tools beside the composer instead of the heade
   await expect(launcher).toHaveAttribute('aria-expanded','true');
   const menu=page.locator('#director-studio-actions-menu');
   await expect(menu).toBeVisible();
-  await expect(menu.locator('[data-studio-tool]')).toHaveCount(7);
+  await expect(menu.locator('[data-studio-tool]')).toHaveCount(5);
+  await expect(menu.locator('[data-studio-tool="new-chat"]')).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(menu).toBeHidden();
   await expect(launcher).toBeFocused();

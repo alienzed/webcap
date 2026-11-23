@@ -1603,14 +1603,7 @@
     }
     launcherButton.onclick = function () {
       var opening = menu.classList.contains('hidden');
-      if (opening) {
-        // These commands own their enabled state in the existing chat
-        // controller. The launcher must not advertise an inert action.
-        menu.querySelector('[data-studio-tool="history"]').disabled =
-          el('director-chat-history-toggle').disabled;
-        menu.querySelector('[data-studio-tool="new-chat"]').disabled =
-          el('director-chat-clear').disabled;
-      }
+
       menu.classList.toggle('hidden', !opening);
       launcherButton.setAttribute('aria-expanded', opening ? 'true' : 'false');
       if (opening) {
@@ -1633,8 +1626,6 @@
             return refreshWrite();
           });
         }
-        if (tool === 'history') return el('director-chat-history-toggle').click();
-        if (tool === 'new-chat') return el('director-chat-clear').click();
         if (tool === 'io') {
           if (el('director-chat-drawer').classList.contains('studio-actions-open'))
             el('studio-dw-close-actions').click();

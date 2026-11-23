@@ -4444,7 +4444,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 
 /* Director's infrequently used creative controls live in one small settings sheet.
    Model selection remains in the global application header. */
-.director-chat-drawer.studio-director .director-chat-drawer-header { position: relative; }
+.director-chat-drawer.studio-director .director-chat-drawer-header { position: relative; z-index: 25; }
 .director-chat-drawer .director-studio-settings-toggle.hidden,
 .director-chat-drawer .director-studio-settings-panel.hidden { display: none !important; }
 .director-chat-drawer.studio-director #director-studio-settings-toggle {

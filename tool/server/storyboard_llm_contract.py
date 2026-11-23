@@ -22,8 +22,6 @@ def _add_model_limitations(blocks, model_id):
 
 
 DOCS_ROOT = Path(__file__).resolve().parents[2] / "docs"
-DIRECTOR_CONTEXT_PATH = DOCS_ROOT / "storyboard-director-context.txt"
-H3_RUNTIME_CONTEXT_PATH = DOCS_ROOT / "mmh3-prompt-runtime-context.txt"
 SCENE_PLAN_SCHEMA_PATH = DOCS_ROOT / "storyboard-scene-plan.schema.json"
 INVARIANT_SCHEMA_PATH = DOCS_ROOT / "storyboard-invariants.schema.json"
 SCENE_REPAIR_SCHEMA_PATH = DOCS_ROOT / "storyboard-scene-repair.schema.json"

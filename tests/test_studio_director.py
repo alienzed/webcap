@@ -101,6 +101,15 @@ def test_chat_can_skip_h3_authoring_load_and_empirical_playbook(monkeypatch):
 
     monkeypatch.setattr(studio_director, "llm_guidance_text", observe)
     monkeypatch.setattr(app_config, "config", {})
+    from pathlib import Path
+    original_read = Path.read_text
+
+    def forbid_prompt_reads(path, *args, **kwargs):
+        if path.name in {"mmh3-prompt-runtime-context.txt", "storyboard-director-context.txt"}:
+            raise AssertionError("Unrelated prompt document was read during Studio Chat")
+        return original_read(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", forbid_prompt_reads)
     result = guidance(profile="classic", include_prompt_contract=False)
     assert result["system"]
     assert result["promptContract"] == ""

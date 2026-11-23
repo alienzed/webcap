@@ -604,12 +604,16 @@
       state.lastStudioMode = modeId;
     if (state.activeMode === modeId) return;
     var input = el('director-chat-input');
-    state.draftByMode[state.activeMode] = input.value;
+    // Browsing a sent message is temporary; the unsent draft remains authoritative.
+    state.draftByMode[state.activeMode] = inputHistoryIndex === inputHistory.length
+      ? input.value : inputHistoryDraft;
     if (persistentMode(state.activeMode) && state.sessionReady && state.sessionDirty[state.activeMode]) {
       flushSessionSave().catch(showSessionFailure);
     }
     state.activeMode = modeId;
     input.value = state.draftByMode[modeId] || '';
+    inputHistoryIndex = inputHistory.length;
+    inputHistoryDraft = input.value;
     finishProgress(null);
     syncModeUi();
     if (input) input.focus();
@@ -4203,39 +4207,44 @@
         inputHistoryIndex = inputHistory.length;
         inputHistoryDraft = input.value;
       }
-      state.draftByMode[state.activeMode] = input.value;
-      if (persistentMode(state.activeMode) && state.sessionReady) scheduleSessionSave();
+      // Recalling a sent message must not overwrite the saved, unsent draft.
+      if (!applyingHistoryValue || inputHistoryIndex === inputHistory.length) {
+        state.draftByMode[state.activeMode] = input.value;
+        if (persistentMode(state.activeMode) && state.sessionReady) scheduleSessionSave();
+      }
       syncControls();
     });
     input.addEventListener('keydown', function (event) {
-      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-        var start = Number(input.selectionStart || 0);
-        var end = Number(input.selectionEnd || 0);
-        var onFirstLine = input.value.lastIndexOf('\n', Math.max(0, start - 1)) === -1;
-        var onLastLine = input.value.indexOf('\n', end) === -1;
+      if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') &&
+          !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey &&
+          !event.isComposing) {
+        var start = input.selectionStart;
+        var end = input.selectionEnd;
         var direction = event.key === 'ArrowUp' ? -1 : 1;
+        var nextIndex = inputHistoryIndex + direction;
+        var atStart = start === 0 && end === 0;
+        var atEnd = start === input.value.length && end === start;
+        var canNavigate = nextIndex >= 0 && nextIndex <= inputHistory.length &&
+          (direction < 0 ? atStart :
+            inputHistoryIndex < inputHistory.length && (atStart || atEnd));
 
-        if ((direction < 0 && onFirstLine) || (direction > 0 && onLastLine)) {
-          if (inputHistory.length) {
-            if (direction < 0) {
-              if (inputHistoryIndex === inputHistory.length) inputHistoryDraft = input.value;
-              if (inputHistoryIndex > 0) inputHistoryIndex -= 1;
-            } else if (inputHistoryIndex < inputHistory.length) {
-              inputHistoryIndex += 1;
-            }
-
-            if (inputHistoryIndex >= 0 && inputHistoryIndex <= inputHistory.length) {
-              event.preventDefault();
-              applyingHistoryValue = true;
-              input.value = inputHistoryIndex === inputHistory.length
-                ? inputHistoryDraft
-                : inputHistory[inputHistoryIndex];
-              input.dispatchEvent(new Event('input', { bubbles: true }));
-              applyingHistoryValue = false;
-              input.setSelectionRange(input.value.length, input.value.length);
-            }
+        if (canNavigate) {
+          if (direction < 0 && inputHistoryIndex === inputHistory.length) inputHistoryDraft = input.value;
+          inputHistoryIndex = nextIndex;
+          event.preventDefault();
+          applyingHistoryValue = true;
+          try {
+            input.value = inputHistoryIndex === inputHistory.length
+              ? inputHistoryDraft
+              : inputHistory[inputHistoryIndex];
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+          } finally {
+            applyingHistoryValue = false;
           }
-          return;
+          // Keep recalled entries at the start for repeated Up/Down navigation.
+          // Returning to the live draft restores the caret to its editing position.
+          var caret = inputHistoryIndex === inputHistory.length ? input.value.length : 0;
+          input.setSelectionRange(caret, caret);
         }
       }
       if (event.key === 'Enter' && !event.shiftKey) {

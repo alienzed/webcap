@@ -24,6 +24,13 @@ Scope: the main Studio Director **conversation** request (`studio_chat`). This i
 | Low | Studio Chat borrowed a sampling preset named `expand_concept`, obscuring its runtime behavior. | Named `studio_chat` profile, preserving identical sampling values and runtime behavior. |
 | Low | Documentation still claimed Chat had no H3 expertise and described events/progression as universal requirements. | Updated the functional contract to reflect the actual requests and neutral creative expectations. |
 
+## Remaining, deliberately unchanged influences
+
+- A completed Write appends a **visible, persisted user-role receipt** with `[WEBCAP APPLIED FIELD VALUES]`, the operation, destination ID and names of saved fields. Subsequent Chat receives these receipts as part of the unabridged conversation. They are factual audit events, **not current saved field values**; a fresh explicit Read still supplies authoritative content. This legacy conversation representation was not rewritten during the guidance audit.
+- The main `studio_chat` route enqueues with an empty runtime context. On local llama.cpp the existing runtime sets `enable_thinking=false` / `reasoning_effort=none`; remote providers retain their supported defaults. This is an inference-behavior choice rather than a prompt instruction. It remains unchanged because altering it would affect model latency, cost, and output beyond seeding guidance.
+- Server-side `STORYBOARD_WORKSHOP_PRIMER` equivalents, specialist defaults and Action Advisor form independent paths. Their separate prompt wording may still need its own creative audit, but it does not contaminate the main Studio Chat request.
+- Provider-managed chat templates and model-specific internal instructions are outside WebCap's outgoing messages; this audit establishes WebCap's payload, not hidden provider internals.
+
 ## Instruction ownership after the change
 
 - **Studio profile**: role, creative judgment, conversational behavior, Project and Scene concepts, scope of authoring vs saving.

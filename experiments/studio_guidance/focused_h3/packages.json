@@ -10,7 +10,8 @@
       "source": "repository_default",
       "profile": "studio.classic",
       "toolkit": "h3.toolkit",
-      "authoring_addendum": ""
+      "authoring_addendum": "",
+      "freeze_addendum": true
     },
     {
       "id": "state-anchor",

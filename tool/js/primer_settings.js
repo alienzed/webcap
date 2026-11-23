@@ -1593,13 +1593,17 @@ function buildCaptionAssistRequest(mediaItem) {
     draft: getCaptionAssistDraftForMediaItem(mediaItem),
     openSight: mediaItem.metadata && mediaItem.metadata.vision_sight || null
   };
-  // Only first-time, untagged items with Sight: an unedited auto-Primer is
-  // structure guidance, NOT an authored draft to preserve. Mature paths stay unchanged.
+  // The unsaved, untouched auto-Primer is structure guidance, not an authored draft.
+  // Keep live editor changes, including changes awaiting autosave.
   var autoPrimer = String(buildAutoPrimer(mediaItem.fileName, mediaKey) || '').trim();
+  if (autoPrimer && !String(mediaItem.caption || '').trim() &&
+      request.draft.trim() === autoPrimer) {
+    request.draft = '';
+  }
+  // First-time, untagged Sight-led captions still start from visual evidence.
   if (!assignments.length && !request.tags.length && !String(mediaItem.caption || '').trim() &&
       request.openSight && String(request.openSight.description || '').trim() &&
-      (!request.draft.trim() || request.draft.trim() === autoPrimer)) {
-    request.draft = '';
+      !request.draft.trim()) {
     request.sightLed = true;
   }
   return request;

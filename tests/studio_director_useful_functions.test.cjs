@@ -39,10 +39,11 @@ test('Read and the optional coherence utility stay separate from creative Write'
   assert.doesNotMatch(chat, /suggest coherence-check/);
 });
 
-test('ordinary chat guidance is concise and has no H3 production or Write instructions',()=>{
-  assert.match(chat,/Answer the author conversationally/);
-  assert.match(roleDefaults,/CONVERSATION: Respond naturally and concisely/);
+test('ordinary Chat sends the selected creative role without a hidden suffix',()=>{
+  assert.match(roleDefaults,/Talk naturally and proportionately/);
+  assert.match(roleDefaults,/Conversation can explore or draft creative content/);
+  assert.match(chat,/includePromptContract=' \+ \(includePromptContract \? '1' : '0'\)/);
+  assert.doesNotMatch(chat,/outbound\[0\]\.content \+= '\\n\\nAnswer the author conversationally/);
   assert.doesNotMatch(roleDefaults,/CREATIVE WORK: When asked to create or revise material/);
-  assert.match(roleDefaults,/Explicit Write functions/);
 });
 

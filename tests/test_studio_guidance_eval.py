@@ -51,10 +51,10 @@ def test_fixed_request_scope_matches_chat_and_write_contracts(design):
         assert len(messages) == 1 + len(case["history"]) + (case["operation"] != "studio_chat")
         assert messages[0]["role"] == "system"
         assert messages[1:1 + len(case["history"])] == case["history"]
-        assert "H3 PROMPT AUTHORING REFERENCE:" in messages[0]["content"] == (
+        assert ("H3 PROMPT AUTHORING REFERENCE:" in messages[0]["content"]) == (
             case["operation"] == "studio_scenes_draft"
         )
-        assert "integrated_multimodal_description:" in messages[0]["content"] == (
+        assert ("integrated_multimodal_description:" in messages[0]["content"]) == (
             case["operation"] == "studio_scenes_draft"
         )
         if case["operation"] == "studio_scenes_draft":
@@ -135,6 +135,15 @@ def test_blind_review_hides_package_and_report_requires_human_scores(tmp_path, m
         "plan", "--output", str(folder), "--model", "test-model",
         "--case", "chat-tableau", "--repeats", "1"
     ]) == 0
+    with pytest.raises(ValueError, match="no model evidence"):
+        evaluation.main(["review", "--run-dir", str(folder)])
+    # Only actual-job receipts are eligible for blind review. Supply representative
+    # terminal records here; this unit test does not call any model.
+    simulated = evaluation.read_jsonl(folder / "trials.jsonl")
+    for record in simulated:
+        record["status"] = "completed"
+        record["result"] = {"text": "A specific, coherent production suggestion."}
+    evaluation.save_jsonl(folder / "trials.jsonl", simulated)
     evaluation.main(["review", "--run-dir", str(folder)])
     cards = evaluation.read_jsonl(folder / "review_cards.jsonl")
     assert len(cards) == 4
@@ -152,4 +161,4 @@ def test_blind_review_hides_package_and_report_requires_human_scores(tmp_path, m
     assert len(report["categories"]) == 4
     assert all(row["reviewed"] == 1 and row["first_pass_usable_rate"] == 1 for row in report["categories"])
     assert all(row["avg_estimated_correction_rounds"] == 1 for row in report["categories"])
-    assert all(row["responses_ok"] == 0 for row in report["categories"])  # planned, not executed
+    assert all(row["responses_ok"] == 1 for row in report["categories"])  # fixture receipts only

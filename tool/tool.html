@@ -2116,6 +2116,9 @@
                             </select>
                         </div>
                         <button id="studio-dw-open-tools" type="button" class="review-captions-btn" aria-controls="director-chat-sidebar" aria-expanded="false">Read / Write</button>
+                        <button id="director-studio-settings-toggle" type="button" class="director-studio-settings-toggle hidden" title="Director settings" aria-label="Director settings" aria-expanded="false" aria-controls="director-studio-settings-panel">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.25a3.75 3.75 0 1 0 0 7.5 3.75 3.75 0 0 0 0-7.5Z"></path><path d="M19.45 13.65a7.8 7.8 0 0 0 0-3.3l1.35-1.05-1.5-2.6-1.65.65a8 8 0 0 0-2.85-1.65L14.55 4h-3L11.3 5.7a8 8 0 0 0-2.85 1.65L6.8 6.7l-1.5 2.6 1.35 1.05a7.8 7.8 0 0 0 0 3.3L5.3 14.7l1.5 2.6 1.65-.65a8 8 0 0 0 2.85 1.65l.25 1.7h3l.25-1.7a8 8 0 0 0 2.85-1.65l1.65.65 1.5-2.6-1.35-1.05Z"></path></svg>
+                        </button>
                         <button id="director-chat-pin" type="button" class="director-chat-pin" title="Pin Assistant" aria-label="Pin Assistant" aria-pressed="false">
                             <svg viewBox="0 0 24 24" aria-hidden="true">
                                 <path d="M9 4h6"></path>
@@ -2127,6 +2130,19 @@
                         <button id="director-chat-clear" type="button" class="review-captions-btn" title="New conversation" aria-label="New conversation"><svg class="studio-header-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10M16 4l4 4M9 15l-1 4 4-1L21 9a2 2 0 0 0-3-3z"></path></svg><span class="director-header-button-label">New chat</span></button>
                         <button id="director-chat-close" type="button" class="director-chat-close" aria-label="Close Assistant">×</button>
                     </div>
+                    <section id="director-studio-settings-panel" class="director-studio-settings-panel hidden" aria-label="Director settings">
+                        <strong>Director settings</strong>
+                        <label for="director-studio-profile">Creative profile</label>
+                        <select id="director-studio-profile" class="hidden" aria-label="Director creative profile">
+                            <option value="classic">Classic</option>
+                            <option value="current">Current</option>
+                            <option value="imaginative">Imaginative</option>
+                            <option value="render">Render-focused</option>
+                        </select>
+                        <p>Applied to new Studio conversations and Write requests.</p>
+                        <button id="director-studio-settings-guidance" type="button">Edit profile instructions</button>
+                        <button id="director-studio-settings-app" type="button">Director runtime &amp; options</button>
+                    </section>
                 </header>
                 <div id="director-studio-flow-target" class="director-studio-flow-target hidden">
                     <span id="director-studio-flow-target-label"></span>
@@ -2177,12 +2193,6 @@
                         <option value="">Loading models...</option>
                     </select>
                     <button id="director-chat-model-refresh" type="button" class="refresh-btn-square director-model-refresh-btn" title="Refresh Director models" aria-label="Refresh Director models">&#8635;</button>
-                    <select id="director-studio-profile" class="hidden" aria-label="Director creative profile" title="Director creative profile; full instructions are visible in Model I/O">
-                        <option value="classic">Classic</option>
-                        <option value="current">Current</option>
-                        <option value="imaginative">Imaginative</option>
-                        <option value="render">Render-focused</option>
-                    </select>
                 </div>
                 <div id="director-chat-progress" class="director-chat-progress hidden" aria-live="polite">
                     <div class="director-chat-progress-copy">

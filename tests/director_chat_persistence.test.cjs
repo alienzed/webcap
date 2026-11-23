@@ -116,6 +116,7 @@ test('global Assistant opens Chat, never stale Studio Director outside Studio', 
       'app-frame':{classList:{toggle(name,on){if(name==='studio-director-active')properties.studio=on;}}},
       'director-chat-input': {focus() {}}})[id],
     syncPinnedUi: () => {}, syncModeUi: () => {},
+    setStudioSettingsOpen: () => { properties.settingsDismissed = true; },
     loadModels: async () => {}, maybeOpenNewStudioConversation: () => {
       throw Error('Studio startup must not happen outside Studio.');
     },
@@ -128,6 +129,7 @@ test('global Assistant opens Chat, never stale Studio Director outside Studio', 
   assert.equal(state.open, true);
   assert.equal(properties.hidden, false);
   setOpen(false);
+  assert.equal(properties.settingsDismissed, true, 'Closing Assistant dismisses Director settings');
 
   // Switching is blocked during LLM requests; do not expose Studio instead.
   state.pending = true;

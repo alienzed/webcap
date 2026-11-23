@@ -1,15 +1,11 @@
-"""Concise, built-in creative-partner guidance for Studio Director.
+"""Studio Director response schema and guidance composition.
 
-The production-prompt shape is returned separately for prompt-authoring tasks,
-rather than spent on every open-ended brainstorm request.
+Creative role defaults are editable via the shared LLM Guidance catalog.
+The technical H3 authoring reference is returned separately for Scene writing.
 """
-
-from pathlib import Path
 
 from . import config as app_config
 
-
-_H3_RUNTIME = Path(__file__).resolve().parents[2] / "docs" / "mmh3-prompt-runtime-context.txt"
 
 # User-visible capability catalog. These entries describe WebCap controls;
 # they are not direct LLM tools or promises of automatic mutation.
@@ -22,7 +18,7 @@ ACTIONS = (
      "description": "Create one or more Scenes with complete H3 Prompts, or revise only requested Scene fields; title-only edits need no creative rewrite. WebCap binds and saves each target."},
 )
 
-from .studio_guidance_defaults import _WORKSHOP, _CLASSIC, _IMAGINATIVE, _RENDER, PROFILES, _PROFILE_IDS
+from .studio_guidance_defaults import PROFILES, _PROFILE_IDS
 from .llm_guidance import text_for as llm_guidance_text
 
 

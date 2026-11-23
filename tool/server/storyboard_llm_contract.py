@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from .h3_prompt_contract import mode_from_reference_roles
+from .llm_guidance import text_for as llm_guidance_text
 from . import config as app_config
 
 
@@ -372,13 +373,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             "operation": operation,
             "output": "json",
             "prompt": "\n\n".join(blocks).strip() + "\n",
-            "system_prompt": (
-                "You are Project Deep QA for a text-to-video production project. Help the author avoid preventable "
-                "prompt failures with useful, specific corrections. Make relevant appearance, action, continuity, "
-                "and transitions explicit wherever the supplied Project text leaves them under-specified. Ground "
-                "every finding in the supplied Project text and preserve the author's creative intent. Use the "
-                "saved Project and Scene prompt text as the evidence for your assessment."
-            ),
+            "system_prompt": llm_guidance_text("task.project_deep_qa"),
             "response_schema": _project_deep_qa_response_schema(),
         }
 
@@ -442,14 +437,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             "operation": operation,
             "output": "json",
             "prompt": "\n\n".join(blocks).strip() + "\n",
-            "system_prompt": (
-                "You are Prompt Assist, a text-only production helper for one Scene. Visual Direction is a separate "
-                "capability and the primary visual-completeness pass. Improve practical issues that remain in the "
-                "written prompt. Make relevant appearance, action, state changes, continuity, and framing explicit "
-                "rather than relying on inference. Each suggestion is one problem and one small, actionable "
-                "correction. Keep explanations short, provide one best fix, and preserve the author's intent and "
-                "all unrelated prompt material. Work only from the supplied Project and Scene text."
-            ),
+            "system_prompt": llm_guidance_text("task.prompt_assist"),
             "response_schema": _prompt_assist_response_schema(),
         }
 
@@ -482,12 +470,12 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             "response_schema": _prompt_response_schema(),
         }
 
-    director_context = _read_text(DIRECTOR_CONTEXT_PATH, "Storyboard director context")
+    director_context = llm_guidance_text("storyboard.director")
     if operation in {"expand_concept", "develop_story", "develop_story_outline", "develop_story_scene", "insert_scene", "extend_story", "write_prompt", "repair_scenes"}:
         guidance = _story_guidelines_text(story)
         if guidance:
             director_context += "\n\n[STORY DIRECTING GUIDELINES - AUTHOR INTENT]\n" + guidance
-    h3_runtime_context = _read_text(H3_RUNTIME_CONTEXT_PATH, "MiniMax H3 runtime context")
+    h3_runtime_context = llm_guidance_text("h3.authoring") + "\n\nH3 CREATIVE TOOLKIT:\n" + llm_guidance_text("h3.toolkit")
 
     if operation == "define_invariants":
         concept = _clean(story.get("concept"))
@@ -951,19 +939,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         "output": "json",
         "prompt": "\n\n".join(blocks).strip() + "\n",
         **({
-            "system_prompt": (
-                "You are refining prompts for a text-to-video model. Your job is to describe the intended moving visuals so the model can render them accurately. "
-                "Be exceptionally thorough and specific about the visuals that will actually be rendered. "
-                "Explicitly establish relevant visual details that are implied by context or not yet specified. "
-                "Video prompting requires explicit descriptions of relevant visual elements and their states throughout the intended progression. "
-                "Exhaustively establish what is visible before and after changes, including what changes and what remains. "
-                "Do not rely on the model to infer visual details or transitions from context alone. "
-                "Prioritize details that materially affect what the viewer will see or how the intended actions will be rendered. "
-                "Make appropriate creative decisions to complete the intended visuals, consistent with the established creative direction. "
-                "Make the Scene prompt sufficiently complete to guide the intended render on its own. "
-                "Keep your work focused on this Scene; do not introduce your own story, narrative direction, or unrelated creative developments. "
-                "Return the complete revised H3 prompt; if no meaningful improvement is needed, return changed=false with the original prompt."
-            )
+            "system_prompt": llm_guidance_text("task.visual_direction"),
         } if operation == "visual_direction" else {}),
         "response_schema": _prompt_response_schema(
             allow_duration=operation == "refine_prompt",

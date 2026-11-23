@@ -93,7 +93,7 @@ def test_director_chat_pin_is_ephemeral_ui_state():
 
     assert "pinned: false" in script
     assert "webcap.directorChat.pinned" not in script
-    assert "localStorage" not in script
+    assert "webcap.studioDirector.profile" in script  # Profile choice may persist; chat pin does not.
     assert "state.pinned = false;" in script
 
 

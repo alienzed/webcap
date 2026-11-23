@@ -53,7 +53,7 @@ def test_studio_guidance_teaches_only_focused_creative_workflows():
     assert "make a recommendation when you can" in result["system"]
     assert "CURRENT WEBCAP CAPABILITIES" not in result["system"]
     assert len(llm_guidance_text("studio.current")) < 4000
-    assert len(system) < 6000
+    assert len(result["system"]) < 6000
 
 def test_chat_director_matches_reply_depth_without_hiding_requested_scene_material():
     system = guidance("minimax_h3", "current")["system"]

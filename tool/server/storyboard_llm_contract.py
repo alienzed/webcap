@@ -931,7 +931,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             + "\n\nPreserve all authored material outside the requested scope. "
             "Return changed=false with the original prompt when the correction is already satisfied. "
             "Otherwise return the complete minimally revised prompt. "
-            "Duration updates, when needed, must be between 6 and 15 seconds."
+            "Duration updates, when needed, must be between 4 and 15 seconds."
         )
 
     return {

@@ -7,3 +7,5 @@ tool/config.json
 /.audit-*
 /node_modules/
 /test-results/
+# Local guidance evaluation evidence and human review (may contain private prompts).
+/experiments/studio_guidance/runs/

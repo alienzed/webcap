@@ -133,7 +133,7 @@ def assemble_studio_context(messages):
             _checkpoint(memory_rows, "AUTHOR HISTORY (verbatim):"),
             _checkpoint(retrieved_rows, "RELEVANT EARLIER EXCHANGES (verbatim):"),
             "[END WEBCAP CONVERSATION CHECKPOINT]"]
-    checkpoint = {"role": "system", "content": "\n\n".join(part for part in note if part)}
+    checkpoint = {"role": "assistant", "content": "\n\n".join(part for part in note if part)}
     outbound = systems + [checkpoint] + recent
     trace = {"strategy": "extractive", "originalMessages": len(messages),
              "originalChars": total, "outboundMessages": len(outbound),

@@ -81,15 +81,15 @@ def assemble_studio_context(messages):
     offset = len(systems)
     scored = []
     for pos, entry in enumerate(older):
-        if entry["role"] != "user":
-            continue
         matches = focus.intersection(_terms(entry["content"]))
         if not matches:
             continue
         score = len(matches) * 6 + (3 if _read_snapshot(entry["content"]) else 0)
         group = [pos]
-        if pos + 1 < len(older) and older[pos + 1]["role"] == "assistant":
+        if entry["role"] == "user" and pos + 1 < len(older) and older[pos + 1]["role"] == "assistant":
             group.append(pos + 1)
+        elif entry["role"] == "assistant" and pos and older[pos - 1]["role"] == "user":
+            group.insert(0, pos - 1)
         scored.append((score, pos, group))
     scored.sort(key=lambda row: (-row[0], -row[1]))
     retrieval = set()

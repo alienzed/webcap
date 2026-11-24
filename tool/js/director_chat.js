@@ -934,6 +934,8 @@
     state.sessionDirty[chat.mode] = false;
     if (state.activeMode === chat.mode) {
       el('director-chat-input').value = state.draftByMode[chat.mode];
+      inputHistoryIndex = inputHistory.length;
+      inputHistoryDraft = state.draftByMode[chat.mode];
       syncModeUi();
     }
     upsertSessionSummary(chat);
@@ -1036,7 +1038,11 @@
           state.workshop = null;
         }
         state.draftByMode[chat.mode] = '';
-        if (state.activeMode === chat.mode) el('director-chat-input').value = '';
+        if (state.activeMode === chat.mode) {
+          el('director-chat-input').value = '';
+          inputHistoryIndex = inputHistory.length;
+          inputHistoryDraft = '';
+        }
       }
       renderSessionHistory();
       syncModeUi();
@@ -3137,6 +3143,8 @@
       state.modeMetricsByAssistantIndex[state.activeMode] = {};
       state.draftByMode[state.activeMode] = '';
       el('director-chat-input').value = '';
+      inputHistoryIndex = inputHistory.length;
+      inputHistoryDraft = '';
       syncModeUi();
       return;
     }
@@ -3188,6 +3196,8 @@
         el('director-chat-workshop-status').textContent = '';
       }
       el('director-chat-input').value = '';
+      inputHistoryIndex = inputHistory.length;
+      inputHistoryDraft = '';
       upsertSessionSummary(chat);
       showSessionStatus('Conversation saved', false);
       finishProgress(null);
@@ -5079,7 +5089,11 @@
         state.draftByMode[modeId] = '';
         // The visible input may still belong to another mode. Let setMode
         // capture that draft before restoring the new QA mode's empty draft.
-        if (state.activeMode === modeId) el('director-chat-input').value = '';
+        if (state.activeMode === modeId) {
+          el('director-chat-input').value = '';
+          inputHistoryIndex = inputHistory.length;
+          inputHistoryDraft = '';
+        }
       }
     }
     setOpen(true, modeId);

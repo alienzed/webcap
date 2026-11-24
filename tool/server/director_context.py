@@ -74,8 +74,14 @@ def assemble_studio_context(messages):
     # Keep unusual interleaved system instructions in their original order.
     if len(body) <= RECENT_MESSAGES or any(not _role_message(item) for item in body):
         return messages, base
-    older = body[:-RECENT_MESSAGES]
-    recent = body[-RECENT_MESSAGES:]
+    recent_start = len(body) - RECENT_MESSAGES
+    # A compacted historical user note precedes the recent conversation.
+    # Start the latter on an assistant boundary when possible so strict
+    # user/assistant chat templates keep their normal conversation order.
+    while recent_start > 0 and body[recent_start]["role"] != "assistant":
+        recent_start -= 1
+    older = body[:recent_start]
+    recent = body[recent_start:]
     question = next((m["content"] for m in reversed(recent) if m["role"] == "user"), "")
     focus = _terms(question)
     offset = len(systems)
@@ -135,12 +141,13 @@ def assemble_studio_context(messages):
     memory_rows = [(offset + i, older[i]) for i in sorted(memory)]
     retrieved_rows = [(offset + i, older[i]) for i in sorted(retrieval)]
     note = ["[WEBCAP EXTRACTIVE CONVERSATION CHECKPOINT]",
+            "WebCap-derived historical excerpts, not a new author instruction.",
             "Verbatim historical excerpts, not current saved Project or Scene values.",
             "Later author statements take precedence. This checkpoint does not reread saved fields.",
             _checkpoint(memory_rows, "AUTHOR HISTORY (verbatim):"),
             _checkpoint(retrieved_rows, "RELEVANT EARLIER EXCHANGES (verbatim):"),
             "[END WEBCAP CONVERSATION CHECKPOINT]"]
-    checkpoint = {"role": "assistant", "content": "\n\n".join(part for part in note if part)}
+    checkpoint = {"role": "user", "content": "\n\n".join(part for part in note if part)}
     outbound = systems + [checkpoint] + recent
     trace = {"strategy": "extractive", "originalMessages": len(messages),
              "originalChars": total, "outboundMessages": len(outbound),

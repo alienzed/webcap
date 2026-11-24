@@ -93,6 +93,7 @@
     returnTrainingFiles: null,
     returnFindingId: '',
     returnToCurate: false,
+    returnToCorrections: false,
     statusMessage: '',
     externalAnalysisAttemptKey: '',
     externalAnalysisRunning: false
@@ -983,7 +984,10 @@
       // Persist accepted results and failed-item receipts before advancing.
       // Save failure is outside the item-error handler and pauses the scan.
       return qaSaveReview(true).then(function () {
-        if (qaDeepScanCurrent(scan, token)) return qaDeepScanNextItemBatch(scan, token);
+        if (qaDeepScanCurrent(scan, token)) {
+          if (qaWorkbenchState.view === 'corrections') renderQaWorkbench();
+          return qaDeepScanNextItemBatch(scan, token);
+        }
       });
     });
   }
@@ -2929,6 +2933,7 @@
       qaWorkbenchState.returnTrainingFiles = null;
       qaWorkbenchState.returnFindingId = '';
       qaWorkbenchState.returnToCurate = false;
+      qaWorkbenchState.returnToCorrections = false;
     }
     if (qaFocusReviewState.active && (folderChanged || scopeChanged) &&
         !qaFocusReviewCurrent()) {
@@ -3033,7 +3038,7 @@
     return !!(receipt && receipt.status === 'dismissed' && receipt.signature === signature);
   }
 
-  function qaFocusReviewCandidateFindings(item) {
+  function qaFocusReviewCandidateFindings(item, all) {
     if (!item) return [];
     var current = qaCurrentItemSignatureMap([item]);
     var signature = current[item.fileName];
@@ -3050,12 +3055,13 @@
           !qaFocusReviewIsDismissed(finding, item, signature) &&
           (finding.files || []).indexOf(item.fileName) !== -1) found.push(finding);
     });
-    return found.filter(function (finding) {
+    var actionable = found.filter(function (finding) {
       return qaFocusReviewHasAction(item.key, item.fileName, item.caption || '', finding);
     }).sort(function (a, b) {
       return qaTrainingValueRank(b.trainingValue) - qaTrainingValueRank(a.trainingValue) ||
         qaPriorityRank(b.priority) - qaPriorityRank(a.priority);
-    }).slice(0, 3);
+    });
+    return all ? actionable : actionable.slice(0, 3);
   }
 
   function qaFocusReviewFindings(mediaKey) {
@@ -3524,7 +3530,7 @@
 
   function qaCorrectionItems() {
     return qaDeepScanScopeItems().map(function (item) {
-      return { item:item, findings:qaFocusReviewCandidateFindings(item) };
+      return { item:item, findings:qaFocusReviewCandidateFindings(item, true) };
     }).filter(function (entry) { return entry.findings.length > 0; });
   }
 
@@ -3566,13 +3572,15 @@
     qaCorrectionCursor.index = (Math.max(0, index) + offset + entries.length) % entries.length;
     qaCorrectionCursor.key = entries[qaCorrectionCursor.index].item.key;
     renderQaWorkbench();
+    var card = document.querySelector('#qa-workbench .qa-correction-card');
+    if (card) card.focus({preventScroll:true});
   }
 
   function qaDismissCorrection(mediaKey, findingId) {
     if (qaCorrectionCursor.busy) return;
     var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
     if (!item) throw new Error('The QA correction target is no longer in the current Set.');
-    var findings = qaFocusReviewCandidateFindings(item).filter(function (finding) {
+    var findings = qaFocusReviewCandidateFindings(item, true).filter(function (finding) {
       return !findingId || finding.id === findingId;
     });
     var signature = qaCurrentItemSignatureMap([item])[item.fileName];
@@ -3583,7 +3591,6 @@
       qaWorkbenchState.dispositions[key] = {status:'dismissed', signature:signature};
     });
     qaCorrectionCursor.busy = true;
-    renderQaWorkbench();
     return qaSaveReview(true).then(function () {
       qaSyncFocusReview();
       setStatus('Rejected QA recommendation' + (findings.length === 1 ? '' : 's') + '. Annotations unchanged.');
@@ -3646,6 +3653,7 @@
     var card = document.createElement('article');
     card.className = 'qa-correction-card';
     card.dataset.fingerprint = fingerprint;
+    card.tabIndex = 0;
     var media = document.createElement('div');
     media.className = 'qa-correction-media';
     var source = mediaGridMediaUrl({fileName:item.fileName, key:item.key});
@@ -3684,6 +3692,30 @@
         details.append(more, reason);
         row.appendChild(details);
       }
+      var individual = qaCorrectionPlan(item, [finding]);
+      var changes = document.createElement('div');
+      changes.className = 'qa-correction-finding-changes';
+      individual.patches.forEach(function (patch) {
+        var line = document.createElement('div');
+        if (patch.sourceText) {
+          var removed = document.createElement('del');
+          removed.textContent = patch.sourceText;
+          line.appendChild(removed);
+        }
+        if (patch.replacementText) {
+          var added = document.createElement('ins');
+          added.textContent = patch.replacementText;
+          line.append(' ', added);
+        }
+        changes.appendChild(line);
+      });
+      individual.tagActions.concat(individual.manualTagActions).forEach(function (action) {
+        var line = document.createElement('div');
+        line.textContent = (action.action === 'add' ? '+ ' : '− ') +
+          (action.group ? action.group + ' / ' : '') + action.term;
+        changes.appendChild(line);
+      });
+      if (changes.childNodes.length) row.appendChild(changes);
       if (entry.findings.length > 1) row.appendChild(qaCreateButton('Reject this finding', '', 'reject-correction-finding', finding.id));
       body.appendChild(row);
     });
@@ -3745,7 +3777,7 @@
     if (qaCorrectionCursor.busy) return Promise.resolve(false);
     var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
     if (!item) throw new Error('The QA correction target is no longer in the current Set.');
-    var plan = qaCorrectionPlan(item, qaFocusReviewCandidateFindings(item));
+    var plan = qaCorrectionPlan(item, qaFocusReviewCandidateFindings(item, true));
     if (!plan.hasChanges) {
       setStatus('No current applicable corrections remain for ' + item.fileName + '.');
       renderQaWorkbench(true);
@@ -3762,6 +3794,9 @@
     }
     plan.tagActions.forEach(function (action) {
       operations = operations.then(function () {
+        if (folder !== String(state.folder || '') || !state.items.some(function (row) { return row.key === key; })) {
+          throw new Error('The Set changed while QA corrections were being applied.');
+        }
         var changed = action.action === 'add'
           ? assignChecklistTagToMediaKey(key, action.group, action.term)
           : unassignChecklistTagFromMediaKey(key, action.group, action.term);
@@ -4009,11 +4044,13 @@
     var parent = qaWorkbenchState.parentFocusSet;
     var returnToFinding = !!qaWorkbenchState.returnFindingId;
     var returnToCurate = !!qaWorkbenchState.returnToCurate;
+    var returnToCorrections = !!qaWorkbenchState.returnToCorrections;
     qaWorkbenchState.returnToCurate = false;
+    qaWorkbenchState.returnToCorrections = false;
     state.focusSet = parent ? qaCloneFocusSet(parent) : null;
     qaWorkbenchState.parentFocusSet = undefined;
     qaWorkbenchState.returnTrainingFiles = null;
-    qaWorkbenchState.view = returnToCurate ? 'curate' : returnToFinding ? 'browse' : 'overview';
+    qaWorkbenchState.view = returnToCorrections ? 'corrections' : returnToCurate ? 'curate' : returnToFinding ? 'browse' : 'overview';
     updateFocusSetUi();
     renderFileList(ui.filterEl.value);
     pruneCandidatesScopeChanged();
@@ -4085,6 +4122,7 @@
       return;
     }
     if (action === 'inspect-correction-item') {
+      qaWorkbenchState.returnToCorrections = true;
       qaSelectFiles([value], 'QA · Proposed corrections', '');
       return;
     }

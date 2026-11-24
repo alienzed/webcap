@@ -60,7 +60,13 @@ def test_deep_qa_corrections_are_action_first_and_caption_assist_remains_separat
         "function renderQaWorkbench(force)", 1
     )[0]
     assert "qaCorrectionItems()" in corrections
-    assert "Current caption" in corrections and "Proposed caption" in corrections
+    assert "Proposed caption changes" in corrections
+    assert "diffTokens(plan.captionBefore, plan.captionAfter)" in corrections
+    assert "var entry = entries[index]" in corrections
+    assert "oldCard.dataset.fingerprint === fingerprint" in corrections
+    assert "preview.controls = true" in corrections
+    assert "Reject corrections" in corrections
+    assert "Reject this finding" in corrections
     assert "Tag changes" in corrections
     assert "Apply proposed corrections" in corrections
     assert "Inspect in Single Item" in corrections
@@ -86,4 +92,5 @@ def test_deep_qa_correction_apply_uses_existing_freshness_and_reports_failures()
     assert "The Set changed while QA corrections were being applied." in apply
     assert "reportConsoleError('QA Corrections · Apply', err)" in apply
     assert "qaRefreshComputedState(true)" in apply
-    assert "Nothing is saved until you apply it." in qa
+    assert "qaSaveReview(true)" in qa
+    assert "Annotations unchanged." in qa

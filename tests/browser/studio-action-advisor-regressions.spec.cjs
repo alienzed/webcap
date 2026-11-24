@@ -25,6 +25,28 @@ test('enabled-by-default advisor sends a separate same-model request with conver
   await say(page,'What should we review next?');
   await expect(advice(page).locator('button')).toHaveCount(1,{timeout:30000});
 
+  // Suggestions share the composer toolbar with Actions and Send, rather than a separate row.
+  const alignment=await page.evaluate(()=>{
+    const footer=document.querySelector('.director-chat-composer-footer');
+    const launcher=document.querySelector('#director-studio-action-launcher');
+    const suggestion=document.querySelector('#studio-action-advisor');
+    const send=document.querySelector('#director-chat-send');
+    const bounds=node=>{const r=node.getBoundingClientRect();
+      return {left:r.left,right:r.right,midY:(r.top+r.bottom)/2};};
+    return {sameParent:suggestion.parentElement===footer,
+      launcher:bounds(launcher),suggestion:bounds(suggestion),send:bounds(send)};
+  });
+  expect(alignment.sameParent).toBe(true);
+  expect(alignment.suggestion.left).toBeGreaterThanOrEqual(alignment.launcher.right-2);
+  expect(alignment.suggestion.right).toBeLessThanOrEqual(alignment.send.left+2);
+  expect(Math.abs(alignment.suggestion.midY-alignment.launcher.midY)).toBeLessThan(15);
+
+  await page.setViewportSize({width:480,height:850});
+  await expect(advice(page).locator('button')).toBeVisible();
+  const overflow=await page.locator('.director-chat-composer-footer')
+    .evaluate(node=>node.scrollWidth-node.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(2);
+
   const calls=(await observedModels(request)).calls;
   expect(calls).toHaveLength(2);
   expect(calls[1].model).toBe(calls[0].model);

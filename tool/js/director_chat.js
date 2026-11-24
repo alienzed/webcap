@@ -514,7 +514,7 @@
       if (el('director-chat-history-panel').open) el('director-chat-history-panel').close();
     }
     var newConversationLabel = context ? 'New QA chat' : studio ? 'New conversation' : 'New chat';
-    el('director-chat-clear').querySelector('.director-header-button-label').textContent = newConversationLabel;
+    el('director-chat-clear').querySelector('.director-header-button-label').textContent = studio ? 'New' : newConversationLabel;
     el('director-chat-clear').setAttribute('aria-label', newConversationLabel);
     el('director-chat-clear').title = newConversationLabel;
     var drawer = el('director-chat-drawer');

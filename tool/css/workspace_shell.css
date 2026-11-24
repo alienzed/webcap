@@ -4548,3 +4548,107 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* Conversation identity on the left; navigation and preferences on the right. */
+.director-chat-header-identity {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+.director-chat-header-identity > .director-chat-header-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.director-chat-header-identity > .director-chat-pin {
+  display: inline-flex;
+  flex: 0 0 30px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+.director-chat-drawer.studio-director .director-chat-header-identity > #director-chat-pin {
+  flex-basis: 34px;
+  width: 34px;
+  height: 34px;
+  margin-top: 0;
+}
+.director-chat-drawer.studio-director .director-chat-header-actions #director-chat-clear,
+.director-chat-drawer.studio-director .director-chat-header-actions #director-chat-history-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  min-height: 36px;
+  padding: 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.director-chat-drawer.studio-director:not(.studio-revision-mode) .director-chat-header-actions #director-chat-clear {
+  width: auto;
+  min-width: 82px;
+  padding: 6px 10px;
+  gap: 7px;
+  border-color: var(--border);
+  background: var(--panel-soft);
+  color: var(--text);
+}
+.director-chat-drawer.studio-director:not(.studio-revision-mode) .director-chat-header-actions #director-chat-history-toggle {
+  width: 36px;
+  min-width: 36px;
+}
+.director-chat-drawer.studio-director .director-chat-header-actions .studio-header-icon {
+  display: block;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.director-chat-drawer.studio-director:not(.studio-revision-mode) #director-chat-clear .director-header-button-label {
+  display: inline;
+  font-size: 14px;
+  font-weight: 650;
+}
+.director-chat-drawer.studio-director:not(.studio-revision-mode) #director-chat-history-toggle .director-header-button-label {
+  display: none;
+}
+.director-chat-drawer.studio-director .director-chat-header-actions #director-studio-settings-toggle,
+.director-chat-drawer.studio-director .director-chat-header-actions #director-chat-close {
+  flex: 0 0 36px;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+}
+.director-chat-drawer.studio-director .director-chat-header-actions #director-chat-clear:hover,
+.director-chat-drawer.studio-director .director-chat-header-actions #director-chat-history-toggle:hover,
+.director-chat-drawer.studio-director .director-chat-header-actions #director-chat-close:hover {
+  border-color: var(--border);
+  background: var(--hover);
+  color: var(--text);
+}
+.director-chat-drawer.studio-director .director-chat-header-actions #director-chat-clear:focus-visible,
+.director-chat-drawer.studio-director .director-chat-header-actions #director-chat-history-toggle:focus-visible,
+.director-chat-drawer.studio-director .director-chat-header-actions #director-chat-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@container (max-width: 640px) {
+  .director-chat-drawer.studio-director:not(.studio-revision-mode) .director-chat-header-actions #director-chat-clear {
+    width: 36px;
+    min-width: 36px;
+    padding: 6px;
+  }
+  .director-chat-drawer.studio-director:not(.studio-revision-mode) #director-chat-clear .director-header-button-label {
+    display: none;
+  }
+}

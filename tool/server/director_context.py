@@ -36,8 +36,11 @@ def _role_message(message):
     return message.get("role") in {"user", "assistant"} and isinstance(message.get("content"), str)
 
 
-def _read_snapshot(content):
-    return content.startswith("[WEBCAP EXPLICIT READ")
+def _authoritative_event(content):
+    # Preserve historical, explicitly supplied source material verbatim.
+    # Existing snapshots/receipts remain historical, never silently refreshed.
+    return (content.startswith("[WEBCAP EXPLICIT READ")
+            or "[WEBCAP APPLIED FIELD VALUES]" in content)
 
 
 def _checkpoint(rows, title):
@@ -61,7 +64,7 @@ def assemble_studio_context(messages):
     total = _chars(messages)
     base = {"strategy": "verbatim", "originalMessages": len(messages),
             "originalChars": total, "outboundMessages": len(messages),
-            "outboundChars": total, "checkpointSources": [], "retrievedSources": []}
+            "outboundChars": total, "checkpointSources": [], "retrievedSources": [], "pinnedSources": []}
     if total <= TRIGGER_CHARS:
         return messages, base
     systems = []
@@ -82,15 +85,19 @@ def assemble_studio_context(messages):
         recent_start -= 1
     older = body[:recent_start]
     recent = body[recent_start:]
+    pinned = {pos for pos, item in enumerate(older)
+              if item["role"] == "user" and _authoritative_event(item["content"])}
     question = next((m["content"] for m in reversed(recent) if m["role"] == "user"), "")
     focus = _terms(question)
     offset = len(systems)
     scored = []
     for pos, entry in enumerate(older):
+        if pos in pinned:
+            continue
         matches = focus.intersection(_terms(entry["content"]))
         if not matches:
             continue
-        score = len(matches) * 6 + (3 if _read_snapshot(entry["content"]) else 0)
+        score = len(matches) * 6
         group = [pos]
         if entry["role"] == "user" and pos + 1 < len(older) and older[pos + 1]["role"] == "assistant":
             group.append(pos + 1)
@@ -101,14 +108,14 @@ def assemble_studio_context(messages):
     retrieval = set()
     retrieval_chars = 0
     for _score, _pos, group in scored:
-        extra = [idx for idx in group if idx not in retrieval]
+        extra = [idx for idx in group if idx not in retrieval and idx not in pinned]
         required = sum(len(older[idx]["content"]) for idx in extra)
         if len(retrieval) >= RETRIEVAL_GROUPS * 2:
             continue
         if retrieval_chars + required > RETRIEVAL_CHARS:
             # A long assistant echo must not prevent retrieving an exact
             # author instruction or an explicitly provided Read snapshot.
-            extra = [_pos] if _pos not in retrieval else []
+            extra = [_pos] if _pos not in retrieval and _pos not in pinned else []
             required = sum(len(older[idx]["content"]) for idx in extra)
             if retrieval_chars + required > RETRIEVAL_CHARS:
                 continue
@@ -120,7 +127,7 @@ def assemble_studio_context(messages):
     memory_chars = 0
     for pos in range(len(older) - 1, -1, -1):
         item = older[pos]
-        if pos in retrieval or item["role"] != "user":
+        if pos in retrieval or pos in pinned or item["role"] != "user":
             continue
         required = len(item["content"])
         if required > MEMORY_CHARS - memory_chars:
@@ -135,7 +142,7 @@ def assemble_studio_context(messages):
                 memory_chars += prior
         if memory_chars >= MEMORY_CHARS:
             break
-    if not memory and not retrieval:
+    if not memory and not retrieval and not pinned:
         # Oversized noncompressible context: preserve current valid behavior.
         return messages, base
     memory_rows = [(offset + i, older[i]) for i in sorted(memory)]
@@ -143,7 +150,8 @@ def assemble_studio_context(messages):
     # The model must see selected evidence in original time order. Grouping
     # memory and retrieval independently can accidentally put a superseded
     # instruction after its correction.
-    history_rows = [(offset + i, older[i]) for i in sorted(memory | retrieval)]
+    selected = memory | retrieval | pinned
+    history_rows = [(offset + i, older[i]) for i in sorted(selected)]
     note = ["[WEBCAP EXTRACTIVE CONVERSATION CHECKPOINT]",
             "WebCap-derived historical excerpts, not a new author instruction.",
             "Verbatim historical excerpts, not current saved Project or Scene values.",
@@ -158,8 +166,9 @@ def assemble_studio_context(messages):
              "outboundChars": _chars(outbound),
              "checkpointSources": [i + 1 for i, _ in memory_rows],
              "retrievedSources": [i + 1 for i, _ in retrieved_rows],
+             "pinnedSources": [offset + i + 1 for i in sorted(pinned)],
              "recentStart": len(messages) - len(recent) + 1,
-             "omittedMessages": len(older) - len(memory | retrieval)}
+             "omittedMessages": len(older) - len(selected)}
     if trace["outboundChars"] >= total:
         return messages, base
     return outbound, trace

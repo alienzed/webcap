@@ -53,6 +53,21 @@ The final related offline suites passed **73 Python tests and 32 Node tests**
 after syncing current main; compile checks passed. Two merged context-menu tests
 needed the browser timer supplied in their VM fixture. That fixture correction
 does not change application startup or production behavior.
+Browser CI also exposed a stale Read test selector: protocol cards contain
+presentation labels around the unchanged snapshot. The test now compares the
+exact disclosure text across reload and against outbound context.
+
+A subsequent browser run caught a real fast-completion race: an inference job
+finished and moved to its terminal receipt before enqueue reread the active lane.
+Enqueue now uses the existing job-status lookup, which reads active jobs and
+terminal receipts; FIFO, GPU ownership and receipt consumption are unchanged.
+A deterministic regression fails with the old lookup and passes with the fix;
+it and the existing receipt-consumption test passed and run in browser CI.
+The wider legacy queue suite is **not green**: an isolated before/after comparison
+found the same 22 pre-existing failures (old contract fixtures, mock signatures
+and legacy expectations), with only the new race regression changing from fail
+to pass. The fixed version had 64 passes and 22 failures. Those unrelated failures
+are not evidence against the guidance and were not hidden or rewritten here.
 CI remains offline: pure harness tests and request plans, with no model endpoints,
 inference calls or saves. The PR remains draft and unmerged.
 

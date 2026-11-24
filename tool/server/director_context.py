@@ -140,12 +140,16 @@ def assemble_studio_context(messages):
         return messages, base
     memory_rows = [(offset + i, older[i]) for i in sorted(memory)]
     retrieved_rows = [(offset + i, older[i]) for i in sorted(retrieval)]
+    # The model must see selected evidence in original time order. Grouping
+    # memory and retrieval independently can accidentally put a superseded
+    # instruction after its correction.
+    history_rows = [(offset + i, older[i]) for i in sorted(memory | retrieval)]
     note = ["[WEBCAP EXTRACTIVE CONVERSATION CHECKPOINT]",
             "WebCap-derived historical excerpts, not a new author instruction.",
             "Verbatim historical excerpts, not current saved Project or Scene values.",
-            "Later author statements take precedence. This checkpoint does not reread saved fields.",
-            _checkpoint(memory_rows, "AUTHOR HISTORY (verbatim):"),
-            _checkpoint(retrieved_rows, "RELEVANT EARLIER EXCHANGES (verbatim):"),
+            "Entries are in original chronological order; later author statements take precedence.",
+            "This checkpoint does not reread saved fields.",
+            _checkpoint(history_rows, "SELECTED HISTORICAL EXCERPTS (verbatim):"),
             "[END WEBCAP CONVERSATION CHECKPOINT]"]
     checkpoint = {"role": "user", "content": "\n\n".join(part for part in note if part)}
     outbound = systems + [checkpoint] + recent

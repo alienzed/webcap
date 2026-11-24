@@ -54,10 +54,29 @@ def test_explicit_read_is_retrievable_only_from_existing_saved_messages():
     messages[-1]["content"] = "What was the blue cathedral roof in the earlier Read?"
     outbound, trace = assemble_studio_context(messages)
     assert read in outbound[1]["content"]
-    assert 4 in trace["retrievedSources"]
+    assert 4 in trace["pinnedSources"]
     without_read = [item for item in messages if item["content"] != read]
     other, _ = assemble_studio_context(without_read)
     assert read not in "".join(item["content"] for item in other)
+
+
+def test_large_explicit_read_and_applied_receipt_survive_unrelated_followups():
+    read = "[WEBCAP EXPLICIT READ — SAVED SNAPSHOT]\\n" + ("Saved scene prompt. " * 650) + "\\n[END WEBCAP READ]"
+    receipt = "Saved Scene changes\\n[WEBCAP APPLIED FIELD VALUES]\\n" + "Red scarf. " * 60
+    messages = conversation(read=read)
+    messages[4:4] = [{"role": "user", "content": receipt}]
+    # A later topic must not make an earlier author-selected Read disappear.
+    for i in range(20):
+        messages[-1:-1] = [{"role": "user", "content": f"New iteration {i}: " + "scene detail " * 70},
+                            {"role": "assistant", "content": "Direction " * 110}]
+    messages[-1]["content"] = "Tell me about the camera movement."
+    outbound, trace = assemble_studio_context(messages)
+    assert trace["strategy"] == "extractive"
+    assert read in outbound[1]["content"]
+    assert receipt in outbound[1]["content"]
+    assert 4 in trace["pinnedSources"]
+    assert 6 in trace["pinnedSources"]
+    assert trace["outboundChars"] < trace["originalChars"]
 
 
 def test_an_old_director_proposal_can_be_recalled_by_its_own_terms():

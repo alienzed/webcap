@@ -990,3 +990,7 @@
 .app.shell-revamp .qa-correction-actions button { flex:1; min-height:56px; font-size:19px; }
 .app.shell-revamp .qa-correction-nav button { flex:1; }
 @media(max-width:900px) { .qa-correction-card { grid-template-columns:1fr; } .qa-correction-media { position:static; } .qa-correction-media img,.qa-correction-media video { max-height:45vh; } }
+
+.qa-correction-finding-changes { width:100%; overflow-wrap:anywhere; line-height:1.5; }
+.qa-correction-finding-changes del { color:#f19b9b; }
+.qa-correction-finding-changes ins { color:#9adead; text-decoration:none; }

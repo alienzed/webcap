@@ -10,9 +10,12 @@ def source(name):
 def test_qa_promotes_confirmed_media_problems_not_soft_signals():
     qa = source("tool/js/qa_workbench.js")
     findings = qa.split("function qaComputeFindings(items)", 1)[1].split("function qaGetRecommendations()", 1)[0]
-    assert ".concat(qaBuildDuplicateFindings(items))" in findings
-    assert ".concat(qaBuildVisualAgreementFindings(items))" in findings
-    assert ".concat(qaBuildCaptionFindings(items))" not in findings
+    actionable = findings.split("return {", 1)[0]
+    assert ".concat(qaBuildDuplicateFindings(items))" in actionable
+    assert "qaBuildVisualAgreementFindings(items)" not in actionable
+    assert "qaBuildCaptionFindings(items)" not in actionable
+    assert ".concat(qaBuildVisualAgreementFindings(items).map(" in findings
+    assert "Unverified visual agreement:" in findings
     assert ".concat(qaBuildCaptionFindings(items))" in qa
     assert ".concat(qaBuildPruneObservations(items))" in qa
     assert ".concat(qaBuildDuplicateObservations(items))" in qa
@@ -60,7 +63,14 @@ def test_deep_qa_corrections_are_action_first_and_caption_assist_remains_separat
         "function renderQaWorkbench(force)", 1
     )[0]
     assert "qaCorrectionItems()" in corrections
-    assert "Current caption" in corrections and "Proposed caption" in corrections
+    assert "Proposed caption changes" in corrections
+    assert "diffTokens(plan.captionBefore, plan.captionAfter)" in corrections
+    assert "var entry = entries[index]" in corrections
+    assert "oldCard.dataset.fingerprint === fingerprint" in corrections
+    assert "preview.controls = true" in corrections
+    assert "Reject corrections" in corrections
+    assert "Reject this finding" in corrections
+    assert "qaCorrectionPlan(item, [finding])" in corrections
     assert "Tag changes" in corrections
     assert "Apply proposed corrections" in corrections
     assert "Inspect in Single Item" in corrections
@@ -82,8 +92,9 @@ def test_deep_qa_correction_apply_uses_existing_freshness_and_reports_failures()
     apply = qa.split("function qaApplyCorrectionsForItem(mediaKey)", 1)[1].split(
         "function renderQaWorkbench(force)", 1
     )[0]
-    assert "qaFocusReviewCandidateFindings(item)" in apply
+    assert "qaFocusReviewCandidateFindings(item, true)" in apply
     assert "The Set changed while QA corrections were being applied." in apply
     assert "reportConsoleError('QA Corrections · Apply', err)" in apply
     assert "qaRefreshComputedState(true)" in apply
-    assert "Nothing is saved until you apply it." in qa
+    assert "qaSaveReview(true)" in qa
+    assert "Annotations unchanged." in qa

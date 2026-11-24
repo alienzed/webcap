@@ -322,6 +322,7 @@ def build_request(items, training_focus="", deterministic_findings=None):
         "- Do not repeat a deterministic finding unless semantic interpretation materially changes why a human should care.\n"
         "- Every returned finding must name the supplied filenames that a human should inspect. Use only filenames from the training selection.\n"
         "- Prefer 0-6 strong findings. Never pad the response to fill a quota.\n\n"
+        "Give each finding a concise, specific title (ideally 5–9 words) and a short evidence-based summary (ideally one sentence). Express the proposed change directly and distinguish visual observations from conclusions.\n\n"
         "[CATEGORY CONTRACT]\n"
         "consistency = semantic naming, relationship, annotation, or descriptive consistency\n"
         "captioning = language quality, semantic repetition, terminology, or caption structure\n\n"

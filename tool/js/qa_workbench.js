@@ -93,6 +93,7 @@
     returnTrainingFiles: null,
     returnFindingId: '',
     returnToCurate: false,
+    returnToCorrections: false,
     statusMessage: '',
     externalAnalysisAttemptKey: '',
     externalAnalysisRunning: false
@@ -983,7 +984,10 @@
       // Persist accepted results and failed-item receipts before advancing.
       // Save failure is outside the item-error handler and pauses the scan.
       return qaSaveReview(true).then(function () {
-        if (qaDeepScanCurrent(scan, token)) return qaDeepScanNextItemBatch(scan, token);
+        if (qaDeepScanCurrent(scan, token)) {
+          if (qaWorkbenchState.view === 'corrections') renderQaWorkbench();
+          return qaDeepScanNextItemBatch(scan, token);
+        }
       });
     });
   }
@@ -2929,6 +2933,7 @@
       qaWorkbenchState.returnTrainingFiles = null;
       qaWorkbenchState.returnFindingId = '';
       qaWorkbenchState.returnToCurate = false;
+      qaWorkbenchState.returnToCorrections = false;
     }
     if (qaFocusReviewState.active && (folderChanged || scopeChanged) &&
         !qaFocusReviewCurrent()) {
@@ -3033,7 +3038,7 @@
     return !!(receipt && receipt.status === 'dismissed' && receipt.signature === signature);
   }
 
-  function qaFocusReviewCandidateFindings(item) {
+  function qaFocusReviewCandidateFindings(item, all) {
     if (!item) return [];
     var current = qaCurrentItemSignatureMap([item]);
     var signature = current[item.fileName];
@@ -3050,12 +3055,13 @@
           !qaFocusReviewIsDismissed(finding, item, signature) &&
           (finding.files || []).indexOf(item.fileName) !== -1) found.push(finding);
     });
-    return found.filter(function (finding) {
+    var actionable = found.filter(function (finding) {
       return qaFocusReviewHasAction(item.key, item.fileName, item.caption || '', finding);
     }).sort(function (a, b) {
       return qaTrainingValueRank(b.trainingValue) - qaTrainingValueRank(a.trainingValue) ||
         qaPriorityRank(b.priority) - qaPriorityRank(a.priority);
-    }).slice(0, 3);
+    });
+    return all ? actionable : actionable.slice(0, 3);
   }
 
   function qaFocusReviewFindings(mediaKey) {
@@ -3520,9 +3526,11 @@
     qaSyncFocusReviewButton();
   }
 
+  var qaCorrectionCursor = {folder:'', key:'', index:0, busy:false};
+
   function qaCorrectionItems() {
     return qaDeepScanScopeItems().map(function (item) {
-      return { item:item, findings:qaFocusReviewCandidateFindings(item) };
+      return { item:item, findings:qaFocusReviewCandidateFindings(item, true) };
     }).filter(function (entry) { return entry.findings.length > 0; });
   }
 
@@ -3535,6 +3543,7 @@
     var seenTags = {};
     (findings || []).forEach(function (finding) {
       (finding.patches || []).forEach(function (patch) {
+        if (!patch || patch.file !== item.fileName) return;
         var validated = captionVisionValidatePatch(caption, patch);
         if (!validated) return;
         var next = captionVisionApplyPatchToText(caption, validated, -1);
@@ -3556,100 +3565,227 @@
       hasChanges:caption !== original || tagActions.length > 0};
   }
 
-  function qaRenderCorrections(container, items) {
+  function qaMoveCorrection(offset) {
     var entries = qaCorrectionItems();
-    qaRenderHeader(container, 'QA Corrections',
-      entries.length + ' items with current, actionable proposed changes', 'corrections');
-    var intro = document.createElement('p');
-    intro.className = 'qa-corrections-intro';
-    intro.textContent = 'Review concrete caption and vocabulary changes. Nothing is saved until you apply it.';
-    container.appendChild(intro);
-    if (!entries.length) {
-      var empty = document.createElement('div');
-      empty.className = 'qa-empty';
-      empty.textContent = qaWorkbenchState.deepScanSessionActive
-        ? 'No actionable corrections are ready yet. Deep QA is still running.'
-        : 'No current actionable corrections. Unverified observations remain in the Full Report.';
-      container.appendChild(empty);
-      return;
-    }
-    entries.forEach(function (entry) {
-      var item = entry.item, plan = qaCorrectionPlan(item, entry.findings);
-      var card = document.createElement('article');
-      card.className = 'qa-correction-card';
-      var heading = document.createElement('div');
-      heading.className = 'qa-correction-heading';
-      var title = document.createElement('h2');
-      title.textContent = item.fileName;
-      title.title = item.fileName;
-      heading.appendChild(title);
-      var count = document.createElement('span');
-      count.textContent = entry.findings.length + ' finding' + (entry.findings.length === 1 ? '' : 's');
-      heading.appendChild(count);
-      card.appendChild(heading);
-      entry.findings.forEach(function (finding) {
-        var reason = document.createElement('p');
-        reason.className = 'qa-correction-reason';
-        reason.textContent = finding.title + (finding.summary ? ' · ' + finding.summary : '');
-        card.appendChild(reason);
+    if (!entries.length || qaCorrectionCursor.busy) return;
+    var index = entries.findIndex(function (entry) { return entry.item.key === qaCorrectionCursor.key; });
+    qaCorrectionCursor.index = (Math.max(0, index) + offset + entries.length) % entries.length;
+    qaCorrectionCursor.key = entries[qaCorrectionCursor.index].item.key;
+    renderQaWorkbench();
+    var card = document.querySelector('#qa-workbench .qa-correction-card');
+    if (card) card.focus({preventScroll:true});
+  }
+
+  function qaDismissCorrection(mediaKey, findingId) {
+    if (qaCorrectionCursor.busy) return;
+    var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
+    if (!item) throw new Error('The QA correction target is no longer in the current Set.');
+    var findings = qaFocusReviewCandidateFindings(item, true).filter(function (finding) {
+      return !findingId || finding.id === findingId;
+    });
+    var signature = qaCurrentItemSignatureMap([item])[item.fileName];
+    var previous = {}, folder = String(state.folder || '');
+    findings.forEach(function (finding) {
+      var key = finding.id + '|' + item.fileName;
+      previous[key] = qaWorkbenchState.dispositions[key];
+      qaWorkbenchState.dispositions[key] = {status:'dismissed', signature:signature};
+    });
+    qaCorrectionCursor.busy = true;
+    return qaSaveReview(true).then(function () {
+      qaSyncFocusReview();
+      setStatus('Rejected QA recommendation' + (findings.length === 1 ? '' : 's') + '. Annotations unchanged.');
+    }).catch(function (err) {
+      if (String(state.folder || '') === folder) Object.keys(previous).forEach(function (key) {
+        if (previous[key] === undefined) delete qaWorkbenchState.dispositions[key];
+        else qaWorkbenchState.dispositions[key] = previous[key];
       });
-      if (plan.captionAfter !== plan.captionBefore) {
-        var caption = document.createElement('div');
-        caption.className = 'qa-correction-caption';
-        [['Current caption',plan.captionBefore || '(empty)'],['Proposed caption',plan.captionAfter]].forEach(function (pair) {
-          var block = document.createElement('div');
-          var label = document.createElement('strong');
-          label.textContent = pair[0];
-          var text = document.createElement('p');
-          text.textContent = pair[1];
-          block.appendChild(label);
-          block.appendChild(text);
-          caption.appendChild(block);
-        });
-        card.appendChild(caption);
-      }
-      if (plan.tagActions.length) {
-        var tags = document.createElement('div');
-        tags.className = 'qa-correction-tags';
-        var tagsLabel = document.createElement('strong');
-        tagsLabel.textContent = 'Tag changes';
-        tags.appendChild(tagsLabel);
-        plan.tagActions.forEach(function (action) {
-          var chip = document.createElement('span');
-          chip.className = action.action === 'add' ? 'qa-correction-tag is-add' : 'qa-correction-tag is-remove';
-          chip.textContent = (action.action === 'add' ? '+ ' : '− ') + action.group + ' / ' + action.term;
-          tags.appendChild(chip);
-        });
-        card.appendChild(tags);
-      }
-      if (plan.manualTagActions.length) {
-        var manual = document.createElement('p');
-        manual.className = 'qa-correction-manual';
-        manual.textContent = 'Additional ungrouped tag changes need item inspection: ' +
-          plan.manualTagActions.map(function (action) {
-            return (action.action === 'add' ? '+ ' : '− ') + action.term;
-          }).join(', ');
-        card.appendChild(manual);
-      }
-      var actions = document.createElement('div');
-      actions.className = 'qa-correction-actions';
-      if (plan.hasChanges) actions.appendChild(qaCreateButton('Apply proposed corrections', 'qa-primary', 'apply-corrections', item.key));
-      actions.appendChild(qaCreateButton('Inspect in Single Item', '', 'inspect-correction-item', item.fileName));
-      card.appendChild(actions);
-      container.appendChild(card);
+      setStatus('Could not save QA rejection: ' + String(err && err.message || err));
+    }).finally(function () {
+      qaCorrectionCursor.busy = false;
+      renderQaWorkbench();
     });
   }
 
+  function qaRenderCorrections(container, items) {
+    var entries = qaCorrectionItems();
+    var folder = String(state.folder || '');
+    if (qaCorrectionCursor.folder !== folder) {
+      qaCorrectionCursor.folder = folder;
+      qaCorrectionCursor.key = '';
+      qaCorrectionCursor.index = 0;
+    }
+    var index = entries.findIndex(function (entry) { return entry.item.key === qaCorrectionCursor.key; });
+    if (index < 0) index = Math.min(qaCorrectionCursor.index, Math.max(0, entries.length - 1));
+    qaCorrectionCursor.index = index;
+    var entry = entries[index];
+    qaCorrectionCursor.key = entry ? entry.item.key : '';
+    var oldCard = container.querySelector('.qa-correction-card');
+    var plan = entry ? qaCorrectionPlan(entry.item, entry.findings) : null;
+    var fingerprint = entry ? JSON.stringify([folder, entry.item.key, entry.findings, plan]) : '';
+    var subtitle = entries.length + ' pending' + (entry ? ' · Item ' + (index + 1) + ' of ' + entries.length : '');
+    // Preserve the active media element and expanded details during live Deep QA refreshes.
+    if (oldCard && oldCard.dataset.fingerprint === fingerprint) {
+      container.querySelector('.qa-page-scope').textContent = subtitle;
+      var stop = container.querySelector('[data-qa-action="deep-scan-stop"]');
+      if (stop) {
+        if (!qaWorkbenchState.deepScanSessionActive) stop.remove();
+        else stop.textContent = 'Stop Deep QA · ' + qaWorkbenchState.aiCoverageValid + '/' + qaWorkbenchState.aiCoverageTotal;
+      } else if (qaWorkbenchState.deepScanSessionActive) {
+        container.querySelector('.qa-page-actions').appendChild(qaCreateButton('Stop Deep QA · ' +
+          qaWorkbenchState.aiCoverageValid + '/' + qaWorkbenchState.aiCoverageTotal, '', 'deep-scan-stop'));
+      }
+      oldCard.querySelectorAll('button').forEach(function (button) {
+        button.disabled = qaCorrectionCursor.busy || (button.dataset.qaAction === 'move-correction' && entries.length < 2);
+      });
+      return;
+    }
+    qaRenderHeader(container, 'QA Corrections', subtitle, 'corrections');
+    if (!entry) {
+      var empty = document.createElement('div');
+      empty.className = 'qa-empty';
+      empty.textContent = qaWorkbenchState.deepScanSessionActive
+        ? 'Waiting for more actionable recommendations. Deep QA is running.'
+        : 'No pending corrections.';
+      container.appendChild(empty);
+      return;
+    }
+    var item = entry.item;
+    var card = document.createElement('article');
+    card.className = 'qa-correction-card';
+    card.dataset.fingerprint = fingerprint;
+    card.tabIndex = 0;
+    var media = document.createElement('div');
+    media.className = 'qa-correction-media';
+    var source = mediaGridMediaUrl({fileName:item.fileName, key:item.key});
+    var preview = document.createElement(isPreviewVideoFileName(item.fileName) ? 'video' : 'img');
+    preview.src = source;
+    if (preview.tagName === 'VIDEO') {
+      preview.controls = true;
+      preview.muted = true;
+      preview.playsInline = true;
+      preview.preload = 'metadata';
+    } else preview.alt = item.fileName;
+    media.appendChild(preview);
+    card.appendChild(media);
+    var body = document.createElement('div');
+    body.className = 'qa-correction-body';
+    var title = document.createElement('h2');
+    title.className = 'qa-correction-filename';
+    title.textContent = item.fileName;
+    title.title = item.fileName;
+    body.appendChild(title);
+    var heading = document.createElement('h3');
+    heading.textContent = entry.findings.length + ' suggested correction' + (entry.findings.length === 1 ? '' : 's');
+    body.appendChild(heading);
+    entry.findings.forEach(function (finding) {
+      var row = document.createElement('div');
+      row.className = 'qa-correction-finding';
+      var label = document.createElement('strong');
+      label.textContent = finding.title;
+      row.appendChild(label);
+      if (finding.summary) {
+        var details = document.createElement('details');
+        var more = document.createElement('summary');
+        more.textContent = 'More details';
+        var reason = document.createElement('p');
+        reason.textContent = finding.summary;
+        details.append(more, reason);
+        row.appendChild(details);
+      }
+      var individual = qaCorrectionPlan(item, [finding]);
+      var changes = document.createElement('div');
+      changes.className = 'qa-correction-finding-changes';
+      individual.patches.forEach(function (patch) {
+        var line = document.createElement('div');
+        if (patch.sourceText) {
+          var removed = document.createElement('del');
+          removed.textContent = patch.sourceText;
+          line.appendChild(removed);
+        }
+        if (patch.replacementText) {
+          var added = document.createElement('ins');
+          added.textContent = patch.replacementText;
+          line.append(' ', added);
+        }
+        changes.appendChild(line);
+      });
+      individual.tagActions.concat(individual.manualTagActions).forEach(function (action) {
+        var line = document.createElement('div');
+        line.textContent = (action.action === 'add' ? '+ ' : '− ') +
+          (action.group ? action.group + ' / ' : '') + action.term;
+        changes.appendChild(line);
+      });
+      if (changes.childNodes.length) row.appendChild(changes);
+      if (entry.findings.length > 1) row.appendChild(qaCreateButton('Reject this finding', '', 'reject-correction-finding', finding.id));
+      body.appendChild(row);
+    });
+    if (plan.captionAfter !== plan.captionBefore) {
+      var caption = document.createElement('div');
+      caption.className = 'qa-correction-caption';
+      var captionLabel = document.createElement('strong');
+      captionLabel.textContent = 'Proposed caption changes';
+      var diff = document.createElement('p');
+      window.webcapTextareaRevisions.diffTokens(plan.captionBefore, plan.captionAfter).forEach(function (part) {
+        var node = document.createElement(part.kind === 'removed' ? 'del' : part.kind === 'added' ? 'ins' : 'span');
+        node.textContent = part.text;
+        diff.appendChild(node);
+      });
+      caption.append(captionLabel, diff);
+      body.appendChild(caption);
+    }
+    if (plan.tagActions.length) {
+      var tags = document.createElement('div');
+      tags.className = 'qa-correction-tags';
+      var tagsLabel = document.createElement('strong');
+      tagsLabel.textContent = 'Tag changes';
+      tags.appendChild(tagsLabel);
+      plan.tagActions.forEach(function (action) {
+        var chip = document.createElement('span');
+        chip.className = 'qa-correction-tag ' + (action.action === 'add' ? 'is-add' : 'is-remove');
+        chip.textContent = (action.action === 'add' ? '+ ' : '− ') + action.group + ' / ' + action.term;
+        tags.appendChild(chip);
+      });
+      body.appendChild(tags);
+    }
+    if (plan.manualTagActions.length) {
+      var manual = document.createElement('p');
+      manual.className = 'qa-correction-manual';
+      manual.textContent = 'Inspect ungrouped tag suggestions: ' + plan.manualTagActions.map(function (action) {
+        return (action.action === 'add' ? '+ ' : '− ') + action.term;
+      }).join(', ');
+      body.appendChild(manual);
+    }
+    var actions = document.createElement('div');
+    actions.className = 'qa-correction-actions';
+    if (plan.hasChanges) actions.appendChild(qaCreateButton('Apply proposed corrections', 'qa-primary', 'apply-corrections', item.key));
+    actions.appendChild(qaCreateButton('Reject corrections', '', 'reject-corrections', item.key));
+    body.appendChild(actions);
+    var nav = document.createElement('div');
+    nav.className = 'qa-correction-nav';
+    nav.appendChild(qaCreateButton('Previous', '', 'move-correction', -1));
+    nav.appendChild(qaCreateButton('Inspect in Single Item', '', 'inspect-correction-item', item.fileName));
+    nav.appendChild(qaCreateButton('Skip for now', '', 'move-correction', 1));
+    body.appendChild(nav);
+    card.appendChild(body);
+    card.querySelectorAll('button').forEach(function (button) {
+      button.disabled = qaCorrectionCursor.busy || (button.dataset.qaAction === 'move-correction' && entries.length < 2);
+    });
+    container.appendChild(card);
+  }
+
   function qaApplyCorrectionsForItem(mediaKey) {
+    if (qaCorrectionCursor.busy) return Promise.resolve(false);
     var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
     if (!item) throw new Error('The QA correction target is no longer in the current Set.');
-    var plan = qaCorrectionPlan(item, qaFocusReviewCandidateFindings(item));
+    var plan = qaCorrectionPlan(item, qaFocusReviewCandidateFindings(item, true));
     if (!plan.hasChanges) {
       setStatus('No current applicable corrections remain for ' + item.fileName + '.');
       renderQaWorkbench(true);
       return Promise.resolve(false);
     }
     var folder = String(state.folder || ''), key = item.key;
+    qaCorrectionCursor.busy = true;
+    renderQaWorkbench();
     var operations = Promise.resolve();
     if (plan.captionAfter !== plan.captionBefore) {
       operations = operations.then(function () {
@@ -3658,6 +3794,9 @@
     }
     plan.tagActions.forEach(function (action) {
       operations = operations.then(function () {
+        if (folder !== String(state.folder || '') || !state.items.some(function (row) { return row.key === key; })) {
+          throw new Error('The Set changed while QA corrections were being applied.');
+        }
         var changed = action.action === 'add'
           ? assignChecklistTagToMediaKey(key, action.group, action.term)
           : unassignChecklistTagFromMediaKey(key, action.group, action.term);
@@ -3680,6 +3819,9 @@
       renderQaWorkbench();
       setStatus(qaWorkbenchState.statusMessage);
       return false;
+    }).finally(function () {
+      qaCorrectionCursor.busy = false;
+      renderQaWorkbench();
     });
   }
 
@@ -3902,11 +4044,13 @@
     var parent = qaWorkbenchState.parentFocusSet;
     var returnToFinding = !!qaWorkbenchState.returnFindingId;
     var returnToCurate = !!qaWorkbenchState.returnToCurate;
+    var returnToCorrections = !!qaWorkbenchState.returnToCorrections;
     qaWorkbenchState.returnToCurate = false;
+    qaWorkbenchState.returnToCorrections = false;
     state.focusSet = parent ? qaCloneFocusSet(parent) : null;
     qaWorkbenchState.parentFocusSet = undefined;
     qaWorkbenchState.returnTrainingFiles = null;
-    qaWorkbenchState.view = returnToCurate ? 'curate' : returnToFinding ? 'browse' : 'overview';
+    qaWorkbenchState.view = returnToCorrections ? 'corrections' : returnToCurate ? 'curate' : returnToFinding ? 'browse' : 'overview';
     updateFocusSetUi();
     renderFileList(ui.filterEl.value);
     pruneCandidatesScopeChanged();
@@ -3970,11 +4114,15 @@
       qaStartFocusReview({autoOpen:false, onReady:function () { qaSetView('corrections'); }});
       return;
     }
+    if (action === 'move-correction') { qaMoveCorrection(Number(value)); return; }
+    if (action === 'reject-corrections') { qaDismissCorrection(value); return; }
+    if (action === 'reject-correction-finding') { qaDismissCorrection(qaCorrectionCursor.key, value); return; }
     if (action === 'apply-corrections') {
       qaApplyCorrectionsForItem(value);
       return;
     }
     if (action === 'inspect-correction-item') {
+      qaWorkbenchState.returnToCorrections = true;
       qaSelectFiles([value], 'QA · Proposed corrections', '');
       return;
     }
@@ -4112,6 +4260,12 @@
       }
     });
     root.addEventListener('keydown', function (event) {
+      if (qaWorkbenchState.view === 'corrections' && !event.altKey && !event.ctrlKey && !event.metaKey &&
+          !event.target.closest('input, textarea, select, video, button, summary, [contenteditable]')) {
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+          event.preventDefault(); qaMoveCorrection(event.key === 'ArrowLeft' ? -1 : 1); return;
+        }
+      }
       if (event.key !== 'Enter') return;
       if (event.target && event.target.id === 'qa-concept-input') { event.preventDefault(); qaRunConceptCheck(); return; }
       if (event.target && event.target.id === 'qa-training-focus-input') {

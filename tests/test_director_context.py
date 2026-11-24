@@ -142,7 +142,8 @@ def test_enqueue_compacts_only_studio_chat_by_default(monkeypatch):
     studio = request("studio_chat")
     assert studio["request"]["contextAssembly"]["strategy"] == "extractive"
     assert len(queued[-1]["contract"]["messages"]) < len(transcript)
-    assert queued[-1]["contract"]["messages"] == studio["request"]["messages"]
+    from tool.server.storyboard_llm_runtime import normalize_freeform_messages
+    assert normalize_freeform_messages(queued[-1]["contract"]["messages"]) == studio["request"]["messages"]
     assert transcript == original
 
     for operation in ("studio_scenes_draft", "freeform_chat", "studio_action_advisor"):

@@ -206,6 +206,16 @@ Unified          1509dfae3493aacb1bc435ef33bf9bf2c297849bd534363ede557e4d6118609
 H3 reference     7e717b14a5ed6783d7cfed42c7bc2e3d0a5076d50dac525a676056f359a7ed71
 ```
 
-Offline validation passed **34 experiment tests**. CI runs tests and request
+After the comparison, main added source-grounded adaptive context (PR #1108).
+The draft branch was synchronized, retaining that feature and the existing
+fast-completion receipt fix. Two equivalent test-selector conflicts used main's
+versions. Offline replay through the new context assembler verified that **all
+24 recorded requests remain verbatim**; no inference was repeated. A regression
+test preserves that integration boundary. Guidance and the experimental inputs
+were unchanged.
+
+Offline validation passed **35 experiment tests**; the expanded context/receipt
+selection passed **47 Python tests**, and the related Node suite passed **235
+tests with one existing skip**. CI runs tests and request
 plans only. The running app was verified afterward as Classic v3 with four
 profiles; no production change or merge was made.

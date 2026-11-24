@@ -3877,9 +3877,16 @@
     requestDetails.open = false;
     el('studio-director-io-request-messages').textContent = hasRequest
       ? JSON.stringify(state.requestDiagnostic.messages, null, 2) : '';
+    var contextInfo = hasRequest ? state.requestDiagnostic.contextAssembly : null;
+    var contextStatus = contextInfo && contextInfo.strategy === 'extractive'
+      ? 'Extractive context: ' + contextInfo.outboundMessages + ' of ' +
+        contextInfo.originalMessages + ' messages; ' +
+        contextInfo.outboundChars + ' of ' + contextInfo.originalChars +
+        ' characters. Verbatim source indexes and the complete model request are shown below. '
+      : '';
     el('studio-director-io-status').textContent = (state.lastStudioIoError
       ? 'Latest request failed: ' + state.lastStudioIoError + ' '
-      : '') + (hasRequest
+      : '') + contextStatus + (hasRequest
       ? 'Latest request is available.'
       : 'Exact request not retained for this conversation. Recorded responses remain inspectable.');
     el('studio-director-inspect').dataset.newResult='false';

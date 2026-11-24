@@ -36,3 +36,17 @@ def test_exact_24_trial_plan_and_identical_author_messages_across_treatments():
         assert msgs[0][1:] == msgs[1][1:] == msgs[2][1:]
         if case["operation"] == "studio_scenes_draft":
             assert all(m[0]["content"].endswith("H3 PROMPT AUTHORING REFERENCE:\n" + plan["technical_reference"]) for m in msgs)
+
+
+def test_final_comparison_requests_remain_verbatim_under_current_context_assembly():
+    from tool.server.director_context import assemble_studio_context
+    plan = e.prepare_experiment(SimpleNamespace(
+        design_dir=DESIGN, package=None, case=None, split="all", baseline_from=None,
+        repeats=2, seed=323, command="plan", model="test::offline", base_url=None,
+    ))
+    cases = {case["id"]: case for case in plan["cases"]}
+    for trial in plan["trials"]:
+        messages = e.make_messages(cases[trial["case_id"]], plan["packages"][trial["package_id"]], plan["technical_reference"])
+        outbound, trace = assemble_studio_context(messages)
+        assert outbound == messages
+        assert trace["strategy"] == "verbatim"

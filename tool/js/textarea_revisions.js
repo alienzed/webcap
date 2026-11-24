@@ -644,7 +644,7 @@
     renderSettings();
   }
 
-  window.webcapTextareaRevisions = {identity:identity,capture:capture,captureInitial:captureInitial,recordChange:recordChange,history:function (key) {return histories.get(key);}, fieldTypes:fieldTypes, enabledFor:enabledFor, setEnabled:setEnabled, setMasterEnabled:setMasterEnabled, renderSettings:renderSettings};
+  window.webcapTextareaRevisions = {diffTokens:diffTokens,identity:identity,capture:capture,captureInitial:captureInitial,recordChange:recordChange,history:function (key) {return histories.get(key);}, fieldTypes:fieldTypes, enabledFor:enabledFor, setEnabled:setEnabled, setMasterEnabled:setMasterEnabled, renderSettings:renderSettings};
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded',initialize);
   else initialize();
 })();

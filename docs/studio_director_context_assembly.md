@@ -29,9 +29,11 @@ contain inferred facts or silently alter Project/Scene state. Large
 noncompressible requests continue verbatim.
 
 **Phase 2 — one deterministic execution boundary (implemented).** Invoke the
-assembler only for `studio_chat` and explicit Project/Scene Write operations
-inside `llm_runner.enqueue`, after WebCap has already constructed the task
-and before the queued job/diagnostic snapshot. Ordinary Assistant Chat,
+assembler for `studio_chat` inside `llm_runner.enqueue`, after WebCap has
+constructed the task and before the queued job/diagnostic snapshot. Explicit
+Project/Scene Writes remain full-history by default until creative regression
+comparisons justify enabling their compact context. The optional `all` mode
+can run that comparison without further code changes. Ordinary Assistant Chat,
 the optional Action Advisor, and dedicated workshop operations are unchanged.
 No extra LLM request, background summarizer, embedding DB, or automatic Read.
 All explicitly Read data available to the assembler comes from prior,
@@ -42,8 +44,9 @@ messages are present in the existing Director I/O request inspector. Its
 context status reports original and outbound sizes; provenance includes
 selected message indexes. Full conversation history stays unchanged on disk,
 so toggling back to full history or opening old chats never loses anything.
-`WEBCAP_STUDIO_CONTEXT_MODE=full` is the explicit rollback switch for a
-runtime needing verbatim context.
+`WEBCAP_STUDIO_CONTEXT_MODE=full` forces all requests to remain verbatim;
+the default `chat` mode compacts only Studio Chat; `all` additionally enables
+compaction in explicit Studio Writes for deliberate comparison.
 
 **Phase 4 — validation (implemented in regression suite).** Test short-chat
 identity, large-history reduction, verbatim latest instructions, explicitly

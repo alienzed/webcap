@@ -67,6 +67,7 @@ def test_deep_qa_corrections_are_action_first_and_caption_assist_remains_separat
     assert "preview.controls = true" in corrections
     assert "Reject corrections" in corrections
     assert "Reject this finding" in corrections
+    assert "qaCorrectionPlan(item, [finding])" in corrections
     assert "Tag changes" in corrections
     assert "Apply proposed corrections" in corrections
     assert "Inspect in Single Item" in corrections
@@ -88,7 +89,7 @@ def test_deep_qa_correction_apply_uses_existing_freshness_and_reports_failures()
     apply = qa.split("function qaApplyCorrectionsForItem(mediaKey)", 1)[1].split(
         "function renderQaWorkbench(force)", 1
     )[0]
-    assert "qaFocusReviewCandidateFindings(item)" in apply
+    assert "qaFocusReviewCandidateFindings(item, true)" in apply
     assert "The Set changed while QA corrections were being applied." in apply
     assert "reportConsoleError('QA Corrections · Apply', err)" in apply
     assert "qaRefreshComputedState(true)" in apply

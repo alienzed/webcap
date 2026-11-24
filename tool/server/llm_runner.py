@@ -1353,11 +1353,13 @@ def enqueue(client, model_id, contract, context=None, label=""):
     # Studio requests carry only a source-grounded view into that transcript.
     # Read remains explicit; the assembler sees only existing message text.
     context_trace = None
-    studio_context_operations = {"studio_chat", "studio_project_draft",
-                                 "studio_brief_draft", "studio_scene_field_draft",
-                                 "studio_scenes_draft"}
-    if (client == "chat" and contract.get("operation") in studio_context_operations
-            and os.getenv("WEBCAP_STUDIO_CONTEXT_MODE", "extractive") != "full"):
+    studio_write_operations = {"studio_project_draft", "studio_brief_draft",
+                               "studio_scene_field_draft", "studio_scenes_draft"}
+    studio_context_mode = os.getenv("WEBCAP_STUDIO_CONTEXT_MODE", "chat")
+    studio_compaction_enabled = (contract.get("operation") == "studio_chat"
+                                 or (studio_context_mode == "all"
+                                     and contract.get("operation") in studio_write_operations))
+    if client == "chat" and studio_compaction_enabled and studio_context_mode != "full":
         from .director_context import assemble_studio_context
         outbound, context_trace = assemble_studio_context(contract.get("messages"))
         contract = {**contract, "messages": outbound}

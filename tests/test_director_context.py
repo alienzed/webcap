@@ -41,7 +41,7 @@ def test_long_context_keeps_recent_turns_and_creates_verbatim_author_checkpoint(
     assert trace["outboundChars"] < trace["originalChars"]
     assert outbound[0] == messages[0]
     assert outbound[-12:] == messages[-12:]
-    assert outbound[1]["role"] == "assistant"
+    assert outbound[1]["role"] == "user"
     assert "cobalt costume" in outbound[1]["content"]
     assert "[Original message 2, user]" in outbound[1]["content"]
     assert 2 in trace["retrievedSources"]

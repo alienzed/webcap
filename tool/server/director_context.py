@@ -97,8 +97,15 @@ def assemble_studio_context(messages):
     for _score, _pos, group in scored:
         extra = [idx for idx in group if idx not in retrieval]
         required = sum(len(older[idx]["content"]) for idx in extra)
-        if len(retrieval) >= RETRIEVAL_GROUPS * 2 or retrieval_chars + required > RETRIEVAL_CHARS:
+        if len(retrieval) >= RETRIEVAL_GROUPS * 2:
             continue
+        if retrieval_chars + required > RETRIEVAL_CHARS:
+            # A long assistant echo must not prevent retrieving an exact
+            # author instruction or an explicitly provided Read snapshot.
+            extra = [_pos] if _pos not in retrieval else []
+            required = sum(len(older[idx]["content"]) for idx in extra)
+            if retrieval_chars + required > RETRIEVAL_CHARS:
+                continue
         retrieval.update(extra)
         retrieval_chars += required
         if sum(older[idx]["role"] == "user" for idx in retrieval) >= RETRIEVAL_GROUPS:

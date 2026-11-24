@@ -39,7 +39,9 @@ def guidance(target_model="minimax_h3", profile="classic", include_prompt_contra
         raise ValueError("Studio Writer's Workshop currently supports MiniMax H3.")
     if profile not in _PROFILE_IDS:
         raise ValueError("Unknown Studio Director creative profile.")
-    system = llm_guidance_text("studio." + profile) + "\n\n" + H3_CAPABILITIES
+    system = llm_guidance_text("studio." + profile)
+    if not include_prompt_contract:
+        system += "\n\n" + H3_CAPABILITIES
     prompt_contract = ""
     if include_prompt_contract:
         try:

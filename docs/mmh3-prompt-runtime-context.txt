@@ -11,11 +11,8 @@ For an existing Scene, match its saved duration unless the author requests a cha
 AUTHORING STRUCTURE.
 State persistent identities and starting conditions once. Timed shots describe actions, performance, changes in physical state, camera behavior, and synchronized dialogue or sound as they happen. Use supplied Project Concept, Visual / atmosphere, relevant Invariants, and the saved Scene Prompt when revising; honor legacy Story Guidelines only when explicitly supplied.
 
-CENTRAL EVENT.
-Start with the Scene's meaningful action, interaction or dialogue, not an empty approach
-to the setting. Include enough concrete appearance and spatial grounding to render
-the intended event; use the available seconds for meaningful progression, including multiple related beats, overlapping actions, quick reactions, economical transitions, montage or split-screen where visually appropriate. Avoid splitting a concise introduction into multiple expensive renders merely because it contains several events. Preserve coherent visual causality rather than imposing a low action count. If the author
-wants an atmospheric buildup, preserve that pacing rather than forcing immediacy.
+SCENE SCOPE.
+Use the author's requested pacing and shot count. A single clip can contain several related actions, a sustained view, or a montage. For an explicitly requested single Scene, keep the content within that Scene's duration.
 
 H3 PROMPT SHAPE
 

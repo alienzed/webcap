@@ -49,7 +49,10 @@ the full role wording appears at the end of this report.
    the identified idle server. Read-only HTTP checks verified the served wording,
    other profiles, H3 reference and preserved local app queue pause flags.
 
-The final related offline suite passed **73 tests**; compile checks passed.
+The final related offline suites passed **73 Python tests and 32 Node tests**
+after syncing current main; compile checks passed. Two merged context-menu tests
+needed the browser timer supplied in their VM fixture. That fixture correction
+does not change application startup or production behavior.
 CI remains offline: pure harness tests and request plans, with no model endpoints,
 inference calls or saves. The PR remains draft and unmerged.
 

@@ -10,6 +10,7 @@ const source = fs.readFileSync(path.join(__dirname, '../tool/js/media_context_ac
 test('Prep folder context menu offers Find & Replace only for a Set folder', () => {
   const context = {
     state: {folder:'sets'},
+    setTimeout: () => 0,
     createFlagAction: () => ({label:'Flag'}),
     isSetFolderPath: folder => folder === 'sets/Set One',
   };
@@ -23,6 +24,7 @@ test('Prep folder context menu offers Find & Replace only for a Set folder', () 
 test('folder action uses the clicked Set path rather than the current parent folder', () => {
   const context = {
     state: {folder:'sets'},
+    setTimeout: () => 0,
     createFlagAction: () => ({label:'Flag'}),
     isSetFolderPath: folder => folder === 'sets/Set One',
   };

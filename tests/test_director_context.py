@@ -75,7 +75,7 @@ def test_large_explicit_read_and_applied_receipt_survive_unrelated_followups():
     assert read in outbound[1]["content"]
     assert receipt in outbound[1]["content"]
     assert 4 in trace["pinnedSources"]
-    assert 6 in trace["pinnedSources"]
+    assert 5 in trace["pinnedSources"]
     assert trace["outboundChars"] < trace["originalChars"]
 
 

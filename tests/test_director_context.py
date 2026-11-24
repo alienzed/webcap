@@ -60,6 +60,15 @@ def test_explicit_read_is_retrievable_only_from_existing_saved_messages():
     assert read not in "".join(item["content"] for item in other)
 
 
+def test_an_old_director_proposal_can_be_recalled_by_its_own_terms():
+    messages = conversation()
+    messages[2]["content"] = "We could stage the cobalt costume beside a huge ferris wheel."
+    messages[-1]["content"] = "What did you propose about the ferris wheel?"
+    outbound, trace = assemble_studio_context(messages)
+    assert "huge ferris wheel" in outbound[1]["content"]
+    assert 3 in trace["retrievedSources"]
+
+
 def test_latest_correction_and_final_write_payload_are_exact():
     messages = conversation()
     messages += [{"role": "assistant", "content": "Blue is right."},

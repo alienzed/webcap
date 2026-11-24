@@ -155,6 +155,7 @@ test('Studio mode selection is unavailable outside its workspace', () => {
   const input = {value: 'regular', focus: () => {}};
   const context = vm.createContext({
     state, String, document: {querySelector: () => null},
+    inputHistory: ['sent prompt'], inputHistoryIndex: 1, inputHistoryDraft: 'regular',
     el: id => id === 'director-chat-input' ? input : null,
     contextualModes: {}, persistentMode: () => true,
     finishProgress: () => {}, syncModeUi: () => {},
@@ -167,4 +168,6 @@ test('Studio mode selection is unavailable outside its workspace', () => {
   vm.runInContext('setMode("storyboard")', context);
   assert.equal(state.activeMode, 'storyboard');
   assert.equal(input.value, 'story');
+  assert.equal(context.inputHistoryIndex, 1);
+  assert.equal(context.inputHistoryDraft, 'story');
 });

@@ -143,6 +143,7 @@ test('Switching Assistant modes preserves separate drafts in both directions', (
   };
   const context = vm.createContext({
     state, String,
+    inputHistory: ['sent prompt'], inputHistoryIndex: 1, inputHistoryDraft: 'draft for regular chat',
     studioWorkspaceVisible: () => false,
     contextualModes: {'qa-finding': {available: () => true, execute() {}}},
     modeAvailable: mode => mode.available(),
@@ -153,6 +154,8 @@ test('Switching Assistant modes preserves separate drafts in both directions', (
   vm.runInContext(assistant.slice(start, end), context);
   const setMode = vm.runInContext('setMode', context);
   setMode('qa-finding');
+  assert.equal(context.inputHistoryIndex, 1, 'mode change resets browsing to latest slot');
+  assert.equal(context.inputHistoryDraft, '', 'new contextual mode has an empty draft');
   assert.equal(state.draftByMode.chat, 'draft for regular chat');
   assert.equal(input.value, '');
   input.value = 'question about QA finding';

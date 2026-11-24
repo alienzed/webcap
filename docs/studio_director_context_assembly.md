@@ -23,7 +23,9 @@ model context does not need to equal that transcript.
 forward every message unmodified. At roughly 24,000 characters of message
 content, keep the latest 12 messages verbatim, build an *extractive* author
 checkpoint from older exact text, and retrieve relevant older user/assistant
-pairs by query-term overlap. Each excerpt is labeled with its original
+pairs by query-term overlap. Explicit Read snapshots and applied-field receipts
+are pinned in full, even if they exceed the ordinary retrieval budget. Each
+excerpt is labeled with its original
 1-based message position. The checkpoint is request-only; it does not
 contain inferred facts or silently alter Project/Scene state. Large
 noncompressible requests continue verbatim.
@@ -57,7 +59,9 @@ in the Storyboard header CI alongside the existing Director persistence tests.
 ## Boundaries and future evaluation
 
 This is a deliberately conservative *extractive* checkpoint, not abstractive
-LLM memory. It cannot reliably infer implicit long-distance references or
+LLM memory. Preserving large explicit Reads may reduce or eliminate token
+savings; the assembler returns to full history when it cannot compact
+without losing those sources. It cannot reliably infer implicit long-distance references or
 settle conflicting creative decisions. That is why saved Project/Scene fields
 and explicit Reads remain authoritative, and why source labels and a
 full-history escape hatch are required. Do not claim that smaller prompts

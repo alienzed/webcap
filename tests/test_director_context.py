@@ -101,3 +101,42 @@ def test_repeatability_and_nonstandard_system_messages():
     outbound, trace = assemble_studio_context(messages)
     assert outbound is messages
     assert trace["strategy"] == "verbatim"
+
+def test_enqueue_compacts_only_studio_chat_by_default(monkeypatch):
+    from tool.server import llm_runner
+
+    queued = []
+    monkeypatch.setattr(llm_runner, "_ensure_execution_reconciled", lambda: None)
+    monkeypatch.setattr(llm_runner, "_ensure_monitor_started", lambda: None)
+    monkeypatch.setattr(llm_runner, "execution_enqueue",
+                        lambda _lane, payload, metadata: queued.append(payload) or {"id": "ctx-test"})
+    monkeypatch.setattr(llm_runner, "execution_get_job", lambda job_id: {"id": job_id})
+    monkeypatch.setattr(llm_runner, "_job_view", lambda job: {"jobId": job["id"]})
+    monkeypatch.delenv("WEBCAP_STUDIO_CONTEXT_MODE", raising=False)
+    transcript = conversation()
+    original = deepcopy(transcript)
+
+    def request(operation):
+        return llm_runner.enqueue("chat", "remote-1::test-model",
+                                  {"operation": operation, "messages": transcript})
+
+    studio = request("studio_chat")
+    assert studio["request"]["contextAssembly"]["strategy"] == "extractive"
+    assert len(queued[-1]["contract"]["messages"]) < len(transcript)
+    assert queued[-1]["contract"]["messages"] == studio["request"]["messages"]
+    assert transcript == original
+
+    for operation in ("studio_scenes_draft", "freeform_chat", "studio_action_advisor"):
+        direct = request(operation)
+        assert queued[-1]["contract"]["messages"] == transcript
+        assert "contextAssembly" not in direct["request"]
+
+    monkeypatch.setenv("WEBCAP_STUDIO_CONTEXT_MODE", "all")
+    expanded = request("studio_scenes_draft")
+    assert expanded["request"]["contextAssembly"]["strategy"] == "extractive"
+
+    monkeypatch.setenv("WEBCAP_STUDIO_CONTEXT_MODE", "full")
+    rollback = request("studio_chat")
+    assert queued[-1]["contract"]["messages"] == transcript
+    assert "contextAssembly" not in rollback["request"]
+

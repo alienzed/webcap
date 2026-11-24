@@ -10,9 +10,12 @@ def source(name):
 def test_qa_promotes_confirmed_media_problems_not_soft_signals():
     qa = source("tool/js/qa_workbench.js")
     findings = qa.split("function qaComputeFindings(items)", 1)[1].split("function qaGetRecommendations()", 1)[0]
-    assert ".concat(qaBuildDuplicateFindings(items))" in findings
-    assert ".concat(qaBuildVisualAgreementFindings(items))" in findings
-    assert ".concat(qaBuildCaptionFindings(items))" not in findings
+    actionable = findings.split("return {", 1)[0]
+    assert ".concat(qaBuildDuplicateFindings(items))" in actionable
+    assert "qaBuildVisualAgreementFindings(items)" not in actionable
+    assert "qaBuildCaptionFindings(items)" not in actionable
+    assert ".concat(qaBuildVisualAgreementFindings(items).map(" in findings
+    assert "Unverified visual agreement:" in findings
     assert ".concat(qaBuildCaptionFindings(items))" in qa
     assert ".concat(qaBuildPruneObservations(items))" in qa
     assert ".concat(qaBuildDuplicateObservations(items))" in qa

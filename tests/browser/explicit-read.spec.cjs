@@ -46,7 +46,7 @@ test('Flow 4 — explicit Read persists immutable visible Project snapshots and 
   await page.reload();
   await reopenDirectorIfClosed(page);
   await expect(page.locator('#director-chat-messages')).toContainText('The woman opens a silver gate beneath blue dusk.');
-  const persisted=await page.locator('#director-chat-messages .director-chat-message-user .director-chat-message-body').allTextContents();
+  const persisted=await page.locator('#director-chat-messages .director-chat-message-user .director-chat-message-body pre').allTextContents();
   expect(persisted).toEqual(snapshots);
   expect((await observedModels(request)).calls).toHaveLength(0);
 

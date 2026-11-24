@@ -80,6 +80,18 @@ def test_latest_correction_and_final_write_payload_are_exact():
     assert outbound[1]["content"].startswith("[WEBCAP EXTRACTIVE CONVERSATION CHECKPOINT]")
 
 
+def test_history_excerpts_follow_original_order_when_corrections_supersede_older_ideas():
+    messages = conversation()
+    messages[1]["content"] = "The costume is AMBER."
+    messages[3]["content"] = "Correction: the costume is COBALT."
+    messages[-1]["content"] = "What did we decide about the costume?"
+    outbound, trace = assemble_studio_context(messages)
+    history = outbound[1]["content"]
+    assert "AMBER" in history and "COBALT" in history
+    assert history.index("AMBER") < history.index("COBALT")
+    assert trace["strategy"] == "extractive"
+
+
 def test_repeatability_and_nonstandard_system_messages():
     messages = conversation()
     a, trace_a = assemble_studio_context(messages)

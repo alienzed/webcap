@@ -1,5 +1,11 @@
 # Studio Director: charter findings and default refinement
 
+Later bounded follow-ups are documented separately: the
+[18-call cleaned-profile screen](studio-director-profile-cleanup-results.md)
+and [20-call Artist + Mixing Engineer pilot](studio-director-artist-mixer-results.md).
+Their production boundary retains the existing four profiles and Classic v3.
+The original 249-call findings below remain unchanged.
+
 **Result, 23 November 2026:** retain D as the working foundation and add one
 general coherence sentence to the default Classic profile. The running app now
 serves that wording. The broader charter variants did not establish a universal

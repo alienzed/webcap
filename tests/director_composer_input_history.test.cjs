@@ -100,3 +100,16 @@ test('Down at the end of recalled multi-line entry restores draft', () => {
   assert.equal(t.key('ArrowDown', t.input.value.length), true);
   assert.equal(t.input.value, 'text I was writing');
 });
+
+test('changing the visible conversation starts history from its draft slot', () => {
+  const restore = source.slice(source.indexOf('  function restoreSession(chat) {'),
+    source.indexOf('  function loadSessionHistory() {'));
+  assert.match(restore, /inputHistoryIndex = inputHistory.length;/);
+  assert.match(restore, /inputHistoryDraft = state.draftByMode\[chat.mode\];/);
+  const create = source.slice(source.indexOf('  function newChat(options) {'),
+    source.indexOf('  function jobRequest(jobId) {'));
+  assert.match(create, /inputHistoryIndex = inputHistory.length;/);
+  const remove = source.slice(source.indexOf('  function deleteSession(chatId) {'),
+    source.indexOf('  function formatElapsed(ms) {'));
+  assert.match(remove, /inputHistoryIndex = inputHistory.length;/);
+});

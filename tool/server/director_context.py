@@ -20,7 +20,14 @@ read prompt prompts conversation context answer give tell explain consider now h
 new old one two three four five around within still going work do does did
 have had has was are for not and the you our its who how can but why any yet
 """.split())
-_ACK = frozenset({"agreed", "yes", "yes.", "okay", "ok", "proceed", "do it", "sounds good", "correct"})
+_ACK = frozenset({"agreed", "agreed, proceed", "yes", "yes, please", "okay", "ok",
+                  "proceed", "do it", "sounds good", "correct"})
+
+
+def _accepted_previous(text):
+    # Limit this to short, unqualified acknowledgments. A longer reply can
+    # contain corrections and must not imply approval of its preceding draft.
+    return text.strip().lower().rstrip(".! ") in _ACK
 
 
 def _terms(value):
@@ -135,7 +142,7 @@ def assemble_studio_context(messages):
         memory.add(pos)
         memory_chars += required
         # The previous assistant reply can hold a proposal the author accepted.
-        if item["content"].strip().lower() in _ACK and pos and older[pos - 1]["role"] == "assistant":
+        if _accepted_previous(item["content"]) and pos and older[pos - 1]["role"] == "assistant":
             prior = len(older[pos - 1]["content"])
             if pos - 1 not in retrieval and prior <= MEMORY_CHARS - memory_chars:
                 memory.add(pos - 1)

@@ -53,6 +53,9 @@ The final related offline suites passed **73 Python tests and 32 Node tests**
 after syncing current main; compile checks passed. Two merged context-menu tests
 needed the browser timer supplied in their VM fixture. That fixture correction
 does not change application startup or production behavior.
+After main advanced through PR #1107, two header tests were updated to inspect
+the whole header, preserving the intended Pin/title ownership. The expanded
+Node check passed 235 tests with one existing skip on the synchronized checkout.
 Browser CI also exposed a stale Read test selector: protocol cards contain
 presentation labels around the unchanged snapshot. The test now compares the
 exact disclosure text across reload and against outbound context.

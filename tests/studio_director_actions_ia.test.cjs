@@ -2,7 +2,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs');
 const html=fs.readFileSync('tool/tool.html','utf8'),shell=fs.readFileSync('tool/css/workspace_shell.css','utf8'),styles=fs.readFileSync('tool/css/storyboard.css','utf8'),bench=fs.readFileSync('tool/js/studio_director_workbench.js','utf8');
 test('conversation controls have visible header ownership',()=>{
- const header=html.split('class="director-chat-header-actions"')[1].split('</header>')[0];
+ const header=html.split('class="director-chat-drawer-header"')[1].split('</header>')[0];
  const pin=header.indexOf('id="director-chat-pin"'),fresh=header.indexOf('id="director-chat-clear"'),history=header.indexOf('id="director-chat-history-toggle"');
  assert.ok(pin>=0&&pin<fresh&&fresh<history);
  const menu=html.split('id="director-studio-actions-menu"')[1].split('</div>')[0];

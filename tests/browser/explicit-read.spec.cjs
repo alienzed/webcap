@@ -32,7 +32,9 @@ test('Flow 4 — explicit Read persists immutable visible Project snapshots and 
   await expect(page.locator('#director-chat-messages')).toContainText(
     'The woman opens a silver gate beneath blue dusk.'
   );
-  const snapshots=await page.locator('#director-chat-messages .director-chat-message-user .director-chat-message-body').allTextContents();
+  // Read cards render a summary and expandable verbatim payload. Compare
+  // the saved payloads, not the summary/details text shown in the card.
+  const snapshots=await page.locator('#director-chat-messages .director-chat-message-user .director-chat-message-body pre').allTextContents();
   expect(snapshots).toHaveLength(2);
   expect((await observedModels(request)).calls).toHaveLength(0);
 

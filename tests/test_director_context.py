@@ -88,6 +88,17 @@ def test_an_old_director_proposal_can_be_recalled_by_its_own_terms():
     assert 3 in trace["retrievedSources"]
 
 
+def test_past_director_proposal_survives_short_author_approval():
+    messages = conversation()
+    messages[26]["content"] = "Director proposes a silver sundial beside the gate."
+    messages[27]["content"] = "Agreed."
+    messages[-1]["content"] = "Let's continue discussing lighting."
+    outbound, trace = assemble_studio_context(messages)
+    assert trace["strategy"] == "extractive"
+    assert "silver sundial" in outbound[1]["content"]
+    assert "[Original message 27, assistant]" in outbound[1]["content"]
+
+
 def test_latest_correction_and_final_write_payload_are_exact():
     messages = conversation()
     messages += [{"role": "assistant", "content": "Blue is right."},

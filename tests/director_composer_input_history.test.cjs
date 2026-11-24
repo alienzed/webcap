@@ -101,6 +101,31 @@ test('Down at the end of recalled multi-line entry restores draft', () => {
   assert.equal(t.input.value, 'text I was writing');
 });
 
+test('loading a different conversation resets the browsing cursor and displays its draft', () => {
+  const start = source.indexOf('  function restoreSession(chat) {');
+  const end = source.indexOf('  function loadSessionHistory() {', start);
+  assert.ok(start >= 0 && end > start);
+  const input = {value: 'previous sent message'};
+  const inspect = {dataset: {}};
+  const state = {
+    activeMode: 'chat', sessionByMode: {}, sessionActiveByMode: {},
+    messages: [], elapsedByAssistantIndex: {}, metricsByAssistantIndex: {},
+    draftByMode: {}, sessionDirty: {}
+  };
+  const context = vm.createContext({
+    state, inputHistory: ['previous sent message'], inputHistoryIndex: 0,
+    inputHistoryDraft: 'original unsent draft',
+    persistentMode: () => true, window: {},
+    el: id => id === 'director-chat-input' ? input : inspect,
+    syncModeUi() {}, upsertSessionSummary() {}, showSessionStatus() {}
+  });
+  vm.runInContext(source.slice(start, end), context);
+  vm.runInContext('restoreSession({id: "another", mode: "chat", messages: [], draft: "new draft"})', context);
+  assert.equal(input.value, 'new draft');
+  assert.equal(context.inputHistoryIndex, 1);
+  assert.equal(context.inputHistoryDraft, 'new draft');
+});
+
 test('changing the visible conversation starts history from its draft slot', () => {
   const restore = source.slice(source.indexOf('  function restoreSession(chat) {'),
     source.indexOf('  function loadSessionHistory() {'));

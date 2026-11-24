@@ -110,6 +110,7 @@ test('Opening a new finding resets only that contextual conversation, not ordina
     state,
     String,
     Error,
+    inputHistory: ['sent prompt'], inputHistoryIndex: 0, inputHistoryDraft: 'old draft',
     el: () => input,
     setOpen: (open, mode) => { calls.push([open, mode]); },
     window: {}
@@ -119,6 +120,8 @@ test('Opening a new finding resets only that contextual conversation, not ordina
   assert.equal(state.modeMessages['qa-finding'].length, 0);
   assert.equal(state.modeMessages.chat.length, 1);
   assert.equal(input.value, '');
+  assert.equal(context.inputHistoryIndex, 1);
+  assert.equal(context.inputHistoryDraft, '');
   assert.equal(state.draftByMode['qa-finding'], '');
   assert.equal(state.draftByMode.chat, 'saved draft');
   assert.equal(calls[0][1], 'qa-finding');

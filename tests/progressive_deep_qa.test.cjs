@@ -454,3 +454,64 @@ test('Deep QA shares only bounded named statistical exceptions with explicit dis
   assert.match(run, /preflight: true/);
   assert.match(run, /qaWaitForDeepScan\(payload\.job\)/);
 });
+
+
+test('correction plans never apply patches for a different file', () => {
+  const item = { key: 'a', fileName: 'a.jpg', caption: 'A red shirt.' };
+  const sandbox = {
+    captionVisionValidatePatch: (_text, patch) => patch,
+    captionVisionApplyPatchToText: (text, patch) => text.replace(patch.sourceText, patch.replacementText),
+    qaFocusReviewTagActionsForFinding: () => []
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(functionSource('qaCorrectionPlan', 'qaMoveCorrection') + '\nthis.plan = qaCorrectionPlan;', sandbox);
+  const plan = sandbox.plan(item, [{patches:[
+    {file:'b.jpg', sourceText:'red', replacementText:'blue'},
+    {file:'a.jpg', sourceText:'red', replacementText:'green'}
+  ]}]);
+  assert.equal(plan.captionAfter, 'A green shirt.');
+  assert.equal(plan.patches.length, 1);
+});
+
+test('rejecting a single correction persists only that finding, without changing annotations', async () => {
+  const item = { key:'a', fileName:'a.jpg', caption:'Original.' };
+  const sandbox = {
+    qaCorrectionCursor:{busy:false},
+    qaWorkbenchState:{dispositions:{}},
+    state:{folder:'set', items:[item]},
+    qaFocusReviewCandidateFindings: () => [{id:'first'}, {id:'second'}],
+    qaCurrentItemSignatureMap: () => ({'a.jpg':'s1'}),
+    qaSaveReview: async required => assert.equal(required, true),
+    qaSyncFocusReview() {},
+    renderQaWorkbench() {},
+    setStatus() {}
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(functionSource('qaDismissCorrection', 'qaRenderCorrections') + '\nthis.reject = qaDismissCorrection;', sandbox);
+  await sandbox.reject('a','first');
+  assert.equal(sandbox.qaWorkbenchState.dispositions['first|a.jpg'].status,'dismissed');
+  assert.equal(sandbox.qaWorkbenchState.dispositions['second|a.jpg'],undefined);
+  assert.equal(item.caption,'Original.');
+  assert.equal(sandbox.qaCorrectionCursor.busy,false);
+});
+
+test('failed correction rejection restores pending state', async () => {
+  const item = { key:'a', fileName:'a.jpg' };
+  const sandbox = {
+    qaCorrectionCursor:{busy:false},
+    qaWorkbenchState:{dispositions:{}},
+    state:{folder:'set', items:[item]},
+    qaFocusReviewCandidateFindings: () => [{id:'first'}],
+    qaCurrentItemSignatureMap: () => ({'a.jpg':'s1'}),
+    qaSaveReview: async () => { throw Error('disk failure'); },
+    qaSyncFocusReview() {},
+    renderQaWorkbench() {},
+    setStatus(message) { sandbox.status = message; }
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(functionSource('qaDismissCorrection', 'qaRenderCorrections') + '\nthis.reject = qaDismissCorrection;', sandbox);
+  await sandbox.reject('a');
+  assert.equal(sandbox.qaWorkbenchState.dispositions['first|a.jpg'],undefined);
+  assert.match(sandbox.status,/disk failure/);
+  assert.equal(sandbox.qaCorrectionCursor.busy,false);
+});

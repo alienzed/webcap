@@ -1,5 +1,10 @@
 # Studio Director: charter findings and default refinement
 
+**Investigation concluded:** the fixed
+[24-call final comparison](studio-director-unified-final-results.md) recommends
+retaining Classic v3 as the operational default, with proposed one-Director
+product consolidation left for review. Production remains unchanged.
+
 Later bounded follow-ups are documented separately: the
 [18-call cleaned-profile screen](studio-director-profile-cleanup-results.md)
 and [20-call Artist + Mixing Engineer pilot](studio-director-artist-mixer-results.md).

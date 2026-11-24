@@ -1,5 +1,10 @@
 # Cleaned-profile comparison: 18-call practical screen
 
+The later [fixed final comparison](studio-director-unified-final-results.md)
+found mixed Scene reliability and recommends retaining Classic v3 for production.
+This earlier screen's observations remain intact; cleaned Current was its
+practical shortlist choice, not a promoted default.
+
 ## Scope and outcome
 
 This follow-up compared all four existing postures after shared editorial

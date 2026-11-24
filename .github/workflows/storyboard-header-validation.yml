@@ -15,6 +15,7 @@ on:
       - 'tests/session_prompt_history.test.cjs'
       - 'tests/director_chat_storyboard_attachment.test.cjs'
       - 'tests/director_chat_persistence.test.cjs'
+      - 'tests/director_composer_input_history.test.cjs'
       - 'tests/test_director_chat_history.py'
       - 'tool/server/director_chat_history.py'
       - 'tool/server/studio_director.py'
@@ -52,8 +53,8 @@ jobs:
         with:
           python-version: '3.11'
       - run: node --check tool/js/storyboard.js && node --check tool/js/director_chat.js && node --check tool/js/diagnostics.js
-      - name: Assistant conversation persistence
-        run: node --test tests/director_chat_persistence.test.cjs
+      - name: Assistant conversation persistence and input history
+        run: node --test tests/director_chat_persistence.test.cjs tests/director_composer_input_history.test.cjs
       - name: Studio Director Writer's Workshop
         run: |
           node --check tool/js/workspace_shell.js

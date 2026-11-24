@@ -2101,11 +2101,20 @@
             <aside id="director-chat-drawer" class="director-chat-drawer hidden" aria-label="Assistant" aria-hidden="true">
                 <div id="studio-director-resizer" role="separator" aria-orientation="vertical" aria-label="Resize Director" aria-controls="director-chat-drawer" tabindex="0" title="Drag to resize; arrow keys adjust width; double-click to reset"></div>
                 <header class="director-chat-drawer-header">
-                    <div class="director-chat-header-copy">
-                        <span class="studio-director-breadcrumb">Projects / Director</span>
-                        <strong id="director-chat-title">Assistant</strong>
-                        <span id="director-chat-mode-description">Assistant conversation</span>
-                        <span id="director-chat-save-status" aria-live="polite"></span>
+                    <div class="director-chat-header-identity">
+                        <button id="director-chat-pin" type="button" class="director-chat-pin" title="Pin Assistant" aria-label="Pin Assistant" aria-pressed="false">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M9 4h6"></path>
+                                <path d="M10 4v5l-3 3v2h10v-2l-3-3V4"></path>
+                                <path d="M12 14v6"></path>
+                            </svg>
+                        </button>
+                        <div class="director-chat-header-copy">
+                            <span class="studio-director-breadcrumb">Projects / Director</span>
+                            <strong id="director-chat-title">Assistant</strong>
+                            <span id="director-chat-mode-description">Assistant conversation</span>
+                            <span id="director-chat-save-status" aria-live="polite"></span>
+                        </div>
                     </div>
                     <div class="director-chat-header-actions">
                         <div id="director-studio-composer-mode" class="director-studio-composer-mode hidden">
@@ -2116,18 +2125,11 @@
                             </select>
                         </div>
                         <button id="studio-dw-open-tools" type="button" class="review-captions-btn" aria-controls="director-chat-sidebar" aria-expanded="false">Read / Write</button>
+                        <button id="director-chat-clear" type="button" class="review-captions-btn" title="New conversation" aria-label="New conversation"><svg class="studio-header-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10M16 4l4 4M9 15l-1 4 4-1L21 9a2 2 0 0 0-3-3z"></path></svg><span class="director-header-button-label">New chat</span></button>
+                        <button id="director-chat-history-toggle" type="button" class="review-captions-btn" title="Conversation history" aria-label="Conversation history" aria-expanded="false" aria-controls="director-chat-history-panel"><svg class="studio-header-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 1 3 6.7M3 16v-4h4M12 7v5l3 2"></path></svg><span class="director-header-button-label">History</span></button>
                         <button id="director-studio-settings-toggle" type="button" class="director-studio-settings-toggle hidden" title="Director settings" aria-label="Director settings" aria-expanded="false" aria-controls="director-studio-settings-panel">
                             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.25a3.75 3.75 0 1 0 0 7.5 3.75 3.75 0 0 0 0-7.5Z"></path><path d="M19.45 13.65a7.8 7.8 0 0 0 0-3.3l1.35-1.05-1.5-2.6-1.65.65a8 8 0 0 0-2.85-1.65L14.55 4h-3L11.3 5.7a8 8 0 0 0-2.85 1.65L6.8 6.7l-1.5 2.6 1.35 1.05a7.8 7.8 0 0 0 0 3.3L5.3 14.7l1.5 2.6 1.65-.65a8 8 0 0 0 2.85 1.65l.25 1.7h3l.25-1.7a8 8 0 0 0 2.85-1.65l1.65.65 1.5-2.6-1.35-1.05Z"></path></svg>
                         </button>
-                        <button id="director-chat-pin" type="button" class="director-chat-pin" title="Pin Assistant" aria-label="Pin Assistant" aria-pressed="false">
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                                <path d="M9 4h6"></path>
-                                <path d="M10 4v5l-3 3v2h10v-2l-3-3V4"></path>
-                                <path d="M12 14v6"></path>
-                            </svg>
-                        </button>
-                        <button id="director-chat-clear" type="button" class="review-captions-btn" title="New conversation" aria-label="New conversation"><svg class="studio-header-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10M16 4l4 4M9 15l-1 4 4-1L21 9a2 2 0 0 0-3-3z"></path></svg><span class="director-header-button-label">New chat</span></button>
-                        <button id="director-chat-history-toggle" type="button" class="review-captions-btn" title="Conversation history" aria-label="Conversation history" aria-expanded="false" aria-controls="director-chat-history-panel"><svg class="studio-header-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 1 3 6.7M3 16v-4h4M12 7v5l3 2"></path></svg><span class="director-header-button-label">History</span></button>
                         <button id="director-chat-close" type="button" class="director-chat-close" aria-label="Close Assistant">×</button>
                     </div>
                     <section id="director-studio-settings-panel" class="director-studio-settings-panel hidden" aria-label="Director settings">
@@ -2217,10 +2219,6 @@
                     <p id="director-chat-empty-description">Tell Director what interests you. You can start with a single moment, a feeling, or nothing at all.</p>
                 </div>
                 <div class="director-chat-composer">
-                    <section id="studio-action-advisor" class="studio-action-advisor hidden" aria-label="Optional action suggestions">
-                        <div id="studio-action-advisor-status" class="hidden" role="status" aria-live="polite"></div>
-                        <div id="studio-action-advisor-actions" class="hidden"></div>
-                    </section>
                     <button id="studio-dw-coherence-review" type="button" class="review-captions-btn hidden">Review coherence changes</button>
                     <div id="director-studio-revision-target" class="director-studio-revision-target hidden"></div>
                     <div id="director-chat-scene-context" class="hidden" role="status"></div>
@@ -2259,6 +2257,10 @@
                                 <button type="button" data-studio-tool="io">Model I/O</button>
                             </div>
                         </div>
+                        <section id="studio-action-advisor" class="studio-action-advisor hidden" aria-label="Optional action suggestions">
+                            <div id="studio-action-advisor-status" class="hidden" role="status" aria-live="polite"></div>
+                            <div id="studio-action-advisor-actions" class="hidden"></div>
+                        </section>
                         <span id="director-chat-composer-hint" class="director-chat-composer-hint">Enter to send · Shift+Enter for newline</span>
                         <div class="director-chat-composer-actions">
                             <button id="studio-director-inspect" type="button" class="review-captions-btn hidden" title="Inspect the latest Director request and response">I/O</button>

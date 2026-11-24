@@ -110,6 +110,7 @@ test('Opening a new finding resets only that contextual conversation, not ordina
     state,
     String,
     Error,
+    inputHistory: ['sent prompt'], inputHistoryIndex: 0, inputHistoryDraft: 'old draft',
     el: () => input,
     setOpen: (open, mode) => { calls.push([open, mode]); },
     window: {}
@@ -119,6 +120,8 @@ test('Opening a new finding resets only that contextual conversation, not ordina
   assert.equal(state.modeMessages['qa-finding'].length, 0);
   assert.equal(state.modeMessages.chat.length, 1);
   assert.equal(input.value, '');
+  assert.equal(context.inputHistoryIndex, 1);
+  assert.equal(context.inputHistoryDraft, '');
   assert.equal(state.draftByMode['qa-finding'], '');
   assert.equal(state.draftByMode.chat, 'saved draft');
   assert.equal(calls[0][1], 'qa-finding');
@@ -143,6 +146,7 @@ test('Switching Assistant modes preserves separate drafts in both directions', (
   };
   const context = vm.createContext({
     state, String,
+    inputHistory: ['sent prompt'], inputHistoryIndex: 1, inputHistoryDraft: 'draft for regular chat',
     studioWorkspaceVisible: () => false,
     contextualModes: {'qa-finding': {available: () => true, execute() {}}},
     modeAvailable: mode => mode.available(),
@@ -153,6 +157,8 @@ test('Switching Assistant modes preserves separate drafts in both directions', (
   vm.runInContext(assistant.slice(start, end), context);
   const setMode = vm.runInContext('setMode', context);
   setMode('qa-finding');
+  assert.equal(context.inputHistoryIndex, 1, 'mode change resets browsing to latest slot');
+  assert.equal(context.inputHistoryDraft, '', 'new contextual mode has an empty draft');
   assert.equal(state.draftByMode.chat, 'draft for regular chat');
   assert.equal(input.value, '');
   input.value = 'question about QA finding';

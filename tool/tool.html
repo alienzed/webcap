@@ -2217,10 +2217,6 @@
                     <p id="director-chat-empty-description">Tell Director what interests you. You can start with a single moment, a feeling, or nothing at all.</p>
                 </div>
                 <div class="director-chat-composer">
-                    <section id="studio-action-advisor" class="studio-action-advisor hidden" aria-label="Optional action suggestions">
-                        <div id="studio-action-advisor-status" class="hidden" role="status" aria-live="polite"></div>
-                        <div id="studio-action-advisor-actions" class="hidden"></div>
-                    </section>
                     <button id="studio-dw-coherence-review" type="button" class="review-captions-btn hidden">Review coherence changes</button>
                     <div id="director-studio-revision-target" class="director-studio-revision-target hidden"></div>
                     <div id="director-chat-scene-context" class="hidden" role="status"></div>
@@ -2259,6 +2255,10 @@
                                 <button type="button" data-studio-tool="io">Model I/O</button>
                             </div>
                         </div>
+                    <section id="studio-action-advisor" class="studio-action-advisor hidden" aria-label="Optional action suggestions">
+                        <div id="studio-action-advisor-status" class="hidden" role="status" aria-live="polite"></div>
+                        <div id="studio-action-advisor-actions" class="hidden"></div>
+                    </section>
                         <span id="director-chat-composer-hint" class="director-chat-composer-hint">Enter to send · Shift+Enter for newline</span>
                         <div class="director-chat-composer-actions">
                             <button id="studio-director-inspect" type="button" class="review-captions-btn hidden" title="Inspect the latest Director request and response">I/O</button>

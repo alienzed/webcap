@@ -10,15 +10,7 @@ from .studio_guidance_defaults import _CLASSIC, _WORKSHOP, _IMAGINATIVE, _RENDER
 
 DOCS_ROOT = Path(__file__).resolve().parents[2] / "docs"
 
-H3_CAPABILITIES = "MiniMax H3 generates independent audiovisual clips of 4 to 15 seconds with synchronized audio."
-
-H3_TOOLKIT = (
-    "Write complete, self-contained generation prompts with rich, explicit descriptions "
-    "of everything relevant to the intended result, including subjects, surroundings, "
-    "appearance, spatial relationships, actions and sound. "
-    "When dialogue matters, specify exact words, speakers, language and delivery, "
-    "coordinating dialogue with shot timing and action."
-)
+H3_TOOLKIT = "H3 | CREATIVE MEDIUM KNOWLEDGE\nMiniMax H3 generates independent audiovisual clips of up to 15 seconds. Scenes need strong visual substance. Composition, layered activity, expressive performance, intricate movement, sustained atmosphere, rhythmic juxtaposition and timed views can all provide it. Use the window generously, tailoring density to each concept.\nAvailable visual structures include a continuous fixed or moving shot, a few complementary shots, rapid 1–2-second montage, dialogue-led coverage and reactions, visually rich tableaux, and images cut to sound or music. These techniques can combine; pacing, editing and camera treatment serve the author's purpose.\nH3 generates synchronized audio alongside the image. When dialogue matters, give the exact spoken words, speakers, language, vocal identity, emotional delivery and timing creative attention. Develop purposeful effects, ambience, music and silence as elements of the audiovisual design.\nFor authored generation prompts, communicate consequential visible details unambiguously: what and who appears, how they look and relate, essential starting states, significant changes, framing and timing. Establish continuity where an unintended variation would distort the result. Specificity makes a rich idea producible; the detailed H3 prompt structure and notation are supplied with actual prompt-writing tasks."
 
 SPECIALIST_DEFAULTS = {
     "task.visual_direction": "You are refining prompts for a text-to-video model. Your job is to describe the intended moving visuals so the model can render them accurately. Be exceptionally thorough and specific about the visuals that will actually be rendered. Explicitly establish relevant visual details that are implied by context or not yet specified. Video prompting requires explicit descriptions of relevant visual elements and their states throughout the intended progression. Exhaustively establish what is visible before and after changes, including what changes and what remains. Do not rely on the model to infer visual details or transitions from context alone. Prioritize details that materially affect what the viewer will see or how the intended actions will be rendered. Make appropriate creative decisions to complete the intended visuals, consistent with the established creative direction. Make the Scene prompt sufficiently complete to guide the intended render on its own. Keep your work focused on this Scene; do not introduce your own story, narrative direction, or unrelated creative developments. Return the complete revised H3 prompt; if no meaningful improvement is needed, return changed=false with the original prompt.",
@@ -32,11 +24,11 @@ SPECIALIST_DEFAULTS = {
 }
 
 MODULES = (
-    ("studio.classic", "Classic", "Studio profiles", "Lean creative collaboration; default Studio profile."),
+    ("studio.classic", "Classic", "Studio profiles", "Original creative producer profile."),
     ("studio.current", "Current", "Studio profiles", "Current creative partner profile."),
     ("studio.imaginative", "Imaginative", "Studio profiles", "Current role with imaginative emphasis."),
     ("studio.render", "Render-focused", "Studio profiles", "Current role with renderability emphasis."),
-    ("h3.toolkit", "H3 creative toolkit", "Model expertise", "Descriptive completeness and dialogue guidance for H3 prompt writing."),
+    ("h3.toolkit", "H3 creative toolkit", "Model expertise", "Audiovisual capabilities and possible techniques. Included in H3 creative authoring."),
     ("h3.authoring", "H3 prompt reference", "Model expertise", "Technical H3 prompt structure and dialogue notation; only for Scene/prompt writing."),
     ("storyboard.director", "Storyboard Director context", "Specialist roles", "Shared context for Storyboard planning and Scene development."),
     ("task.visual_direction", "Visual Direction", "Specialist roles", "Scene-focused visual completeness pass."),

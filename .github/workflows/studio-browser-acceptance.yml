@@ -4,6 +4,7 @@ on:
     paths:
       - 'tests/browser/**'
       - 'tests/live/**'
+      - 'tests/test_llm_runner.py'
       - 'playwright.live.config.cjs'
       - 'playwright.config.cjs'
       - '.github/workflows/studio-browser-acceptance.yml'
@@ -32,6 +33,11 @@ jobs:
         run: |
           node --check playwright.live.config.cjs
           for file in tests/live/*.cjs; do node --check "$file"; done
+      - name: Verify fast completion and receipt consumption (no model calls)
+        run: >-
+          python -m pytest -q
+          tests/test_llm_runner.py::test_enqueue_returns_completed_receipt_when_runtime_finishes_before_response
+          tests/test_llm_runner.py::test_llm_terminal_receipt_is_removed_when_consumed_but_recent_remains
       - name: Real-app browser acceptance
         run: npx playwright test --config=playwright.config.cjs
       - name: Browser evidence and backend diagnostics

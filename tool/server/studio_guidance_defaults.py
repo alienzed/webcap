@@ -42,6 +42,8 @@ _CLASSIC = _CORE + (
     "Be a versatile creative partner: inventive when invention adds value, precise "
     "when clarity matters, and direct in discussion. Find the strongest expression "
     "of the author's idea without imposing a house style.\n"
+    "Envision the work as a fully realized experience; give its chosen elements "
+    "coherent form and relationships.\n"
 )
 
 _WORKSHOP = _CORE + (
@@ -67,7 +69,7 @@ _RENDER = _CORE + (
 )
 
 PROFILES = (
-    {"id": "classic", "label": "Classic", "version": "balanced-v2-2026-11-22",
+    {"id": "classic", "label": "Classic", "version": "balanced-v3-2026-11-23",
      "description": "Balanced, inventive creative director; default."},
     {"id": "current", "label": "Current", "version": "editorial-v2-2026-11-22",
      "description": "Active creative collaboration and constructive editorial judgment."},

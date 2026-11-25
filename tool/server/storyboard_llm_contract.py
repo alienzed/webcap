@@ -468,12 +468,15 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             "response_schema": _prompt_response_schema(),
         }
 
-    director_context = llm_guidance_text("storyboard.director")
+    director_context = ""
     if operation in {"expand_concept", "develop_story", "develop_story_outline", "develop_story_scene", "insert_scene", "extend_story", "write_prompt", "repair_scenes"}:
+        director_context = llm_guidance_text("storyboard.director")
         guidance = _story_guidelines_text(story)
         if guidance:
             director_context += "\n\n[STORY DIRECTING GUIDELINES - AUTHOR INTENT]\n" + guidance
-    h3_runtime_context = llm_guidance_text("h3.authoring") + "\n\nH3 CREATIVE TOOLKIT:\n" + llm_guidance_text("h3.toolkit")
+    h3_runtime_context = ""
+    if operation in {"develop_story", "develop_story_scene", "insert_scene", "extend_story", "repair_scenes", "write_prompt", "visual_direction"}:
+        h3_runtime_context = llm_guidance_text("h3.authoring") + "\n\nH3 CREATIVE TOOLKIT:\n" + llm_guidance_text("h3.toolkit")
 
     if operation == "define_invariants":
         concept = _clean(story.get("concept"))

@@ -246,13 +246,14 @@ def test_studio_brief_extraction_schema(monkeypatch):
     monkeypatch.setattr(application, "enqueue_llm", fake_enqueue)
     response = app.test_client().post("/fs/director/chat", json={
         "model": "local-test", "operation": "studio_brief_draft",
+        "requiredFields": ["concept"],
         "messages": [{"role": "user", "content": "Refine the Concept"}],
     })
     assert response.status_code == 202
     schema = result["contract"]["response_schema"]
-    assert "required" not in schema
+    assert schema["required"] == ["concept"]
+    assert list(schema["properties"]) == ["concept"]
     assert "additionalProperties" not in schema
-    assert "maxItems" not in schema["properties"]["invariants"]
     assert "maxLength" not in schema["properties"]["concept"]
 
 
@@ -362,29 +363,39 @@ def test_studio_project_validation_and_atomic_pre_publish_failure(isolated_story
     assert not list(storyboard_store.storyboard_root().glob(".studio-create-*"))
 
 
-def test_studio_project_extraction_schema_accepts_usable_partial_material(monkeypatch):
+def test_complete_project_request_keeps_partial_results_saveable(isolated_storyboard, monkeypatch):
     from tool.server import app as application
     captured = {}
 
     def fake_enqueue(client, model, contract, context, label):
         captured["contract"] = contract
+        captured["calls"] = captured.get("calls", 0) + 1
         return {"jobId": "project-job", "status": "queued"}
 
     monkeypatch.setattr(application, "enqueue_llm", fake_enqueue)
-    result = app.test_client().post("/fs/director/chat", json={
+    result = isolated_storyboard.post("/fs/director/chat", json={
         "model": "local-test", "operation": "studio_project_draft",
         "messages": [{"role": "user", "content": "A funny idea"}],
     })
     assert result.status_code == 202
     schema = captured["contract"]["response_schema"]
     assert "additionalProperties" not in schema
-    assert "required" not in schema
+    assert schema["required"] == ["title", "concept", "style", "invariants"]
     assert "maxItems" not in schema["properties"]["invariants"]
     for field in ("title", "concept", "style"):
         assert "maxLength" not in schema["properties"][field]
     assert "initialScenes" not in schema["properties"]
     assert "rationale" not in schema["properties"]
     assert "firstScenes" not in schema["properties"]
+
+    # The request is complete; useful returned material still saves independently.
+    saved = isolated_storyboard.post("/fs/studio/director/project-create", json={
+        "proposal": {"style": "Cool neutral daylight"},
+    })
+    assert saved.status_code == 201, saved.json
+    assert saved.json["story"]["style"] == "Cool neutral daylight"
+    assert storyboard_store.load_story(saved.json["story"]["id"])["style"] == "Cool neutral daylight"
+    assert captured["calls"] == 1
 
 
 def test_multi_scene_insert_at_start_between_and_end(isolated_storyboard):

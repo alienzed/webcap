@@ -49,7 +49,7 @@ def test_qa_focus_inspection_reuses_existing_focus_set_round_trip():
     assert "function returnToQaWorkbenchFromFocusSet()" in qa
     assert "state.focusSet = parent ? qaCloneFocusSet(parent) : null;" in qa
     return_block = qa.split("function returnToQaWorkbenchFromFocusSet()", 1)[1].split("function qaHandleAction", 1)[0]
-    assert return_block.index("qaWorkbenchState.view = returnToCurate ? 'curate' : returnToFinding ? 'browse' : 'overview';") < return_block.index("setWorkspaceSurface('reviewOutput');")
+    assert return_block.index("qaWorkbenchState.view = returnToCorrections ? 'corrections' : returnToCurate ? 'curate' : returnToFinding ? 'browse' : 'overview';") < return_block.index("setWorkspaceSurface('reviewOutput');")
     assert "function qaInspectCurationItem(fileName)" in qa
     assert "selectPathMedia(target, {allowOutsideFilter:true})" in qa
     assert "qaWorkbenchState.returnToCurate = true;" in qa

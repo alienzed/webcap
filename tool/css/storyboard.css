@@ -4259,6 +4259,26 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 }
 .studio-action-advisor-action:hover { background:var(--hover); border-color:var(--accent); }
 .studio-action-advisor-action:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+/* Keep optional suggestions in the composer toolbar, between Actions and Send. */
+.director-chat-composer-footer .studio-action-advisor {
+  flex: 1 1 150px;
+  min-width: 0;
+  margin: 0;
+  flex-wrap: wrap;
+}
+.director-chat-composer-footer #studio-action-advisor-actions {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.director-chat-composer-footer .studio-action-advisor-action {
+  min-height: 40px;
+  padding: 6px 11px;
+  overflow-wrap: anywhere;
+}
+.director-chat-composer-footer #studio-action-advisor-status {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 #studio-dw-write-project-fields { border:1px solid var(--border); border-radius:8px; padding:10px; }
 #studio-dw-write-project-fields.hidden { display:none; }
 #studio-dw-write-project-fields legend { font-size:15px; font-weight:600; padding:0 4px; }

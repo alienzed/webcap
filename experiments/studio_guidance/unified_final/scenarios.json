@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "experiment": "unified-final-v1",
+  "cases": [
+    {
+      "id": "final-chat-pool",
+      "split": "development",
+      "category": "natural-conversational-judgment",
+      "operation": "studio_chat",
+      "focus": "A proportionate concrete recommendation that serves understated optimism without prematurely drafting a Project or Scene.",
+      "fidelity_checks": [
+        "Chooses a direction between lighting and human action with a reason.",
+        "Preserves understated optimism rather than a grand reveal.",
+        "A few natural conversational sentences; the current task is choosing a direction."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "I am planning a short film about a municipal caretaker opening an empty outdoor swimming pool at dawn. I want understated optimism rather than a grand reveal. Would you put the feeling in the light or in a small human action? Give me one recommendation and why, in a few sentences; we are choosing a direction."
+        }
+      ]
+    },
+    {
+      "id": "final-project-balance",
+      "split": "development",
+      "category": "project-versatility",
+      "operation": "studio_project_draft",
+      "focus": "A complete distinctive collection that supports documentary precision, dry comedy and spectacular imagination without imposing a single narrative or mood.",
+      "fidelity_checks": [
+        "Meaningful title, concept, developed style and relevant invariant values.",
+        "Same clear glass sphere with a cobalt-blue equatorial band across films.",
+        "Independent films retain observational/documentary, dry-comic and spectacular possibilities; people, settings and techniques vary."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "A collection of independent short films about balance. The same clear glass sphere with a cobalt-blue equatorial band appears in every film. People, settings and techniques vary freely. Some films should be precise and observational, others dryly comic or spectacularly imaginative. There is no overall plot. Give the collection a recognizable identity while retaining that range."
+        }
+      ],
+      "instruction": "Create one complete Project with a distinctive title, an inspiring Concept, developed Visual / atmosphere and genuinely enduring Invariants."
+    },
+    {
+      "id": "final-scene-gauge",
+      "split": "development",
+      "category": "clinical-precision-and-restraint",
+      "operation": "studio_scenes_draft",
+      "focus": "Neutral, clinically clear observation of a specified physical operation; precision and restraint are the creative goal.",
+      "fidelity_checks": [
+        "One 10-second Scene in one continuous fixed close-up.",
+        "Sky-blue gloved hands place a stainless-steel gauge block beneath a dial indicator; right hand lowers probe to contact block, needle moves once and settles, then both hands withdraw.",
+        "Probe contact and dial needle remain in frame; block and instrument remain after hands leave.",
+        "Uniform neutral illumination, real-time depiction, quiet physical sounds, no dialogue or music."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "This is a clinically clear observational demonstration. Its value is seeing the physical contact and the needle settle, with a patient camera and neutral presentation."
+        }
+      ],
+      "instruction": "Write one complete 10-second H3 Scene in one continuous fixed close-up. On a clean white laboratory bench, sky-blue gloved hands place a stainless-steel gauge block beneath a dial indicator. The right hand lowers the probe until it contacts the block; the dial needle moves once and settles. Both hands then withdraw, leaving the block and instrument still. Keep the probe contact and dial needle in frame throughout. Use uniform neutral illumination, real-time movement and only quiet physical sounds. No dialogue or music.",
+      "project": {
+        "title": "Contact and Measure",
+        "concept": "Precise observational demonstrations of simple mechanical measurements.",
+        "style": "Clinical clarity, neutral light and faithful real-time physical action.",
+        "invariants": []
+      }
+    },
+    {
+      "id": "final-scene-wooden-sea",
+      "split": "development",
+      "category": "ambitious-imaginative-authoring",
+      "operation": "studio_scenes_draft",
+      "focus": "An ambitious tactile transformation with coherent material identity, full intended scale, expressive sound and clear audiovisual progression.",
+      "fidelity_checks": [
+        "One 15-second Scene with three consecutive authored shots covering the duration.",
+        "Small teal ceramic whale with a gold stripe swims through a wooden worktable; table becomes rolling wooden waves filling the workshop while walls remain intact.",
+        "Whale leaps from the wooden sea, becomes solid ceramic again and lands in a craftswoman's waiting hands; identity is consistent.",
+        "Craftswoman says exactly: Easy, now. Appropriate H3 dialogue/speaker notation.",
+        "Preserves the full workshop-scale transformation, tangible wood/ceramic materials and exhilarating imaginative intent."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Make an impossible material transformation feel tangible and exhilarating. The pleasure is the whole workshop becoming a wooden sea, then a tiny object returning safely to human hands."
+        }
+      ],
+      "instruction": "Write one complete 15-second H3 Scene in three consecutive shots. A small teal ceramic whale with one gold stripe starts swimming through the solid surface of a wooden worktable as though it were water. The table becomes rolling wooden waves that fill the workshop while its walls remain intact. The whale leaps from the wooden sea, becomes solid ceramic again, and lands in a craftswoman's waiting hands. She says exactly \"Easy, now.\" Choose her appearance and clothing consistently. Preserve the full workshop-scale transformation, the whale's identity, tangible wood and ceramic textures, and purposeful sound.",
+      "project": {
+        "title": "Materials Otherwise",
+        "concept": "Impossible behavior realized through the tactile identities of familiar materials.",
+        "style": "Ambitious handmade audiovisual conception with coherent physical relationships.",
+        "invariants": []
+      }
+    }
+  ]
+}

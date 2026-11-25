@@ -141,7 +141,7 @@ def test_caption_assist_without_template_supplies_no_order_override():
     )
     payload = json.loads(messages[1]["content"].split("\n\n", 1)[1])
     assert payload["captionTemplate"] == ""
-    assert payload["renderedPrimer"] == ""
+    assert "renderedPrimer" not in payload
     assert "preferredCaptionSequence" not in payload
     assert "Do not use annotation group order as caption order." in messages[1]["content"]
 

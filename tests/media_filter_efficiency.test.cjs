@@ -20,7 +20,7 @@ function fixture() {
   const tags = {a: ['red scarf'], b: [], c: ['portrait'], d: ['flower']};
   const assignments = {c: [{requirement: 'Clothing', term: 'halter top'}]};
   const ratings = {a: 5, b: 0, c: 3, d: 2};
-  const stats = {tags: 0, ai: 0, mismatch: 0};
+  const stats = {tags: 0, mismatch: 0};
   let stars = {values: [], includeNoStar: false};
   let flags = [];
   const ui = {
@@ -28,7 +28,6 @@ function fixture() {
     advancedFilterMissingCaptionsEl: {checked: false},
     advancedFilterReviewedEl: {checked: false},
     advancedFilterUnreviewedEl: {checked: false},
-    advancedFilterNeedsAiValidationEl: {checked: false},
     advancedFilterUntaggedEl: {checked: false},
     advancedFilterInvalidArEl: {checked: false}
   };
@@ -43,7 +42,6 @@ function fixture() {
     getAdvancedStarFilterState: () => stars,
     getAdvancedFlagFilterValues: () => flags,
     getRatingForMediaKey: key => ratings[key] || 0,
-    isAiValidatedForItem: item => { stats.ai++; return item.key === 'a' || item.key === 'c'; },
     hasTagMismatchForText: key => { stats.mismatch++; return key === 'b' || key === 'c'; },
     hasSupportedAspectBucket: ar => ar !== '2:1'
   };
@@ -57,12 +55,11 @@ function fixture() {
   };
 }
 
-test('captionless, review state, stars, flags, AI, mismatch, and invalid aspect filters retain results', () => {
+test('captionless, review state, stars, flags, mismatch, and invalid aspect filters retain results', () => {
   const cases = [
     ['advancedFilterMissingCaptionsEl', ['b']],
     ['advancedFilterReviewedEl', ['a', 'd']],
     ['advancedFilterUnreviewedEl', ['b', 'c']],
-    ['advancedFilterNeedsAiValidationEl', ['b', 'd']],
     ['advancedFilterUntaggedEl', ['b', 'c']],
     ['advancedFilterInvalidArEl', ['c']]
   ];
@@ -126,25 +123,19 @@ test('matching filename/caption or excluded negative term never requests tag exp
   assert.equal(f.stats.tags, 1, 'multiple tag-dependent terms reuse one expansion');
 });
 
-test('combined cheap filters prune candidates before text, AI and Tag Mismatch work', () => {
+test('combined cheap filters prune candidates before text and Tag Mismatch work', () => {
   const f = fixture();
   f.ui.filterEl.value = 'never present';
   f.ui.advancedFilterMissingCaptionsEl.checked = true;
   f.setFlags(['blue']);
-  f.ui.advancedFilterNeedsAiValidationEl.checked = true;
   f.ui.advancedFilterUntaggedEl.checked = true;
   assert.deepEqual(f.keys(), [], 'AND of incompatible filters');
   assert.equal(f.stats.tags, 0, 'text tag expansion never runs for already-excluded items');
-  assert.equal(f.stats.ai, 0, 'AI fingerprint checks never run for already-excluded items');
   assert.equal(f.stats.mismatch, 0, 'Tag Mismatch never runs for already-excluded items');
 
   f.setFlags([]);
   f.ui.advancedFilterMissingCaptionsEl.checked = false;
   f.ui.filterEl.value = 'green hat';
-  assert.deepEqual(f.keys(), [], 'AI-validated item is correctly excluded by Needs AI Validation');
-  assert.equal(f.stats.ai, 1, 'AI check only for text match');
-  assert.equal(f.stats.mismatch, 0, 'Tag Mismatch is skipped when AI filter rejects item');
-  f.ui.advancedFilterNeedsAiValidationEl.checked = false;
-  assert.deepEqual(f.keys(), ['c'], 'removing AI filter preserves the text and mismatch match');
+  assert.deepEqual(f.keys(), ['c'], 'text and mismatch match');
   assert.equal(f.stats.mismatch, 1, 'Tag Mismatch checks only the final candidate');
 });

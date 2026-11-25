@@ -4,7 +4,7 @@
 
 Deep QA's user-facing correction path is distinct from the ordinary Caption Assist workflow. **Caption Assist remains the user's final caption pass** and retains its existing generation, refinement, editing, and approval behavior.
 
-The QA Workbench's **Review & Fix** entry opens a correction review surface grouped by media item. It previews current/proposed caption text and applicable grouped-vocabulary tag operations before any mutation. Applying a card uses the existing exact-target caption patch validator, caption save path, and checklist tag assignment/removal functions. It does not create AI Validation receipts or mark media Reviewed; Deep QA corrections are not equivalent to the user's final caption/annotation validation.
+The QA Workbench's **Review & Fix** entry opens a correction review surface grouped by media item. It previews current/proposed caption text and applicable grouped-vocabulary tag operations before any mutation. Applying a card uses the existing exact-target caption patch validator, caption save path, and checklist tag assignment/removal functions. It does not mark media Reviewed; Deep QA corrections are independent of the user's final caption and annotation pass.
 
 Ungrouped tag actions are shown as requiring item inspection rather than silently applied. Single Item remains available for deeper inspection. Hypotheses without concrete current actions remain in the Full Report/Concept Check paths and are not promoted to corrections. No inference is triggered by opening the correction review.
 
@@ -50,15 +50,13 @@ Status: focused LLM/VL-driven annotation workflow.
 
 **Afterwards, optional Deep QA** serves as a **high-bar, high-precision exception search** for consequential, evidenced omissions or contradictions, ideally with a concrete fix. No finding is a successful outcome. Keep inexpensive deterministic clues (Missing Captions, Tag Mismatch, Reviewed/Unreviewed, technical checks) accessible; demote low-value or confusing workflow clutter rather than layering additional overlapping QA machinery. Incomplete currently measures unchecked requirement groups and must not be represented as an independent overall quality verdict.
 
-Reuse Set Intelligence, Vocabulary Discovery, Guided Tagging, Focus Annotation, the Primer, Caption Assist's existing editing/actions, and existing review/navigation/filter infrastructure. Do not introduce a new editor, queue, evidence cache, automatically selected rescan scheme, or separate wizard-state system. If preparation was already done, users can enter the guided validation flow directly. **The intended user experience is: scan → establish vocabulary → validate tags and caption together, item by item → optionally run final Deep QA.**
+Reuse Set Intelligence, Vocabulary Discovery, Guided Tagging, Focus Annotation, the Primer, Caption Assist's existing editing/actions, and existing review/navigation/filter infrastructure. Do not introduce a new editor, queue, evidence cache, automatically selected rescan scheme, or separate wizard-state system. If preparation was already done, users can enter the guided validation flow directly. **The intended user experience is: scan → establish vocabulary → review tags and caption together, item by item → optionally run final Deep QA.**
 
-## Guided Validation implementation slice (2026-10-11)
+## Single Item Tag Assist and caption acceptance
 
-**Feature branch implementation; browser acceptance remains pending.** Single Item now has an explicit per-item **Suggest Tags** action using the existing `suggest_tags` Director operation and cached Sight, with canonical vocabulary candidates rendered as temporary draft chips in each Group Workbench group. Selecting suggestions only edits the session draft; **Apply Tags** explicitly assigns selected terms and **Discard Proposals** rejects the batch. The established Guided Tagging Grid pass, Focus Caption, and Caption Assist editor remain independently usable.
+Single Item has an explicit per-item **Suggest Tags** action using the existing `suggest_tags` Director operation and cached Sight, with canonical vocabulary candidates rendered as temporary draft chips in each Group Workbench group. Selecting suggestions only edits the session draft; **Apply Tags** explicitly assigns selected terms and **Discard Proposals** rejects the batch. The established Guided Tagging Grid pass, Focus Caption, and Caption Assist editor remain independently usable.
 
-**Validate & Next** explicitly saves the current caption, writes a separate human-approved `ai_validation_receipts` entry to existing Set folder state, and advances through the current filtered Media List. The **Needs AI Validation** filter includes missing/stale receipts; staleness compares final caption, assigned tags, and saved Sight, not whole-Set group configuration. New vocabulary approved through Discover Vocabulary invalidates receipts only for media linked by the Director's cited Sight evidence IDs. Other edits do not automatically start inference. No parallel cache, full-Set scan, or new model runtime is introduced.
-
-Remaining polish is limited to browser QA of autosave/selection/filtered navigation, integrated Caption Assist presentation, and refinements arising from actual use; no replacement of Focus Caption or Grid Guided Tagging is implied.
+Caption Assist saves accepted captions and annotations before advancing in Focus Caption. Suggest Tags remains optional; ordinary Reviewed status and Deep QA retain their own workflows. There is no separate validation status or receipt, and older validation metadata and filter preferences are ignored on load and omitted on normal folder-state saves.
 
 ## Master of One
 

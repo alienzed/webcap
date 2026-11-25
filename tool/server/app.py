@@ -2431,6 +2431,7 @@ def director_chat_route():
                 raise ValueError("Invalid requested Project fields.")
             contract["response_schema"] = {
                 "type": "object",
+                "required": list(dict.fromkeys(required_fields)) or list(project_fields),
                 "properties": {field: project_fields[field] for field in
                                (dict.fromkeys(required_fields) if required_fields else project_fields)},
             }
@@ -2475,10 +2476,11 @@ def director_chat_route():
                 },
             }
         if operation == "studio_project_draft":
-            # A Project may start from any useful authored field, not just Concept.
-            # The save path validates the actual fields that can be persisted.
+            # Request the complete Project the author asked for. Required keys
+            # guide generation; useful partial results remain independently saveable.
             contract["response_schema"] = {
                 "type": "object",
+                "required": list(project_fields),
                 "properties": project_fields,
             }
         if operation == "storyboard_workshop_shots":

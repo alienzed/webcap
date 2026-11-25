@@ -503,6 +503,29 @@ def test_local_llm_queue_reuses_gpu_ownership_until_queued_work_is_drained(llm_r
     assert execution_queue.resource_owner() == ""
 
 
+def test_enqueue_returns_completed_receipt_when_runtime_finishes_before_response(llm_root, monkeypatch):
+    def finish_immediately():
+        job = llm_runner.execution_claim_next(llm_runner.EXECUTION_LANE)
+        llm_runner.execution_finish_job_transient(
+            job["id"], status="completed", result={"result": "Fast useful answer"}
+        )
+
+    monkeypatch.setattr(llm_runner, "_ensure_monitor_started", finish_immediately)
+    job = llm_runner.enqueue(
+        "chat", "remote", {
+            "operation": "freeform_chat", "messages": [{"role": "user", "content": "Hello"}]
+        }
+    )
+
+    assert job["status"] == "completed"
+    assert job["result"]["result"] == "Fast useful answer"
+    assert job["request"]["messages"] == [{"role": "user", "content": "Hello"}]
+    delivered = llm_runner.job_status(job["jobId"], consume=True)
+    assert delivered["result"] == job["result"]
+    with pytest.raises(FileNotFoundError):
+        llm_runner.job_status(job["jobId"])
+
+
 def test_llm_terminal_receipt_is_removed_when_consumed_but_recent_remains(llm_root):
     job = llm_runner.execution_enqueue(
         llm_runner.EXECUTION_LANE,

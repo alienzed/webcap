@@ -1,0 +1,387 @@
+{
+  "version": 1,
+  "experiment": "creative-charter-transfer-v1",
+  "description": "Twelve fresh development and four sealed holdout cases spanning Chat, Project, and Scene. Case-specific literal checks are diagnostics, not the winning criterion.",
+  "cases": [
+    {
+      "id": "chat-theatrical-restraint",
+      "split": "development",
+      "category": "editorial-dialogue",
+      "operation": "studio_chat",
+      "focus": "Offer a clear artistic point of view without overriding deliberate restraint.",
+      "fidelity_checks": [
+        "No person or supernatural intrusion",
+        "Concrete cinematic proposal suited to a quiet single object",
+        "Proportionate, conversational reply"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "I want a 12-second film about a chair in an empty rehearsal room. I'm worried that's too boring. I don't want a person or supernatural twist."
+        }
+      ]
+    },
+    {
+      "id": "chat-ambiguous-ending",
+      "split": "development",
+      "category": "editorial-dialogue",
+      "operation": "studio_chat",
+      "focus": "Independent artistic judgment and productive critique.",
+      "fidelity_checks": [
+        "Offers a specific recommendation and reason",
+        "Preserves mystery and the garden",
+        "Avoids an unnecessary production checklist"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Our short ends with an astronaut staring at a sealed garden. Should we show what is inside? I want mystery, not a generic cliffhanger."
+        }
+      ]
+    },
+    {
+      "id": "chat-comedy-collaboration",
+      "split": "development",
+      "category": "editorial-dialogue",
+      "operation": "studio_chat",
+      "focus": "Distinctive comic invention with tasteful emotional framing.",
+      "fidelity_checks": [
+        "Affectionate rather than humiliating",
+        "Specific performable audiovisual gag",
+        "Natural concise collaboration"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Pitch me a more surprising but emotionally plausible visual gag: a grandparent tries to look cool in a family cooking video. Keep it affectionate, not mocking."
+        }
+      ]
+    },
+    {
+      "id": "project-ambient-portraits",
+      "split": "development",
+      "category": "project-vision",
+      "operation": "studio_project_draft",
+      "focus": "Project concept gives a creative map without dictating each scene.",
+      "fidelity_checks": [
+        "Independent scenes, not imposed serialized plot",
+        "Emotional range remains open",
+        "Invariants limited to deliberately recurring visual facts"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "I want a collection of independent portraits of people in late-night laundromats, no shared plot. Some are jubilant, others exhausted; it shouldn't all look melancholy."
+        }
+      ],
+      "instruction": "Create a strong Project title, Concept, Visual/atmosphere and only useful recurring Invariants. Leave future subjects and moods open."
+    },
+    {
+      "id": "project-paper-world",
+      "split": "development",
+      "category": "project-vision",
+      "operation": "studio_project_draft",
+      "focus": "World-building initiative and sensible invariant scope.",
+      "fidelity_checks": [
+        "Recognizable stable spatial identity for the city",
+        "Different protagonists allowed",
+        "Weather effects treated as variable",
+        "Specific visual signature rather than generic surrealism"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Build a surreal anthology: small objects made of folded paper live in a city whose weather changes from ink to confetti. Each episode uses a different protagonist. The shared geography must be recognizable."
+        }
+      ],
+      "instruction": "Create the Project overview, visual atmosphere, and relevant Invariants. Bring artistic personality to the world but leave episodes free."
+    },
+    {
+      "id": "project-documentary-ethics",
+      "split": "development",
+      "category": "project-vision",
+      "operation": "studio_project_draft",
+      "focus": "Expressive documentary design without fabricating testimony.",
+      "fidelity_checks": [
+        "No fabricated biography or interviews",
+        "Specific filmic identity and sonic conception",
+        "Flexible, non-prescriptive project map"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Plan a lyrical documentary collection about a coastal fish market after dawn. No invented interviews or invented people's personal histories. Show physical work, sounds, color and contrasts."
+        }
+      ],
+      "instruction": "Draft Project Title, Concept, Visual/atmosphere and stable Invariants where needed."
+    },
+    {
+      "id": "scene-orchestral-empty",
+      "split": "development",
+      "category": "audiovisual-judgment",
+      "operation": "studio_scenes_draft",
+      "focus": "Decisive audiovisual authorship without gratuitous visuals.",
+      "fidelity_checks": [
+        "Fixed viewpoint and no people or dialogue",
+        "One key depresses, not an exploding instrument",
+        "Sound perspective and light form a coherent experience"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "A sound-driven piece should feel powerful without spectacle. No person, no dialogue, no moving camera."
+        }
+      ],
+      "instruction": "Write one 12-second independently generatable H3 Scene. A solitary upright piano is illuminated in an otherwise empty black rehearsal space. A distant orchestra rehearses an unresolved chord; one piano key depresses slowly on its own, but keep the event physical and subtle. Hold the fixed viewpoint and let acoustic distance and light do the storytelling.",
+      "project": {
+        "title": "Resonance",
+        "concept": "A restrained music-film study",
+        "style": "Dark, intimate acoustic realism",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      }
+    },
+    {
+      "id": "scene-athletic-ensemble",
+      "split": "development",
+      "category": "composition-performance",
+      "operation": "studio_scenes_draft",
+      "focus": "Purposeful complex choreographic composition and sound.",
+      "fidelity_checks": [
+        "All twelve dancers participate meaningfully",
+        "Two foreground performers break and rejoin group pattern",
+        "Only one lateral camera move",
+        "Distant train affects sound design"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "This needs to be a full ensemble; don't turn it into a duel or a generic crowd."
+        }
+      ],
+      "instruction": "Create a complete 15-second H3 Scene of twelve contemporary dancers on a weathered rooftop at sunrise. A diagonal wave of movement travels among all twelve, with two near the camera briefly breaking the pattern before rejoining it. A distant train interrupts the score. The camera travels only once, laterally, revealing the choreography's geometry.",
+      "project": {
+        "title": "Twelve",
+        "concept": "Rooftop choreography study",
+        "style": "Warm industrial sunrise, kinetic documentary texture",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      }
+    },
+    {
+      "id": "scene-museum-gesture",
+      "split": "development",
+      "category": "author-fidelity",
+      "operation": "studio_scenes_draft",
+      "focus": "Invent within open space while respecting precise anchors.",
+      "fidelity_checks": [
+        "Exactly one rectangular skylight",
+        "One blue glass bird on marble table",
+        "Gold loop around left wing",
+        "Curator never touches bird"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Please preserve my exact object and staging choices. Make the rest of the scene original."
+        }
+      ],
+      "instruction": "Write an 11-second H3 Scene: in an empty museum, a single rectangular skylight casts pale light onto a marble table. On the table stands precisely one blue glass bird with a gold wire loop around its left wing. A curator in white gloves approaches but never touches the bird. Create compelling visual rhythm and sound while preserving those exact choices.",
+      "project": {
+        "title": "Blue Bird",
+        "concept": "A delicate object under observation",
+        "style": "Quiet, spacious museum naturalism",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      }
+    },
+    {
+      "id": "scene-dialogue-duo",
+      "split": "development",
+      "category": "audiovisual-dialogue",
+      "operation": "studio_scenes_draft",
+      "focus": "A fully realized, restrained audiovisual exchange.",
+      "fidelity_checks": [
+        "Both exact dialogue lines and speaker assignments",
+        "Relief rather than tragedy",
+        "Shelter setting and two actors",
+        "Sound supports performance"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Their dialogue is understated; don't turn this into melodrama."
+        }
+      ],
+      "instruction": "Author a 14-second H3 Scene in a night bus shelter. A woman holding a folded umbrella says exactly 'We missed the last one.' A man replies exactly 'Then we walk.' Their gestures and pacing should suggest relief rather than defeat. Passing headlights and the hum of a vending machine punctuate the dialogue.",
+      "project": {
+        "title": "Last Bus",
+        "concept": "Two friends choose to walk home",
+        "style": "Rain-slick streets, humane realism",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      }
+    },
+    {
+      "id": "scene-transformative-cut",
+      "split": "development",
+      "category": "editing-design",
+      "operation": "studio_scenes_draft",
+      "focus": "Editing as expressive design and coherent transformation.",
+      "fidelity_checks": [
+        "Exactly two shots and a 5-second match cut",
+        "Paper boat yellow, wooden boat yellow",
+        "Child's hand absent in second shot",
+        "Paper-to-water sonic bridge"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "The cut is the main idea, but I don't want confusing transformations."
+        }
+      ],
+      "instruction": "Write a 10-second H3 Scene with two shots. In shot one a child folds a yellow paper boat at a kitchen table; match cut at 5 seconds to a full-size yellow wooden boat moving slowly through an estuary, echoing its triangular prow. The child's hand never appears in shot two. Sound bridges the cut from crinkled paper to water.",
+      "project": {
+        "title": "Paper Tide",
+        "concept": "A small gesture becomes a journey",
+        "style": "Tactile warm interior to misty estuary",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      }
+    },
+    {
+      "id": "scene-silent-crowd",
+      "split": "development",
+      "category": "composition-performance",
+      "operation": "studio_scenes_draft",
+      "focus": "Coherent large-scale stillness and confident pacing.",
+      "fidelity_checks": [
+        "Hundreds remain present and still",
+        "No panic, chase or violence",
+        "Violin bow lowers but no violin performance",
+        "Sensory progression despite minimal motion"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "I want an enormous public scale without frenzy or violence."
+        }
+      ],
+      "instruction": "Write a 15-second H3 Scene at a public square at blue hour. Hundreds of people stand still beneath floating lanterns; a single person at the edge lowers a violin bow without playing. The crowd remains calm and immobile. Use composition, subtle sound, and changes in atmosphere for emotional progression.",
+      "project": {
+        "title": "Blue Hour",
+        "concept": "Collective silence in a crowded plaza",
+        "style": "Civic space, luminous calm",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      }
+    },
+    {
+      "id": "holdout-chat-critical",
+      "split": "holdout",
+      "category": "editorial-dialogue",
+      "operation": "studio_chat",
+      "focus": "Judgment that challenges and prioritizes rather than indulging everything.",
+      "fidelity_checks": [
+        "Addresses likely overloading without arbitrary rules",
+        "Makes a specific compelling recommendation",
+        "Respects intended wonder"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "My underwater film needs wonder, but I've packed it with three camera moves, two costume changes, and a song in 8 seconds. Is that too much?"
+        }
+      ]
+    },
+    {
+      "id": "holdout-project-rituals",
+      "split": "holdout",
+      "category": "project-vision",
+      "operation": "studio_project_draft",
+      "focus": "Evocative scope and recurring object fidelity without scripted episodes.",
+      "fidelity_checks": [
+        "Same octagonal walnut table anchors series",
+        "Different households and moods remain possible",
+        "No fixed cast mandated"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "A nonnarrative series of family dinner rituals across seasons, always at the same octagonal walnut table. Different households, cuisines and moods. Never prescribe exactly who sits there."
+        }
+      ],
+      "instruction": "Create a Project with inspiring premise, cinematic style and only enduring Invariants. Let every episode remain distinct."
+    },
+    {
+      "id": "holdout-scene-miniature",
+      "split": "holdout",
+      "category": "author-fidelity",
+      "operation": "studio_scenes_draft",
+      "focus": "Tasteful invention under deliberate compositional boundaries.",
+      "fidelity_checks": [
+        "Exactly three terracotta pots",
+        "Different succulent per pot",
+        "Silver teaspoon beside middle pot",
+        "No human presence"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "The exact props are important; add atmosphere without changing them."
+        }
+      ],
+      "instruction": "Write an 11-second H3 Scene inside a miniature greenhouse. Exactly three terracotta pots line one windowsill, each with a different succulent. A silver teaspoon rests beside the middle pot. Raindrops on the glass send shifting shadows over the plants; no person is visible. Build a vivid audiovisual piece with tactility and patient pacing.",
+      "project": {
+        "title": "Three Pots",
+        "concept": "A miniature greenhouse in rain",
+        "style": "Macro tactile naturalism",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      }
+    },
+    {
+      "id": "holdout-scene-musical",
+      "split": "holdout",
+      "category": "audiovisual-judgment",
+      "operation": "studio_scenes_draft",
+      "focus": "Audiovisual counterpoint without loss of physical clarity.",
+      "fidelity_checks": [
+        "One mechanic, one wheel repair, no montage",
+        "Wheel motion contrasts rhythm rather than on-beat cutting",
+        "Clear physical beginning and ending",
+        "Stable subject identity"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Please don't use obvious on-the-beat cuts; I want a more interesting relationship between sound and image."
+        }
+      ],
+      "instruction": "Write a complete 15-second H3 Scene of a lone bicycle mechanic repairing a wheel in a softly lit workshop. An irregular jazz percussion track plays from a tiny radio, while the wheel's oscillation moves against the beat. Give the repair a clear beginning and ending. Keep the mechanic's identity and clothing stable, and avoid a montage.",
+      "project": {
+        "title": "Counterpoint",
+        "concept": "Mechanical rhythm and improvised sound",
+        "style": "Warm lived-in workshop realism",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      }
+    }
+  ]
+}

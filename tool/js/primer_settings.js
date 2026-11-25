@@ -216,9 +216,8 @@ function useCaptionAssistCandidate() {
   captionAssistApplyPending = true;
   syncCaptionAssistCandidateUi();
 
-  // Apply is human acceptance. Save the caption and annotations, then record
-  // the same durable validation receipt used by Validate & Next. QA Focus
-  // Review keeps its separate resolution flow.
+  // Save the accepted caption and its annotations before advancing.
+  // QA Focus Review retains its own resolution flow.
   return (focused ? cancelCurrentCaptionVision() : Promise.resolve()).then(function () {
     if (unchanged) return true;
     return saveCaptionDirect(folder, mediaItem.fileName, nextCaption, mediaItem.key, {
@@ -229,25 +228,32 @@ function useCaptionAssistCandidate() {
     });
   }).then(function () {
     if (qaReview) return true;
-    return aiValidationRecordAcceptedCaption(mediaItem, nextCaption, folder);
+    if (folder !== String(state.folder || '') || !state.currentItem || state.currentItem.key !== mediaItem.key) {
+      throw new Error('The selected Set or item changed during Caption Assist acceptance.');
+    }
+    return saveMediaAnnotationState(mediaItem.key).then(function (ok) {
+      if (!ok) throw new Error('Could not persist the accepted caption annotations.');
+      if (folder !== String(state.folder || '') || !state.currentItem || state.currentItem.key !== mediaItem.key) {
+        throw new Error('The selected Set or item changed during Caption Assist acceptance.');
+      }
+      return true;
+    });
   }).then(function () {
     captionAssistCandidate = null;
     forgetCaptionAssistCandidate(mediaItem.key);
     if (!focused) {
-      // Standalone Apply previously copied into the editor only. Applying a
-      // candidate now saves and validates it, consistently with Focus Caption.
+      // Standalone Apply saves the caption, consistently with Focus Caption.
       closeCaptionAssistPresentation();
       applyEditorTextAndTriggerInput(nextCaption);
       syncCaptionAssistCandidateUi();
       renderFileList();
       ui.editorEl.focus();
-      setStatus('Caption saved · AI Validated.');
+      setStatus('Caption saved.');
       return true;
     }
     syncCaptionAssistCandidateUi();
     ui.editorEl.value = nextCaption;
-    setStatus(qaReview ? (unchanged ? 'Caption accepted.' : 'Caption saved.') :
-      'Caption accepted · AI Validated.');
+    setStatus(unchanged ? 'Caption accepted.' : 'Caption saved.');
     if (qaReview) {
       if (qaFocusReviewRefreshAfterApply(mediaItem.key, priorQaFindings)) {
         return presentFocusedReviewCandidate(mediaItem).then(function () {
@@ -257,13 +263,12 @@ function useCaptionAssistCandidate() {
       }
       return resolveFocusedQaReviewItem('applied');
     }
-    // Refresh the Needs AI Validation filter while Focus Caption still owns
-    // selection, then advance to the next captured item.
+    // Refresh the list while Focus Caption still owns selection, then advance.
     renderFileList();
     return advanceFocusedCaption();
   }).catch(function (err) {
     reportConsoleError('Caption Assist · Apply Caption', err);
-    setStatus((captionSaved ? 'Caption saved, but AI validation failed: ' :
+    setStatus((captionSaved ? 'Caption saved, but acceptance could not finish: ' :
       'Could not save AI caption candidate: ') + String(err && err.message ? err.message : err));
     return false;
   }).finally(function () {
@@ -1185,12 +1190,12 @@ function syncCaptionAssistCandidateUi(options) {
   useBtn.textContent = isFocusedQaReviewMode()
     ? 'Apply'
     : (reviewMode ? (reviewChanged ? 'Save & Next' : 'Keep & Next')
-      : (useArmed ? 'Press Enter again' : (focusOpen ? (focusHasCaptionChange ? 'Save & Next' : 'Accept & Next') : 'Apply & Validate')));
+      : (useArmed ? 'Press Enter again' : (focusOpen ? (focusHasCaptionChange ? 'Save & Next' : 'Accept & Next') : 'Apply')));
   useBtn.title = pending ? 'Stop generation or wait before applying'
-    : (captionAssistApplyPending ? 'Saving caption and AI validation…'
+    : (captionAssistApplyPending ? 'Saving caption…'
       : (isFocusedQaReviewMode() ? 'Apply caption and continue QA review'
-        : (focusOpen ? 'Save caption, mark AI Validated, and advance to the next item'
-          : 'Save this caption and mark it AI Validated')));
+        : (focusOpen ? 'Save or accept the caption and advance to the next item'
+          : 'Save this caption')));
 
   var currentRequest = visible ? buildCaptionAssistRequest(state.currentItem) : null;
   var tagsChanged = !!(visible && candidate.annotationsAtGeneration &&

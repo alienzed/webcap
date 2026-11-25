@@ -22,7 +22,7 @@ The existing `generation_model_guidance` remains the empirical playbook in app c
 
 ## Ownership
 
-- `tool/server/studio_guidance_defaults.py` contains the four original profile defaults (preserved).
+- `tool/server/studio_guidance_defaults.py` contains the four versioned profile defaults. Classic v3 retains D plus the [checked coherence sentence](studio-director-creative-charter-results.md); Current, Imaginative and Render-focused retain their previous wording and versions.
 - `tool/server/llm_guidance.py` owns the catalog, H3 creative toolkit, standalone specialist role defaults, and replacement lookup.
 - `docs/mmh3-prompt-runtime-context.txt` remains the canonical H3 prompt reference default. `docs/storyboard-director-context.txt` remains the Storyboard Director default.
 - `config.json.llm_guidance` contains only sparse text overrides, validated against known IDs.
@@ -49,3 +49,7 @@ One verified drift was reconciled: Storyboard prompt revision's 6–15s wording 
 5. Keep unchanged behavior in unrelated captioning, media, queues, and saved Scene prompts.
 
 Automation/live LLM tests may require the author's configured runtime and cannot be claimed passed solely from Python or static tests.
+
+## Restoration of tested guidance
+
+After the v4 rewrite, the production Classic v3 role and H3 toolkit were restored verbatim from `c801959ec3c5bb7f1ffa89e9faa671b963a9aac1`, matching the frozen `classic-v3` package in `experiments/studio_guidance/unified_final/packages.json`. The other profile defaults, H3 and Storyboard references, and original Studio delivery (role plus toolkit for Chat and Write, technical reference and playbook for prompt-writing tasks only) were also restored from that commit. The operation-scoped Storyboard lookup and system-message diagnostics from #1102 remain. No new prompt wording or changes to user overrides are introduced. Subsequent refinements should be isolated against this baseline.

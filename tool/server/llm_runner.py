@@ -1,5 +1,6 @@
 import copy
 import json
+import os
 import logging
 import threading
 import time
@@ -1306,7 +1307,10 @@ def _request_diagnostic(client, contract):
         messages = normalize_freeform_messages(contract.get("messages"))
     else:
         prompt = str(contract.get("prompt") or "").strip()
-        messages = [{"role": "user", "content": prompt}] if prompt else []
+        system_prompt = str(contract.get("system_prompt") or "").strip()
+        messages = [{"role": "system", "content": system_prompt}] if system_prompt else []
+        if prompt:
+            messages.append({"role": "user", "content": prompt})
 
     diagnostic = {
         "messages": copy.deepcopy(messages),
@@ -1348,7 +1352,23 @@ def enqueue(client, model_id, contract, context=None, label=""):
                 raise ValueError("LLM runtime override " + field + " must be a positive integer.")
         if "contextSize" in runtime_overrides and runtime_overrides["contextSize"] < 1024:
             raise ValueError("LLM runtime override contextSize must be at least 1024.")
+    # The complete conversation remains in Director's session file. Large
+    # Studio requests carry only a source-grounded view into that transcript.
+    # Read remains explicit; the assembler sees only existing message text.
+    context_trace = None
+    studio_write_operations = {"studio_project_draft", "studio_brief_draft",
+                               "studio_scene_field_draft", "studio_scenes_draft"}
+    studio_context_mode = os.getenv("WEBCAP_STUDIO_CONTEXT_MODE", "chat")
+    studio_compaction_enabled = (contract.get("operation") == "studio_chat"
+                                 or (studio_context_mode == "all"
+                                     and contract.get("operation") in studio_write_operations))
+    if client == "chat" and studio_compaction_enabled and studio_context_mode != "full":
+        from .director_context import assemble_studio_context
+        outbound, context_trace = assemble_studio_context(contract.get("messages"))
+        contract = {**contract, "messages": outbound}
     request_diagnostic = _request_diagnostic(client, contract)
+    if context_trace is not None:
+        request_diagnostic["contextAssembly"] = context_trace
     with _enqueue_lock:
         job = execution_enqueue(
             EXECUTION_LANE,
@@ -1370,7 +1390,8 @@ def enqueue(client, model_id, contract, context=None, label=""):
             },
         )
     _ensure_monitor_started()
-    view = _job_view(execution_get_job(job["id"]))
+    # A fast runtime may already have moved this job to its terminal receipt.
+    view = job_status(job["id"])
     view["request"] = request_diagnostic
     return view
 

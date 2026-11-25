@@ -266,8 +266,7 @@ function openSetCaptionFindReplace(folderPath) {
       '<label>Replace with<input name="replacement" type="text" autocomplete="off"></label>' +
       '<p class="prep-set-caption-replace-note">Exact, case-sensitive text in this Set’s saved captions only.</p>' +
       '<p class="prep-set-caption-replace-result" role="status" aria-live="polite"></p>' +
-      '<div class="prep-set-caption-replace-actions"><button type="button" data-action="preview">Preview</button>' +
-      '<button type="button" data-action="apply" disabled>Replace matches</button></div></form>';
+      '<div class="prep-set-caption-replace-actions"><button type="button" data-action="apply" disabled>Replace matches</button></div></form>';
     var style = document.createElement('style');
     style.textContent = '.prep-set-caption-replace{width:min(540px,calc(100vw - 30px));max-height:85vh;padding:22px;border:1px solid var(--border,#777);border-radius:10px;background:var(--panel,Canvas);color:var(--text,CanvasText)}' +
       '.prep-set-caption-replace::backdrop{background:#0009}.prep-set-caption-replace-form{display:grid;gap:14px}' +
@@ -285,20 +284,41 @@ function openSetCaptionFindReplace(folderPath) {
     var form = dialog.querySelector('form');
     var findInput = form.elements.namedItem('find');
     var replacementInput = form.elements.namedItem('replacement');
-    var previewButton = dialog.querySelector('[data-action="preview"]');
     var applyButton = dialog.querySelector('[data-action="apply"]');
     var resultEl = dialog.querySelector('.prep-set-caption-replace-result');
     var current = null;
     var requestVersion = 0;
+    var previewTimer = null;
     function invalidate() {
+      clearTimeout(previewTimer);
+      previewTimer = null;
       requestVersion++;
       current = null;
       applyButton.disabled = true;
       resultEl.textContent = '';
     }
-    findInput.addEventListener('input',invalidate);
-    replacementInput.addEventListener('input',invalidate);
-    form.addEventListener('submit',function(event) {event.preventDefault();send(false);});
+    function schedulePreview(preserveCount) {
+      clearTimeout(previewTimer);
+      previewTimer = null;
+      requestVersion++;
+      current = null;
+      applyButton.disabled = true;
+      if (!findInput.value) {
+        resultEl.textContent = '';
+        return;
+      }
+      if (!preserveCount || !resultEl.textContent || resultEl.textContent === 'Replacing…') {
+        resultEl.textContent = 'Searching…';
+      }
+      previewTimer = setTimeout(function () {
+        previewTimer = null;
+        send(false);
+      }, 350);
+    }
+    findInput.addEventListener('input',function () { schedulePreview(false); });
+    replacementInput.addEventListener('input',function () { schedulePreview(true); });
+    // Enter does not perform a batch mutation; the explicit button does.
+    form.addEventListener('submit',function(event) {event.preventDefault();});
     dialog.querySelector('[data-action="close"]').addEventListener('click',function() {dialog.close();});
     function send(apply) {
       var find = findInput.value;
@@ -310,9 +330,10 @@ function openSetCaptionFindReplace(folderPath) {
         payload.signature = current.signature;
       }
       var thisRequest = ++requestVersion;
-      previewButton.disabled = true;
       applyButton.disabled = true;
-      resultEl.textContent = apply ? 'Replacing…' : 'Searching…';
+      if (apply || !resultEl.textContent) {
+        resultEl.textContent = apply ? 'Replacing…' : 'Searching…';
+      }
       fetch('/caption/set_replace',{
         method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)
       }).then(function(resp) {
@@ -338,9 +359,12 @@ function openSetCaptionFindReplace(folderPath) {
         resultEl.textContent = message;
         setStatus(message);
         console.error(message,err);
-      }).finally(function() {if (thisRequest === requestVersion) previewButton.disabled = false;});
+        if (apply) {
+          resultEl.textContent = message + ' Refreshing matches…';
+          schedulePreview(true);
+        }
+      });
     }
-    previewButton.addEventListener('click',function() {send(false);});
     applyButton.addEventListener('click',function() {send(true);});
     dialog.addEventListener('close',invalidate);
     dialog._prepSetReplaceReset = invalidate;

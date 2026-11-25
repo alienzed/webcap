@@ -8,9 +8,9 @@ Give the author explicit, editable ownership of creative prompts while keeping W
 
 | Path / operation | Creative guidance source | Task/technical material |
 | --- | --- | --- |
-| Studio Chat | Selected `studio.*` profile + basic H3 capabilities | Saved conversation (source-grounded context assembly); concise conversational instruction; no H3 authoring reference |
-| Studio Write Project | Selected `studio.*` profile + basic H3 capabilities | Author's selected task and Project fields, operation response schema |
-| Studio Write Scene | Selected `studio.*` profile | `h3.toolkit` + `h3.authoring`, current task and saved Scene/Project context, response schema; empirical playbook |
+| Studio Chat | Selected `studio.*` profile + `h3.toolkit` | Full saved conversation; concise conversational instruction; no H3 authoring reference |
+| Studio Write Project | Selected `studio.*` profile + `h3.toolkit` | Author's selected task and Project fields, operation response schema |
+| Studio Write Scene | Selected `studio.*` profile + `h3.toolkit` | `h3.authoring`, current task and saved Scene/Project context, response schema; empirical playbook |
 | First Cut concept / Scene planning | `storyboard.director` | Operation-specific request, relevant Project context; Scene development also uses `h3.authoring` + `h3.toolkit` + empirical playbook |
 | Standalone Visual Direction | `task.visual_direction` | Existing Scene prompt, relevant Project scope, `h3.authoring` + `h3.toolkit`, schema |
 | Prompt Assist | `task.prompt_assist` | Text-only Scene, relevant Project context and optional Project Deep QA findings; schema |
@@ -22,7 +22,7 @@ The existing `generation_model_guidance` remains the empirical playbook in app c
 
 ## Ownership
 
-- `tool/server/studio_guidance_defaults.py` contains the four versioned profile defaults. The four profiles retain their IDs and share a lean creative core; Classic has no extra emphasis. Prior experimental packages retain their frozen text.
+- `tool/server/studio_guidance_defaults.py` contains the four versioned profile defaults. Classic v3 retains D plus the [checked coherence sentence](studio-director-creative-charter-results.md); Current, Imaginative and Render-focused retain their previous wording and versions.
 - `tool/server/llm_guidance.py` owns the catalog, H3 creative toolkit, standalone specialist role defaults, and replacement lookup.
 - `docs/mmh3-prompt-runtime-context.txt` remains the canonical H3 prompt reference default. `docs/storyboard-director-context.txt` remains the Storyboard Director default.
 - `config.json.llm_guidance` contains only sparse text overrides, validated against known IDs.
@@ -38,14 +38,18 @@ User-configurable instructions are *creative/behavioral prompts*. WebCap still o
 
 The following are currently **task payloads**, not editable persona/modules: operation-specific `[CURRENT TASK]` segments inside `storyboard_llm_contract.py`, per-target Write instructions built by `director_chat.js`, response schema descriptions, certain text/image captioning assistants in separate workspaces, and specialized LoRA/training guidance. Their scope must be individually checked before extraction because many contain concrete task parameters, selected scope, or output requirements. Do not blindly move every string into global H3 guidance.
 
-One verified drift was reconciled: Storyboard prompt revision's 6–15s wording now matches supported H3 4–15s generation. The H3 and Storyboard defaults now respect author-selected pacing rather than prescribing a central event. The toolkit is limited to prompt writing, and the technical reference retains timing, structure and dialogue notation.
+One verified drift was reconciled: Storyboard prompt revision's 6–15s wording now matches supported H3 4–15s generation. Further artistic guidance revisions (e.g. central-event bias) should be evaluated separately using live rendered examples; migrating ownership does not silently rewrite established prompts.
 
 ## Verification and rollout
 
-1. Check current profile content and frozen historical experiments independently, and the scope of the Scene-only H3 technical reference.
+1. Test the original profile content with no overrides (parity), and the scope of the Scene-only H3 technical reference.
 2. Test each override as a replacement, default reset by omission, validation of unknown IDs, and immediate settings persistence.
 3. Test Generate, First Cut/Storyboard, Visual Direction, Prompt Assist, Project Deep QA, Advisor, and Studio request assembly independently.
 4. Inspect real outbound Studio Model I/O and representative live LLM operations, comparing content before/after editing a module.
 5. Keep unchanged behavior in unrelated captioning, media, queues, and saved Scene prompts.
 
 Automation/live LLM tests may require the author's configured runtime and cannot be claimed passed solely from Python or static tests.
+
+## Restoration of tested guidance
+
+After the v4 rewrite, the production Classic v3 role and H3 toolkit were restored verbatim from `c801959ec3c5bb7f1ffa89e9faa671b963a9aac1`, matching the frozen `classic-v3` package in `experiments/studio_guidance/unified_final/packages.json`. The other profile defaults, H3 and Storyboard references, and original Studio delivery (role plus toolkit for Chat and Write, technical reference and playbook for prompt-writing tasks only) were also restored from that commit. The operation-scoped Storyboard lookup and system-message diagnostics from #1102 remain. No new prompt wording or changes to user overrides are introduced. Subsequent refinements should be isolated against this baseline.

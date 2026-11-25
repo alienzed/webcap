@@ -269,7 +269,7 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
             assert record["properties"]["prompt"]["type"] == "string"
             assert "maximum" not in record["properties"]["durationSeconds"]
         if operation in {"studio_project_draft", "studio_brief_draft"}:
-            assert "required" not in captured["schema"]
+            assert captured["schema"]["required"] == ["title", "concept", "style", "invariants"]
             for field in ("title", "concept", "style"):
                 assert "maxLength" not in captured["schema"]["properties"][field]
             invariant_schema = captured["schema"]["properties"]["invariants"]
@@ -282,6 +282,8 @@ def test_director_chat_route_preserves_all_structured_schemas(monkeypatch, opera
 
 @pytest.mark.parametrize("operation, required_fields, expected", [
     ("studio_brief_draft", ["style"], ["style"]),
+    ("studio_brief_draft", ["style", "style"], ["style"]),
+    ("studio_brief_draft", [], ["title", "concept", "style", "invariants"]),
     ("studio_brief_draft", ["concept", "invariants"], ["concept", "invariants"]),
     ("studio_scene_field_draft", ["prompt", "title"], ["prompt", "title"]),
     ("studio_scene_field_draft", ["prompt", "durationSeconds"], ["prompt", "durationSeconds"]),
@@ -305,9 +307,7 @@ def test_explicit_studio_authoring_requires_each_requested_field(
     assert response.status_code == 202
     if operation == "studio_brief_draft":
         assert list(captured["response_schema"]["properties"]) == expected
-        assert "required" not in captured["response_schema"], "Missing requested fields remain inspectable rather than invalidating useful output"
-    else:
-        assert captured["response_schema"]["required"] == expected
+    assert captured["response_schema"]["required"] == expected
 
 
 def test_studio_chat_is_conversation_only_without_writing_schema():

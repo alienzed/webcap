@@ -1545,14 +1545,8 @@ function getCaptionAssistOmittedAssignments(mediaKey, captionText, assignments, 
 }
 
 function getCaptionAssistDraftForMediaItem(mediaItem) {
-  var mediaKey = mediaItem && mediaItem.key;
-  if (!mediaKey) throw new Error('Caption Assist requires a selected media item.');
-  if (state && state.currentItem && state.currentItem.key === mediaKey && ui && ui.editorEl) {
-    return String(ui.editorEl.value || '').trim();
-  }
-  var savedCaption = String(mediaItem.caption || '');
-  if (savedCaption.trim()) return savedCaption.trim();
-  return String(buildAutoPrimer(mediaItem.fileName, mediaKey) || '').trim();
+  if (!mediaItem || !mediaItem.key) throw new Error('Caption Assist requires a selected media item.');
+  return String(mediaItem.caption || '').trim();
 }
 
 function captionAssistSightFingerprint(sight) {
@@ -1598,13 +1592,6 @@ function buildCaptionAssistRequest(mediaItem) {
     draft: getCaptionAssistDraftForMediaItem(mediaItem),
     openSight: mediaItem.metadata && mediaItem.metadata.vision_sight || null
   };
-  // The unsaved, untouched auto-Primer is structure guidance, not an authored draft.
-  // Keep live editor changes, including changes awaiting autosave.
-  var autoPrimer = String(buildAutoPrimer(mediaItem.fileName, mediaKey) || '').trim();
-  if (autoPrimer && !String(mediaItem.caption || '').trim() &&
-      request.draft.trim() === autoPrimer) {
-    request.draft = '';
-  }
   // First-time, untagged Sight-led captions still start from visual evidence.
   if (!assignments.length && !request.tags.length && !String(mediaItem.caption || '').trim() &&
       request.openSight && String(request.openSight.description || '').trim() &&

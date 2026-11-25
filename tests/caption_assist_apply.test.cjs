@@ -44,11 +44,9 @@ function fixture({ focused = true, qa = false, caption = 'Old caption', candidat
       item.caption = text;
       return Promise.resolve();
     },
-    aiValidationRecordAcceptedCaption(media, text, folder) {
-      assert.equal(media, item);
-      assert.equal(text, candidate);
-      assert.equal(folder, 'set');
-      entries.push('validation-saved');
+    saveMediaAnnotationState(key) {
+      assert.equal(key, item.key);
+      entries.push('annotations-saved');
       return Promise.resolve(true);
     },
     forgetCaptionAssistCandidate(key) { entries.push('draft-forgotten:' + key); },
@@ -63,15 +61,15 @@ function fixture({ focused = true, qa = false, caption = 'Old caption', candidat
   return { context, entries, item };
 }
 
-test('Focus Caption Apply writes validation before refreshing the filtered list or advancing', async () => {
+test('Focus Caption Apply persists annotations before refreshing the filtered list or advancing', async () => {
   const { context: c, entries } = fixture();
   const awaiting = deferred();
-  c.aiValidationRecordAcceptedCaption = () => { entries.push('validation-start'); return awaiting.promise; };
+  c.saveMediaAnnotationState = () => { entries.push('annotations-start'); return awaiting.promise; };
 
   const operation = c.apply();
   await tick();
   assert.ok(entries.includes('caption-saved:Accepted caption'));
-  assert.ok(entries.includes('validation-start'));
+  assert.ok(entries.includes('annotations-start'));
   assert.equal(entries.includes('advance'), false);
   assert.equal(entries.includes('render'), false);
   assert.equal(c.captionAssistApplyPending, true);
@@ -79,65 +77,77 @@ test('Focus Caption Apply writes validation before refreshing the filtered list 
 
   awaiting.resolve(true);
   assert.equal(await operation, true);
-  assert.ok(entries.indexOf('render') > entries.indexOf('validation-start'));
+  assert.ok(entries.indexOf('render') > entries.indexOf('annotations-start'));
   assert.ok(entries.indexOf('advance') > entries.indexOf('render'));
   assert.equal(c.captionAssistCandidate, null);
   assert.equal(c.captionAssistApplyPending, false);
-  assert.ok(entries.some(x => x.includes('AI Validated.')));
+  assert.ok(entries.some(x => x.includes('Caption saved.')));
 });
 
-test('Accept & Next validates unchanged but explicitly accepted captions without resaving', async () => {
+test('Accept & Next persists annotations for unchanged but explicitly accepted captions without resaving', async () => {
   const { context: c, entries } = fixture({ caption: 'Already saved', candidate: 'Already saved' });
   c.saveCaptionDirect = () => { throw Error('unchanged acceptance should not rewrite caption'); };
   assert.equal(await c.apply(), true);
-  assert.ok(entries.includes('validation-saved'));
+  assert.ok(entries.includes('annotations-saved'));
   assert.ok(entries.includes('advance'));
 });
 
-test('Standalone Apply saves, validates and then refreshes the Needs AI Validation filter', async () => {
+test('Standalone Apply saves caption and annotations before refreshing the list', async () => {
   const { context: c, entries, item } = fixture({ focused: false });
   assert.equal(await c.apply(), true);
   assert.equal(item.caption, 'Accepted caption');
   assert.equal(c.ui.editorEl.value, 'Accepted caption');
-  assert.ok(entries.indexOf('caption-saved:Accepted caption') < entries.indexOf('validation-saved'));
-  assert.ok(entries.indexOf('validation-saved') < entries.indexOf('render'));
+  assert.ok(entries.indexOf('caption-saved:Accepted caption') < entries.indexOf('annotations-saved'));
+  assert.ok(entries.indexOf('annotations-saved') < entries.indexOf('render'));
   assert.equal(entries.includes('advance'), false);
   assert.ok(entries.includes('presentation-closed'));
   assert.ok(entries.includes('focus'));
 });
 
-test('Failed caption save or failed receipt keeps the candidate and never advances', async () => {
+test('Failed caption save or failed annotation save keeps the candidate and never advances', async () => {
   const first = fixture();
   first.context.saveCaptionDirect = () => Promise.reject(new Error('disk full'));
   assert.equal(await first.context.apply(), false);
   assert.equal(first.context.captionAssistCandidate.text, 'Accepted caption');
   assert.equal(first.entries.includes('advance'), false);
-  assert.equal(first.entries.includes('validation-saved'), false);
+  assert.equal(first.entries.includes('annotations-saved'), false);
   assert.ok(first.entries.some(x => x.includes('Could not save AI caption candidate: disk full')));
   assert.ok(first.entries.some(x => x.includes('error:Caption Assist · Apply Caption: disk full')));
 
   const second = fixture();
-  second.context.aiValidationRecordAcceptedCaption = () => Promise.reject(new Error('receipt write failed'));
+  second.context.saveMediaAnnotationState = () => Promise.reject(new Error('annotation write failed'));
   assert.equal(await second.context.apply(), false);
   assert.equal(second.context.captionAssistCandidate.text, 'Accepted caption');
   assert.equal(second.entries.includes('advance'), false);
   assert.equal(second.entries.includes('render'), false);
-  assert.ok(second.entries.some(x => x.includes('Caption saved, but AI validation failed: receipt write failed')));
+  assert.ok(second.entries.some(x => x.includes('Caption saved, but acceptance could not finish: annotation write failed')));
   assert.equal(second.context.captionAssistApplyPending, false);
 });
 
-test('QA Focus Review retains its own review lifecycle instead of validating incomplete QA', async () => {
+test('QA Focus Review retains its own review lifecycle without extra annotation persistence', async () => {
   const { context: c, entries } = fixture({ focused: true, qa: true });
-  c.aiValidationRecordAcceptedCaption = () => { throw Error('QA acceptance should not issue AI-validation receipt'); };
+  c.saveMediaAnnotationState = () => { throw Error('QA acceptance uses its own resolution path'); };
   assert.equal(await c.apply(), true);
   assert.ok(entries.includes('qa-resolve'));
   assert.equal(entries.includes('advance'), false);
 });
 
-test('Only Caption Assist acceptance calls the receipt path; ordinary editor Apply is unaffected', () => {
+test('Ordinary editor Apply remains independent and Caption Assist has no validation receipt', () => {
   const editorApply = source.slice(source.indexOf("  if (applyCaptionBtn && !applyCaptionBtn.__captionApplyBound)"),
     source.indexOf("  updatePrimerCaptionResetUi();\n}", source.indexOf("  if (applyCaptionBtn && !applyCaptionBtn.__captionApplyBound)")));
   assert.doesNotMatch(editorApply, /aiValidationRecordAcceptedCaption/);
+  assert.doesNotMatch(source, /aiValidationRecordAcceptedCaption|AI Validated|Apply & Validate/);
   assert.match(source, /useBtn\.disabled = !!pending \|\| captionAssistApplyPending;/);
-  assert.match(source, /Apply & Validate/);
+});
+test('a changed item prevents a misdirected annotation save and navigation', async () => {
+  const { context: c, entries } = fixture();
+  const awaiting = deferred();
+  c.saveCaptionDirect = () => awaiting.promise;
+  const operation = c.apply();
+  await tick();
+  c.state.currentItem = { key: 'other.jpg' };
+  awaiting.resolve();
+  assert.equal(await operation, false);
+  assert.equal(entries.includes('annotations-saved'), false);
+  assert.equal(entries.includes('advance'), false);
 });

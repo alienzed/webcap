@@ -150,7 +150,7 @@ test('LIVE creative judgment — recurring Invariants stay distinct from flexibl
   const request=observed.requests.at(-1);
   await evidence(info,'live-invariant-creative-judgment',{model,question,request,receipt});
   expect(request.operation).toBe('studio_chat');
-  expect(request.messages[0].content).toContain('deliberately flexible details');
+  expect(request.messages[0].content).toContain('individual Scenes carry their own actions');
   expect(request.messages[0].content).not.toContain('H3 PROMPT AUTHORING REFERENCE');
   let answer=receipt.raw;
   try{const parsed=JSON.parse(answer);if(typeof parsed.reply==='string')answer=parsed.reply;}

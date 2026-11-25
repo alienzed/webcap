@@ -1693,11 +1693,10 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 }
 
 .storyboard-lora-status {
-  overflow: hidden;
   color: var(--muted);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 16px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .storyboard-scene-quick .storyboard-generate-btn {
@@ -2805,8 +2804,12 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 }
 
 .storyboard-story-section[data-story-section="story"] > .storyboard-story-section-body {
-  grid-template-columns: minmax(0, 1fr) 132px 150px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
+
+.storyboard-project-title-field { grid-column: 1 / -1; }
+#storyboard-story-title { min-width: 0; font-size: 24px; font-weight: 650; }
+.storyboard-story-section[data-story-section="story"] .storyboard-field > span { font-size: 16px; }
 
 .storyboard-story-icon-field {
   position: relative;
@@ -4092,7 +4095,8 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 .storyboard-scenes-heading { flex-wrap: wrap; }
 .storyboard-scenes-heading-left { flex: 1 1 220px; }
 .storyboard-scenes-heading-actions {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   margin-left: auto;
   flex-wrap: nowrap;
   overflow: visible;
@@ -4240,12 +4244,12 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 
 /* Action Advisor: one focused next-step chip, without a stacked card. */
 .studio-action-advisor {
-  display:flex; align-items:center; gap:8px; margin:6px 0 10px;
+  display:flex; align-items:center; gap:8px; margin:0 0 12px;
   padding:0; border:0; background:transparent; color:var(--text);
 }
 .studio-action-advisor.hidden, .studio-action-advisor .hidden { display:none; }
 #studio-action-advisor-status { color:var(--muted); font-size:14px; }
-#studio-action-advisor-actions { display:flex; flex-wrap:wrap; gap:8px; }
+#studio-action-advisor-actions { display:flex; flex-wrap:wrap; gap:8px; min-width:0; }
 .studio-action-advisor-action {
   display:inline-flex; align-items:center; justify-content:center;
   max-width:100%; min-height:36px; padding:6px 12px;
@@ -4255,6 +4259,26 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 }
 .studio-action-advisor-action:hover { background:var(--hover); border-color:var(--accent); }
 .studio-action-advisor-action:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+/* Keep optional suggestions in the composer toolbar, between Actions and Send. */
+.director-chat-composer-footer .studio-action-advisor {
+  flex: 1 1 150px;
+  min-width: 0;
+  margin: 0;
+  flex-wrap: wrap;
+}
+.director-chat-composer-footer #studio-action-advisor-actions {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.director-chat-composer-footer .studio-action-advisor-action {
+  min-height: 40px;
+  padding: 6px 11px;
+  overflow-wrap: anywhere;
+}
+.director-chat-composer-footer #studio-action-advisor-status {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 #studio-dw-write-project-fields { border:1px solid var(--border); border-radius:8px; padding:10px; }
 #studio-dw-write-project-fields.hidden { display:none; }
 #studio-dw-write-project-fields legend { font-size:15px; font-weight:600; padding:0 4px; }
@@ -4354,7 +4378,7 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 
 /* Scene heading: context stays left, scoped actions use the available right edge. */
 .storyboard-scenes-heading {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 12px;
 }
 .storyboard-scenes-heading-left {
@@ -4371,11 +4395,12 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   max-width: none;
 }
 .storyboard-scenes-heading-actions {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   margin-left: auto;
 }
 .storyboard-project-tool-bar {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 #storyboard-project-tool-bar > .storyboard-tool-icon,
 #storyboard-project-tool-bar .storyboard-header-menu > .storyboard-tool-icon {
@@ -4389,12 +4414,13 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 /* Project tools are specialized actions: keep their text labels visible alongside icons. */
 .storyboard-tool-label {
   display: inline;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.2;
   font-weight: 600;
 }
 #storyboard-project-tool-bar {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   gap: 6px;
 }
 @container (max-width: 760px) {

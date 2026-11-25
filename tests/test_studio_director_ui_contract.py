@@ -12,6 +12,7 @@ WORKBENCH = (ROOT / "tool/js/studio_director_workbench.js").read_text(encoding="
 CHAT = (ROOT / "tool/js/director_chat.js").read_text(encoding="utf-8")
 STORY = (ROOT / "tool/js/storyboard.js").read_text(encoding="utf-8")
 SHELL_CSS = (ROOT / "tool/css/workspace_shell.css").read_text(encoding="utf-8")
+SETTINGS = (ROOT / "tool/js/app_settings.js").read_text(encoding="utf-8")
 STORY_CSS = (ROOT / "tool/css/storyboard.css").read_text(encoding="utf-8")
 
 
@@ -45,6 +46,21 @@ class StudioDirectorUiContractTests(unittest.TestCase):
         self.assertIn('id="storyboard-collapsed-director"', HTML)
         self.assertIn("el('storyboard-collapsed-director').classList.toggle", STORY)
         self.assertIn("#storyboard-collapsed-director", STORY_CSS)
+
+    def test_director_settings_owns_profile_without_showing_drawer_model_row(self):
+        self.assertIn('id="director-studio-settings-toggle"', HTML)
+        self.assertIn('id="director-studio-settings-panel"', HTML)
+        self.assertEqual(HTML.count('id="director-studio-profile"'), 1)
+        hidden_model_row = HTML.split('class="director-chat-model-row director-chat-model-tools"', 1)[1].split('</div>', 1)[0]
+        self.assertNotIn('director-studio-profile', hidden_model_row)
+        self.assertIn(".director-chat-model-tools {", SHELL_CSS)
+        self.assertIn("function setStudioSettingsOpen(open, restoreFocus)", CHAT)
+        self.assertIn("setStudioSettingsOpen(false, true)", CHAT)
+        self.assertIn("localStorage.setItem('webcap.studioDirector.profile', state.studioProfile)", CHAT)
+        self.assertIn("openAppSettingsModal('guidance', 'studio.' + state.studioProfile)", CHAT)
+        self.assertIn("openAppSettingsModal('director')", CHAT)
+        self.assertIn("function openAppSettingsModal(tabName, guidanceModuleId)", SETTINGS)
+        self.assertIn("setAppSettingsTab(typeof tabName === 'string' ? tabName : appSettingsActiveTab, false)", SETTINGS)
 
     def test_controls_are_reachable_at_medium_widths(self):
         self.assertIn("grid-template-columns:minmax(0,1fr) minmax(260px,36%)", SHELL_CSS)

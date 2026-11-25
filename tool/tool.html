@@ -26,7 +26,7 @@
         <link rel="stylesheet" href="/static/css/media_explorer.css">
         <link rel="stylesheet" href="/static/css/workbench.css">
         <link rel="stylesheet" href="/static/css/epoch_finder.css">
-        <link rel="stylesheet" href="/static/css/ai_validation.css">
+        <link rel="stylesheet" href="/static/css/single_item_tag_assist.css">
         <link rel="stylesheet" href="/static/css/qa_workbench.css">
         <link rel="stylesheet" href="/static/css/modals.css">
         <link rel="stylesheet" href="/static/css/set_dashboard.css">
@@ -290,10 +290,6 @@
                                 <span>Unreviewed</span>
                             </label>
                             <label class="advanced-filter-check-row">
-                                <input id="advanced-filter-needs-ai-validation" type="checkbox">
-                                <span>Needs AI Validation</span>
-                            </label>
-                            <label class="advanced-filter-check-row">
                                 <input id="advanced-filter-invalid-ar" type="checkbox">
                                 <span>Invalid AR</span>
                             </label>
@@ -486,12 +482,10 @@
                     <div class="workbench-main-stack">
                         <div class="workbench-card groups-card">
                             <section id="group-workbench" class="group-workbench" aria-label="Annotation groups">
-                                <div id="ai-validation-toolbar" class="ai-validation-toolbar hidden">
-                                    <span id="ai-validation-status" class="ai-validation-status">Needs AI validation</span>
-                                    <button id="ai-validation-suggest" type="button" class="btn">Suggest Tags</button>
-                                    <button id="ai-validation-apply" type="button" class="btn hidden">Apply Tags</button>
-                                    <button id="ai-validation-discard" type="button" class="btn hidden">Discard Proposals</button>
-                                    <button id="ai-validation-complete" type="button" class="btn ai-validation-primary">Validate &amp; Next</button>
+                                <div id="single-item-tag-assist-toolbar" class="single-item-tag-assist-toolbar hidden">
+                                    <button id="single-item-tag-assist-suggest" type="button" class="btn">Suggest Tags</button>
+                                    <button id="single-item-tag-assist-apply" type="button" class="btn hidden">Apply Tags</button>
+                                    <button id="single-item-tag-assist-discard" type="button" class="btn hidden">Discard Proposals</button>
                                 </div>
                                 <div id="group-workbench-list" class="group-workbench-list"></div>
                             </section>
@@ -1943,7 +1937,7 @@
                                         </span>
                                     </summary>
                                     <div class="storyboard-story-section-body">
-                                        <label class="storyboard-field"><span>Title</span><input id="storyboard-story-title" type="text" maxlength="200"></label>
+                                        <label class="storyboard-field storyboard-project-title-field"><span>Title</span><input id="storyboard-story-title" type="text" maxlength="200"></label>
                                         <div class="storyboard-field storyboard-story-icon-field">
                                             <span>Icon</span>
                                             <div class="storyboard-icon-picker">
@@ -2101,11 +2095,20 @@
             <aside id="director-chat-drawer" class="director-chat-drawer hidden" aria-label="Assistant" aria-hidden="true">
                 <div id="studio-director-resizer" role="separator" aria-orientation="vertical" aria-label="Resize Director" aria-controls="director-chat-drawer" tabindex="0" title="Drag to resize; arrow keys adjust width; double-click to reset"></div>
                 <header class="director-chat-drawer-header">
-                    <div class="director-chat-header-copy">
-                        <span class="studio-director-breadcrumb">Projects / Director</span>
-                        <strong id="director-chat-title">Assistant</strong>
-                        <span id="director-chat-mode-description">Assistant conversation</span>
-                        <span id="director-chat-save-status" aria-live="polite"></span>
+                    <div class="director-chat-header-identity">
+                        <button id="director-chat-pin" type="button" class="director-chat-pin" title="Pin Assistant" aria-label="Pin Assistant" aria-pressed="false">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M9 4h6"></path>
+                                <path d="M10 4v5l-3 3v2h10v-2l-3-3V4"></path>
+                                <path d="M12 14v6"></path>
+                            </svg>
+                        </button>
+                        <div class="director-chat-header-copy">
+                            <span class="studio-director-breadcrumb">Projects / Director</span>
+                            <strong id="director-chat-title">Assistant</strong>
+                            <span id="director-chat-mode-description">Assistant conversation</span>
+                            <span id="director-chat-save-status" aria-live="polite"></span>
+                        </div>
                     </div>
                     <div class="director-chat-header-actions">
                         <div id="director-studio-composer-mode" class="director-studio-composer-mode hidden">
@@ -2116,18 +2119,31 @@
                             </select>
                         </div>
                         <button id="studio-dw-open-tools" type="button" class="review-captions-btn" aria-controls="director-chat-sidebar" aria-expanded="false">Read / Write</button>
-                        <button id="director-chat-pin" type="button" class="director-chat-pin" title="Pin Assistant" aria-label="Pin Assistant" aria-pressed="false">
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                                <path d="M9 4h6"></path>
-                                <path d="M10 4v5l-3 3v2h10v-2l-3-3V4"></path>
-                                <path d="M12 14v6"></path>
-                            </svg>
-                        </button>
-                        <button id="director-chat-history-toggle" type="button" class="review-captions-btn" title="Conversation history" aria-label="Conversation history" aria-expanded="false" aria-controls="director-chat-history-panel"><svg class="studio-header-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 1 3 6.7M3 16v-4h4M12 7v5l3 2"></path></svg><span class="director-header-button-label">History</span></button>
                         <button id="director-chat-clear" type="button" class="review-captions-btn" title="New conversation" aria-label="New conversation"><svg class="studio-header-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10M16 4l4 4M9 15l-1 4 4-1L21 9a2 2 0 0 0-3-3z"></path></svg><span class="director-header-button-label">New chat</span></button>
+                        <button id="director-chat-history-toggle" type="button" class="review-captions-btn" title="Conversation history" aria-label="Conversation history" aria-expanded="false" aria-controls="director-chat-history-panel"><svg class="studio-header-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 1 3 6.7M3 16v-4h4M12 7v5l3 2"></path></svg><span class="director-header-button-label">History</span></button>
+                        <button id="director-studio-settings-toggle" type="button" class="director-studio-settings-toggle hidden" title="Director settings" aria-label="Director settings" aria-expanded="false" aria-controls="director-studio-settings-panel">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.25a3.75 3.75 0 1 0 0 7.5 3.75 3.75 0 0 0 0-7.5Z"></path><path d="M19.45 13.65a7.8 7.8 0 0 0 0-3.3l1.35-1.05-1.5-2.6-1.65.65a8 8 0 0 0-2.85-1.65L14.55 4h-3L11.3 5.7a8 8 0 0 0-2.85 1.65L6.8 6.7l-1.5 2.6 1.35 1.05a7.8 7.8 0 0 0 0 3.3L5.3 14.7l1.5 2.6 1.65-.65a8 8 0 0 0 2.85 1.65l.25 1.7h3l.25-1.7a8 8 0 0 0 2.85-1.65l1.65.65 1.5-2.6-1.35-1.05Z"></path></svg>
+                        </button>
                         <button id="director-chat-close" type="button" class="director-chat-close" aria-label="Close Assistant">×</button>
                     </div>
+                    <section id="director-studio-settings-panel" class="director-studio-settings-panel hidden" aria-label="Director settings">
+                        <strong>Director settings</strong>
+                        <label for="director-studio-profile">Creative profile</label>
+                        <select id="director-studio-profile" class="hidden" aria-label="Director creative profile">
+                            <option value="classic">Classic</option>
+                            <option value="current">Current</option>
+                            <option value="imaginative">Imaginative</option>
+                            <option value="render">Render-focused</option>
+                        </select>
+                        <p>Applied to new Studio conversations and Write requests.</p>
+                        <button id="director-studio-settings-guidance" type="button">Edit profile instructions</button>
+                        <button id="director-studio-settings-app" type="button">Director runtime &amp; options</button>
+                    </section>
                 </header>
+                <div id="director-studio-flow-target" class="director-studio-flow-target hidden">
+                    <span id="director-studio-flow-target-label"></span>
+                    <button id="director-studio-attach-current" type="button" class="review-captions-btn">Use open Project</button>
+                </div>
                 <dialog id="director-chat-history-panel" class="director-chat-history-panel" aria-labelledby="director-chat-history-title">
                     <header class="director-chat-history-heading"><h2 id="director-chat-history-title">Conversations</h2><button id="director-chat-history-close" type="button" class="review-captions-btn">Close</button></header>
                     <div class="director-chat-history-filter"><input id="director-chat-history-search" type="search" aria-label="Filter conversations" placeholder="Filter by title or Project"></div>
@@ -2173,12 +2189,6 @@
                         <option value="">Loading models...</option>
                     </select>
                     <button id="director-chat-model-refresh" type="button" class="refresh-btn-square director-model-refresh-btn" title="Refresh Director models" aria-label="Refresh Director models">&#8635;</button>
-                    <select id="director-studio-profile" class="hidden" aria-label="Director creative profile" title="Director creative profile; full instructions are visible in Model I/O">
-                        <option value="classic">Classic</option>
-                        <option value="current">Current</option>
-                        <option value="imaginative">Imaginative</option>
-                        <option value="render">Render-focused</option>
-                    </select>
                 </div>
                 <div id="director-chat-progress" class="director-chat-progress hidden" aria-live="polite">
                     <div class="director-chat-progress-copy">
@@ -2198,10 +2208,6 @@
 
 
                 <div id="director-chat-messages" class="director-chat-messages" aria-live="polite"></div>
-                <section id="studio-action-advisor" class="studio-action-advisor hidden" aria-label="Optional action suggestions">
-                    <div id="studio-action-advisor-status" class="hidden" role="status" aria-live="polite"></div>
-                    <div id="studio-action-advisor-actions" class="hidden"></div>
-                </section>
                 <div id="director-chat-empty" class="director-chat-empty">
                     <strong id="director-chat-empty-title">Your creative workshop</strong>
                     <p id="director-chat-empty-description">Tell Director what interests you. You can start with a single moment, a feeling, or nothing at all.</p>
@@ -2245,11 +2251,14 @@
                                 <button type="button" data-studio-tool="scene">Write Scene(s)</button>
                                 <button type="button" data-studio-tool="project">Write Project</button>
                                 <button type="button" data-studio-tool="revision">Revise Scenes</button>
-                                <button type="button" data-studio-tool="history">History</button>
-                                <button type="button" data-studio-tool="new-chat">New conversation</button>
+                                <hr class="director-studio-actions-divider" aria-hidden="true">
                                 <button type="button" data-studio-tool="io">Model I/O</button>
                             </div>
                         </div>
+                        <section id="studio-action-advisor" class="studio-action-advisor hidden" aria-label="Optional action suggestions">
+                            <div id="studio-action-advisor-status" class="hidden" role="status" aria-live="polite"></div>
+                            <div id="studio-action-advisor-actions" class="hidden"></div>
+                        </section>
                         <span id="director-chat-composer-hint" class="director-chat-composer-hint">Enter to send · Shift+Enter for newline</span>
                         <div class="director-chat-composer-actions">
                             <button id="studio-director-inspect" type="button" class="review-captions-btn hidden" title="Inspect the latest Director request and response">I/O</button>
@@ -2329,10 +2338,6 @@
                             <p id="director-studio-flow-description">Concept / overview · Visual / atmosphere · Invariants</p>
                         </div>
                         <button id="director-studio-capture" type="button" class="studio-primary-action">Review new Project</button>
-                    </div>
-                    <div id="director-studio-flow-target" class="director-studio-flow-target hidden">
-                        <span id="director-studio-flow-target-label"></span>
-                        <button id="director-studio-attach-current" type="button" class="review-captions-btn">Use open Project</button>
                     </div>
                     <div class="director-studio-flow-secondary">
                         <section id="director-studio-access" class="director-studio-access hidden" aria-label="Story read access">
@@ -2547,7 +2552,7 @@
                 </div>
                 <div class="storyboard-workshop-review-content">
                     <p id="storyboard-workshop-review-summary"></p>
-                    <div class="storyboard-workshop-diff-heading">Timed shots · proposed changes</div>
+                    <div id="storyboard-workshop-diff-heading" class="storyboard-workshop-diff-heading">Timed shots · proposed changes</div>
                     <div id="storyboard-workshop-review-diff" class="storyboard-workshop-diff" aria-label="Changes to timed shots"></div>
                     <p class="storyboard-workshop-review-note">Subject, Scene Overview, Environment, Style and audio remain unchanged. Applying checks the saved original before replacing the approved shots.</p>
                     <p id="storyboard-workshop-review-error" class="storyboard-workshop-review-error" role="alert"></p>
@@ -3216,6 +3221,7 @@
                     <button id="app-settings-tab-models" type="button" class="app-settings-tab" data-app-settings-tab="models" role="tab" aria-selected="false" aria-controls="app-settings-panel-models" tabindex="-1">Models</button>
                     <button id="app-settings-tab-training" type="button" class="app-settings-tab" data-app-settings-tab="training" role="tab" aria-selected="false" aria-controls="app-settings-panel-training" tabindex="-1">Training</button>
                     <button id="app-settings-tab-director" type="button" class="app-settings-tab" data-app-settings-tab="director" role="tab" aria-selected="false" aria-controls="app-settings-panel-director" tabindex="-1">Director</button>
+                    <button id="app-settings-tab-guidance" type="button" class="app-settings-tab" data-app-settings-tab="guidance" role="tab" aria-selected="false" aria-controls="app-settings-panel-guidance" tabindex="-1">LLM Guidance</button>
                     <button id="app-settings-tab-system" type="button" class="app-settings-tab" data-app-settings-tab="system" role="tab" aria-selected="false" aria-controls="app-settings-panel-system" tabindex="-1">Advanced</button>
                 </div>
                 <div class="app-settings-tab-panels">
@@ -3430,16 +3436,7 @@
                             <p class="app-settings-help">Local models come from <code>&lt;Models Root&gt;/text_encoders</code>. Director model selection remains shared across Director-enabled workspaces.</p>
                             <p class="app-settings-help">Use <strong>Save + Reboot</strong> after changing Director runtime settings.</p>
                         </section>
-                        <section class="app-settings-section">
-                            <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Production Playbook</div>
-                                <div class="app-settings-section-copy">Your practical strengths, weaknesses, techniques, and lessons for each video-generation model. Studio Director reads the selected playbook when you converse; the built-in technical prompt contract stays separate. These notes are not silently appended to generation prompts.</div>
-                            </div>
-                            <div class="app-settings-form-grid">
-                                <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">MiniMax H3 — working methods &amp; lessons</span><textarea id="app-settings-model-guidance-minimax_h3" rows="7" placeholder="Reliable actions, known failure modes, techniques that worked in your Takes…"></textarea></label>
-                                <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Krea 2</span><textarea id="app-settings-model-guidance-krea2_raw" rows="3" placeholder="Optional model-specific guidance"></textarea></label>
-                            </div>
-                        </section>
+
                         <section class="app-settings-section" id="caption-assist-settings">
                             <div class="app-settings-section-header">
                                 <div class="app-settings-section-title">Caption Assist</div>
@@ -3461,6 +3458,41 @@
                                 <span class="app-settings-field-label">Groups not yet in the template</span>
                                 <div id="app-settings-caption-sequence-groups" class="app-settings-caption-sequence-groups"></div>
                                 <span class="app-settings-note">Click a group to insert its template placeholder at the cursor, or append it.</span>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div id="app-settings-panel-guidance" class="app-settings-panel hidden" data-app-settings-panel="guidance" role="tabpanel" aria-labelledby="app-settings-tab-guidance">
+                        <section class="app-settings-section">
+                            <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">LLM Guidance</div>
+                                <div class="app-settings-section-copy">Edit the instructions that actually reach the models. Built-in defaults remain available; custom text replaces that module's default rather than stacking more instructions onto it.</div>
+                            </div>
+                            <div class="app-settings-form-grid">
+                                <label class="app-settings-field app-settings-field-wide">
+                                    <span class="app-settings-field-label">Guidance module</span>
+                                    <select id="app-settings-guidance-module"></select>
+                                </label>
+                                <p id="app-settings-guidance-description" class="app-settings-help"></p>
+                                <label class="app-settings-field app-settings-field-wide">
+                                    <span class="app-settings-field-label">Model-facing instructions</span>
+                                    <textarea id="app-settings-guidance-text" rows="14" spellcheck="false" placeholder="Choose a guidance module to edit its instructions."></textarea>
+                                </label>
+                                <div class="app-settings-section-header">
+                                    <button id="app-settings-guidance-reset" type="button">Reset selected module to default</button>
+                                    <span id="app-settings-guidance-state" class="app-settings-note"></span>
+                                </div>
+                            </div>
+                            <p class="app-settings-help">Profiles govern Studio Chat and Write. H3 creative knowledge is available during creative work; H3 prompt structure is supplied only for prompt-writing tasks. Technical schemas, target selection, saving and workflow contracts remain managed by WebCap. Saves apply to new LLM requests without restarting a model.</p>
+                        </section>
+                        <section class="app-settings-section">
+                            <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">Production Playbook</div>
+                                <div class="app-settings-section-copy">Your practical strengths, weaknesses, techniques, and lessons for each video-generation model. Saved empirical notes are supplied to relevant generation-model authoring tasks; the technical prompt contract stays separate. These notes are not silently appended to generation prompts.</div>
+                            </div>
+                            <div class="app-settings-form-grid">
+                                <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">MiniMax H3 — working methods &amp; lessons</span><textarea id="app-settings-model-guidance-minimax_h3" rows="7" placeholder="Reliable actions, known failure modes, techniques that worked in your Takes…"></textarea></label>
+                                <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Krea 2</span><textarea id="app-settings-model-guidance-krea2_raw" rows="3" placeholder="Optional model-specific guidance"></textarea></label>
                             </div>
                         </section>
                     </div>
@@ -4100,7 +4132,7 @@
         <script src="/static/js/caption_vision.js"></script>
         <script src="/static/js/set_scan.js"></script>
         <script src="/static/js/vision_schema_assist.js"></script>
-        <script src="/static/js/ai_validation.js"></script>
+        <script src="/static/js/single_item_tag_assist.js"></script>
         <script src="/static/js/focused_caption.js"></script>
         <script src="/static/js/balance_distribution_wheel.js"></script>
         <script src="/static/js/h3_calibration_results.js"></script>

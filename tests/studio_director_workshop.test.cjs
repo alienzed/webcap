@@ -278,6 +278,7 @@ test('ordinary Studio conversation does not receive the H3 production contract',
     '  // Retain available conversational work across ordinary follow-up questions.'),scope);
   const out=await vm.runInContext("studioDirectorChatRequestMessages([{role:'user',content:'How should the story unfold?'}])",scope);
   assert.equal(out.length,2);
+  assert.equal(out[0].content, 'Creative partner');
   assert.doesNotMatch(out[0].content,/H3 production reference|H3 PROMPT AUTHORING REFERENCE/);
   assert.equal(out[1].content,'How should the story unfold?');
 });

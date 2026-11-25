@@ -57,4 +57,16 @@ def test_incomplete_media_filter_is_retired_without_removing_checklist_progress(
     folder_state = _read("tool/js/folder_state.js")
     assert "media_filters: {" in folder_state
     assert "tag_mismatch_only: !!mediaFilters.tag_mismatch_only" in folder_state
-    assert "needs_ai_validation_only: !!mediaFilters.needs_ai_validation_only" in folder_state
+    assert "needs_ai_validation_only" not in folder_state
+    assert "ai_validation_receipts" not in folder_state
+
+
+def test_ai_validation_retired_without_removing_tag_assist_or_reviewed():
+    html = _read("tool/tool.html")
+    assert 'id="advanced-filter-needs-ai-validation"' not in html
+    assert 'id="ai-validation-complete"' not in html
+    assert 'id="single-item-tag-assist-suggest"' in html
+    assert 'id="single-item-tag-assist-apply"' in html
+    assert 'id="single-item-tag-assist-discard"' in html
+    assert 'id="advanced-filter-reviewed"' in html
+    assert "singleItemTagAssistReset();" in _read("tool/js/folder_state.js")

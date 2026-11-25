@@ -1,5 +1,8 @@
 var appSettingsLoadedConfig = null;
 var appSettingsActiveTab = 'general';
+var appSettingsGuidanceCatalog = [];
+var appSettingsGuidanceDrafts = {};
+var appSettingsGuidanceSelectedId = 'studio.classic';
 var appSettingsTrainingProfiles = [
   { id: 'wan22_t2v', uiKey: 'appSettingsTrainingProfileWan22El' },
   { id: 'krea2_raw', uiKey: 'appSettingsTrainingProfileKrea2El' },
@@ -15,7 +18,7 @@ var appSettingsTestCopyRoots = [
 ];
 
 function setAppSettingsTab(tabName, focusTab) {
-  var next = ['general', 'models', 'training', 'director', 'system'].indexOf(tabName) !== -1 ? tabName : 'general';
+  var next = ['general', 'models', 'training', 'director', 'guidance', 'system'].indexOf(tabName) !== -1 ? tabName : 'general';
   appSettingsActiveTab = next;
   var selectedButton = null;
   Array.prototype.forEach.call(document.querySelectorAll('[data-app-settings-tab]'), function (button) {
@@ -47,6 +50,7 @@ function normalizeAppConfigShape(cfg) {
   if (!out.storyboard || typeof out.storyboard !== 'object') out.storyboard = {};
   if (!out.storyboard.director || typeof out.storyboard.director !== 'object') out.storyboard.director = {};
   if (!out.generation_model_guidance || typeof out.generation_model_guidance !== 'object' || Array.isArray(out.generation_model_guidance)) out.generation_model_guidance = {};
+  if (!out.llm_guidance || typeof out.llm_guidance !== 'object' || Array.isArray(out.llm_guidance)) out.llm_guidance = {};
   ['minimax_h3', 'krea2_raw'].forEach(function (id) { out.generation_model_guidance[id] = String(out.generation_model_guidance[id] || ''); });
   if (!out.requirements || typeof out.requirements !== 'object') out.requirements = {};
   if (typeof out.debug !== 'boolean') out.debug = !!out.debug;
@@ -317,8 +321,85 @@ function captureAppSettingsCaptionSequenceCursor() {
   appSettingsCaptionSequenceCursor = { start: typeof el.selectionStart === 'number' ? el.selectionStart : String(el.value || '').length, end: typeof el.selectionEnd === 'number' ? el.selectionEnd : String(el.value || '').length };
 }
 
+
+function renderAppSettingsGuidanceEditor() {
+  var picker = document.getElementById('app-settings-guidance-module');
+  var editor = document.getElementById('app-settings-guidance-text');
+  var description = document.getElementById('app-settings-guidance-description');
+  var state = document.getElementById('app-settings-guidance-state');
+  if (!picker || !editor) return;
+  var entry = appSettingsGuidanceCatalog.find(function (item) { return item.id === appSettingsGuidanceSelectedId; });
+  if (!entry) {
+    editor.value = '';
+    editor.disabled = true;
+    if (description) description.textContent = 'Loading guidance modules...';
+    return;
+  }
+  picker.value = entry.id;
+  editor.disabled = false;
+  var overridden = Object.prototype.hasOwnProperty.call(appSettingsGuidanceDrafts, entry.id);
+  editor.value = overridden ? appSettingsGuidanceDrafts[entry.id] : entry.default;
+  if (description) description.textContent = entry.description || '';
+  if (state) state.textContent = overridden ? 'Customized — overrides this default' : 'Built-in default';
+  var reset = document.getElementById('app-settings-guidance-reset');
+  if (reset) reset.disabled = !overridden;
+}
+
+function renderAppSettingsGuidanceCatalog() {
+  var picker = document.getElementById('app-settings-guidance-module');
+  if (!picker) return;
+  picker.replaceChildren();
+  var groups = {};
+  appSettingsGuidanceCatalog.forEach(function (item) {
+    if (!groups[item.group]) {
+      groups[item.group] = document.createElement('optgroup');
+      groups[item.group].label = item.group;
+      picker.appendChild(groups[item.group]);
+    }
+    var option = document.createElement('option');
+    option.value = item.id;
+    option.textContent = item.label;
+    groups[item.group].appendChild(option);
+  });
+  if (!appSettingsGuidanceCatalog.some(function (item) { return item.id === appSettingsGuidanceSelectedId; })) {
+    appSettingsGuidanceSelectedId = appSettingsGuidanceCatalog.length ? appSettingsGuidanceCatalog[0].id : '';
+  }
+  renderAppSettingsGuidanceEditor();
+}
+
+function loadAppSettingsGuidanceCatalog() {
+  return fetch('/fs/llm/guidance/catalog').then(function (response) {
+    return response.json().then(function (payload) {
+      if (!response.ok || !payload.ok || !Array.isArray(payload.modules)) throw new Error(payload.error || 'Could not load guidance modules.');
+      return payload.modules;
+    });
+  }).then(function (entries) {
+    appSettingsGuidanceCatalog = entries;
+    renderAppSettingsGuidanceCatalog();
+  }).catch(function (error) {
+    setAppSettingsStatus('Guidance modules unavailable: ' + error.message, true);
+    if (typeof window.reportConsoleError === 'function') window.reportConsoleError('LLM Guidance settings', error);
+  });
+}
+
+function saveAppSettingsGuidanceEditor() {
+  var editor = document.getElementById('app-settings-guidance-text');
+  var entry = appSettingsGuidanceCatalog.find(function (item) { return item.id === appSettingsGuidanceSelectedId; });
+  if (!editor || !entry) return;
+  if (!editor.value.trim() || editor.value === entry.default) delete appSettingsGuidanceDrafts[entry.id];
+  else appSettingsGuidanceDrafts[entry.id] = editor.value;
+  var overridden = Object.prototype.hasOwnProperty.call(appSettingsGuidanceDrafts, entry.id);
+  var state = document.getElementById('app-settings-guidance-state');
+  if (state) state.textContent = overridden ? 'Customized — overrides this default' : 'Built-in default';
+  var reset = document.getElementById('app-settings-guidance-reset');
+  if (reset) reset.disabled = !overridden;
+  syncAppSettingsJsonFromForm();
+}
+
 function fillAppSettingsForm(cfg) {
   var c = normalizeAppConfigShape(cfg);
+  appSettingsGuidanceDrafts = JSON.parse(JSON.stringify(c.llm_guidance || {}));
+  renderAppSettingsGuidanceEditor();
   if (ui.appSettingsRootEl) ui.appSettingsRootEl.value = c.filesystem.root || '';
   if (ui.appSettingsOutputRootEl) ui.appSettingsOutputRootEl.value = c.filesystem.output_root || '';
   if (ui.appSettingsModelsEl) ui.appSettingsModelsEl.value = c.filesystem.models || '';
@@ -358,6 +439,7 @@ function fillAppSettingsForm(cfg) {
 
 function collectAppSettingsFormConfig() {
   var base = normalizeAppConfigShape(appSettingsLoadedConfig || {});
+  base.llm_guidance = JSON.parse(JSON.stringify(appSettingsGuidanceDrafts));
   base.filesystem.root = ui.appSettingsRootEl ? ui.appSettingsRootEl.value : '';
   base.filesystem.output_root = ui.appSettingsOutputRootEl ? ui.appSettingsOutputRootEl.value : '';
   base.filesystem.models = ui.appSettingsModelsEl ? ui.appSettingsModelsEl.value : '';
@@ -452,10 +534,11 @@ function appSettingsLlamaAction(action) {
   });
 }
 
-function openAppSettingsModal() {
+function openAppSettingsModal(tabName, guidanceModuleId) {
   if (!ui.appSettingsModalEl) return;
+  if (guidanceModuleId) appSettingsGuidanceSelectedId = String(guidanceModuleId);
   setAppSettingsStatus('Loading settings...', false);
-  setAppSettingsTab(appSettingsActiveTab, false);
+  setAppSettingsTab(typeof tabName === 'string' ? tabName : appSettingsActiveTab, false);
   ui.appSettingsModalEl.classList.remove('hidden');
   refreshAppSettingsLlamaRuntime();
   ui.appSettingsModalEl.setAttribute('aria-hidden', 'false');
@@ -470,6 +553,7 @@ function openAppSettingsModal() {
       appSettingsLoadedConfig = normalizeAppConfigShape(cfg);
       setRuntimeAppConfig(cfg);
       fillAppSettingsForm(appSettingsLoadedConfig);
+      loadAppSettingsGuidanceCatalog();
       setAppSettingsStatus('', false);
     } catch (e) {
       setAppSettingsStatus('Failed to parse settings JSON.', true);
@@ -708,7 +792,7 @@ function wireAppSettingsUi() {
       setAppSettingsTab(button.getAttribute('data-app-settings-tab'), false);
     };
     button.onkeydown = function (event) {
-      var tabs = ['general', 'models', 'training', 'director', 'system'];
+      var tabs = ['general', 'models', 'training', 'director', 'guidance', 'system'];
       var current = tabs.indexOf(button.getAttribute('data-app-settings-tab'));
       var next = current;
       if (event.key === 'ArrowRight') next = (current + 1) % tabs.length;
@@ -719,6 +803,19 @@ function wireAppSettingsUi() {
       event.preventDefault();
       setAppSettingsTab(tabs[next], true);
     };
+  });
+  var guidancePicker = document.getElementById('app-settings-guidance-module');
+  var guidanceEditor = document.getElementById('app-settings-guidance-text');
+  var guidanceReset = document.getElementById('app-settings-guidance-reset');
+  if (guidancePicker) guidancePicker.addEventListener('change', function () {
+    appSettingsGuidanceSelectedId = guidancePicker.value;
+    renderAppSettingsGuidanceEditor();
+  });
+  if (guidanceEditor) guidanceEditor.addEventListener('input', saveAppSettingsGuidanceEditor);
+  if (guidanceReset) guidanceReset.addEventListener('click', function () {
+    delete appSettingsGuidanceDrafts[appSettingsGuidanceSelectedId];
+    renderAppSettingsGuidanceEditor();
+    syncAppSettingsJsonFromForm();
   });
   setAppSettingsTab(appSettingsActiveTab, false);
   if (ui.appSettingsModalEl) {
@@ -731,6 +828,8 @@ function wireAppSettingsUi() {
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
     if (!ui.appSettingsModalEl || ui.appSettingsModalEl.classList.contains('hidden')) return;
+    e.preventDefault();
+    e.stopPropagation();
     closeAppSettingsModal();
   });
 

@@ -56,6 +56,7 @@ jobs:
           node --check tool/js/director_chat.js
           node --check tests/studio_director_live_model.test.cjs
           node --test tests/studio_director_model_readiness.test.cjs
+          node --test tests/studio_revision_scene_selection.test.cjs
           node --check tool/js/studio_blocks.js
           node --check tool/js/storyboard.js
           node --check tool/js/studio_director_workbench.js

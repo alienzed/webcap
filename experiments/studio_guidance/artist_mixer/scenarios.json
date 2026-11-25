@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "experiment": "artist-mixer-v1",
+  "cases": [
+    {
+      "id": "mix-chat-signoff",
+      "split": "development",
+      "category": "natural-conversation",
+      "operation": "studio_chat",
+      "focus": "A natural proportionate acknowledgment; technical elaboration has no useful role.",
+      "fidelity_checks": [
+        "Acknowledges the intention to continue tomorrow.",
+        "Keeps a natural conversational voice and proportionate scope."
+      ],
+      "history": [
+        {
+          "role": "assistant",
+          "content": "A paper boat follows a stripe of sunlight across a kitchen floor; its wake briefly becomes a real river."
+        },
+        {
+          "role": "user",
+          "content": "That's the feeling I wanted. Let's pick it up tomorrow."
+        }
+      ]
+    },
+    {
+      "id": "mix-chat-library",
+      "split": "development",
+      "category": "ambitious-conversation",
+      "operation": "studio_chat",
+      "focus": "An unconventional idea gains a distinct artistic direction and concrete spatial/audiovisual realization without being reduced.",
+      "fidelity_checks": [
+        "Keeps one fixed wide camera.",
+        "An entire library breathes once: shelves bow, pages rise together, then settle.",
+        "Sublime and uncanny; one useful direction rather than a complete generation prompt."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "I imagine a 12-second film where an entire ordinary library takes one breath: shelves bow inward, loose pages rise together, then everything settles. One fixed wide camera. It should feel sublime and uncanny, not frantic. Help me find one strong direction for the image and sound; we are exploring the idea, not writing the final prompt yet."
+        }
+      ]
+    },
+    {
+      "id": "mix-project-kites",
+      "split": "development",
+      "category": "flexible-project",
+      "operation": "studio_project_draft",
+      "focus": "A complete inspiring collection with recurring identity and artistic range; refinement preserves formal variety.",
+      "fidelity_checks": [
+        "Meaningful title, concept, style and invariants.",
+        "One recurring black-and-white checkered kite, with freely varying people and places.",
+        "Independent films can be comic, overwhelming or intimate; no compulsory emotional arc."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "A collection of independent short films where an ordinary black-and-white checkered kite seems to change the weather in small, surprising ways. People and places vary. Some films can be comic, some overwhelming and spectacular, others intimate. The kite recurs; there is no overall plot."
+        }
+      ],
+      "instruction": "Create one complete Project with a distinctive title, an inspiring Concept, developed Visual / atmosphere and genuinely enduring Invariants."
+    },
+    {
+      "id": "mix-scene-weather",
+      "split": "development",
+      "category": "ambitious-fixed-camera",
+      "operation": "studio_scenes_draft",
+      "focus": "An ambitious transformation becomes concrete without reducing its scale or changing the fixed camera.",
+      "fidelity_checks": [
+        "One 14-second Scene with one continuous fixed wide camera.",
+        "Woman opens a small yellow suitcase; a tiny storm cloud expands to fill the station hall, then contracts back into the suitcase.",
+        "Hall and woman remain present throughout; suitcase identity stays stable.",
+        "Woman says exactly: Clouds travel light. Correct H3 dialogue notation."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "The pleasure is the impossible scale change happening in an ordinary place. Keep it physically tangible and unexpectedly joyful."
+        }
+      ],
+      "instruction": "Write one complete 14-second H3 Scene in one continuous fixed wide shot. In an ordinary railway-station hall, a woman opens a small yellow suitcase. A tiny storm cloud emerges, expands until it fills the hall around her, then contracts back into the suitcase. The hall and woman remain present throughout. She says exactly \"Clouds travel light.\" Choose her appearance and clothing. Preserve the full scale change and use sound to make it tangible.",
+      "project": {
+        "title": "Hand Luggage",
+        "concept": "Impossible things carried into ordinary public places.",
+        "style": "Physical material detail and joyful impossibility.",
+        "invariants": []
+      }
+    },
+    {
+      "id": "mix-scene-handoff",
+      "split": "development",
+      "category": "continuity-and-dialogue",
+      "operation": "studio_scenes_draft",
+      "focus": "Precise camera geography and handoff continuity support the chosen intimacy and object identity.",
+      "fidelity_checks": [
+        "One 12-second Scene in three consecutive timed shots.",
+        "Man remains screen-left in green jacket; woman screen-right in red coat.",
+        "Small blue porcelain bird passes from his right hand to her left hand.",
+        "Man says Ready? Woman says Always. Correct H3 speaker/dialogue notation.",
+        "Same two people and bird across all shots; a quiet intimate exchange."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "The emotional action is a tiny exchange becoming a commitment. Let performance and small physical sounds carry it."
+        }
+      ],
+      "instruction": "Write one complete 12-second H3 Scene in three consecutive shots beside a wooden greenhouse bench at dusk. A man in a green jacket remains screen-left; a woman in a red coat remains screen-right. He passes a small blue porcelain bird from his right hand into her left hand. He asks exactly \"Ready?\" She answers exactly \"Always.\" Preserve the same people, clothing, bird and screen positions across the shots. Choose their appearances and make the handoff physically clear while preserving the quiet intimacy.",
+      "project": {
+        "title": "Small Agreements",
+        "concept": "Independent intimate exchanges made tangible through objects.",
+        "style": "Specific gesture and restrained physical sound.",
+        "invariants": []
+      }
+    }
+  ]
+}

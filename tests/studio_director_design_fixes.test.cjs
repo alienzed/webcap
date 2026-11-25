@@ -106,7 +106,7 @@ test('Write opens the explicit operation picker without launching a model reques
   const nodes={};
   function node(id) {
     const classes=new Set();
-    return nodes[id] ||= {attrs:{},classList:{add:x=>classes.add(x),remove:x=>classes.delete(x),contains:x=>classes.has(x),toggle(x,on){if(on)classes.add(x);else classes.delete(x);}},
+    return nodes[id] ||= {attrs:{},dataset:{},classList:{add:x=>classes.add(x),remove:x=>classes.delete(x),contains:x=>classes.has(x),toggle(x,on){if(on)classes.add(x);else classes.delete(x);}},
       setAttribute(k,v){this.attrs[k]=v;},focus(){this.focused=true;},click(){this.onclick();},
       querySelectorAll(){return [];},contains(){return false;}};
   }
@@ -115,7 +115,8 @@ test('Write opens the explicit operation picker without launching a model reques
   node('director-studio-action-launcher').classList.add('hidden');
   const a=rail.indexOf('    function openDirectAction(which) {');
   const b=rail.indexOf("    rail.addEventListener('keydown'",a);
-  const scope=vm.createContext({el:node,document:{addEventListener(){}},lastQuickAction:'write',updateScope(){},showConversationWrite(){availability++;},refreshWrite:async()=>{selected++;}});
+  let feedbackCleared=0;
+  const scope=vm.createContext({el:node,status:()=>feedbackCleared++,document:{addEventListener(){}},lastQuickAction:'write',updateScope(){},showConversationWrite(){availability++;},refreshWrite:async()=>{selected++;}});
   vm.runInContext(section(rail,'  function toggle(which) {','  function parseProposal(raw) {')+rail.slice(a,b),scope);
   node('studio-dw-write').onclick=()=>scope.toggle('write');
   node('studio-dw-open-tools').click();
@@ -129,6 +130,7 @@ test('Write opens the explicit operation picker without launching a model reques
   assert.equal(node('studio-dw-open-tools').focused,true);
   node('studio-dw-open-tools').click();
   assert.equal(selected,1,'reopening Write reuses the visible picker without starting a model');
+  assert.ok(feedbackCleared>0,'opening an action clears old success feedback');
 });
 
 test('Read remains explicitly accessible without a standing approval badge',()=>{
@@ -200,13 +202,13 @@ test('Write availability shows authored material and no automatic manual task',(
   assert.match(rail,/pendingCreativeAction/);
   assert.match(rail,/authoredFields:action\.authoredFields/);
 });
-test('Studio History and new conversation remain accessible from the compact Actions launcher', () => {
+test('Studio History and new conversation remain accessible in the header', () => {
   assert.match(html,/id="director-chat-history-toggle"[^>]*aria-label="Conversation history"/);
   assert.match(html,/id="director-chat-clear"[^>]*aria-label="New conversation"/);
   assert.match(css,/studio-director \.studio-director-breadcrumb \{display:none;/);
-  assert.match(html,/data-studio-tool="history"/);
-  assert.match(html,/data-studio-tool="new-chat"/);
-  assert.match(rail,/menu.querySelector\('\[data-studio-tool="history"\]'\)\.disabled/);
+  assert.doesNotMatch(html,/data-studio-tool="history"|data-studio-tool="new-chat"/);
+  assert.match(css,/not\(\.studio-revision-mode\) #director-chat-clear \{width:36px/);
+  assert.doesNotMatch(rail,/menu\.querySelector\('\[data-studio-tool="history"\]'\)/);
   assert.match(rail,/function showConversationWrite\(\)/);
   assert.doesNotMatch(section(rail,'  function toggle(which) {','  function parseProposal(raw) {'),
     /seedManualSceneInstruction\(\)/);
@@ -292,7 +294,7 @@ test('Studio Revision mode dispatches the existing Storyboard revision operation
   const el=id=>{
     if (!nodes.has(id)) nodes.set(id,{
       value:'',checked:false,focus(){},classList:{toggle(){}},textContent:'',
-      dispatchEvent(){},readOnly:false,children:[],
+      dispatchEvent(){},readOnly:false,children:[],dataset:{},
       replaceChildren(...items){this.children=items;},
       appendChild(item){this.children.push(item);},
       querySelectorAll(selector){
@@ -306,7 +308,7 @@ test('Studio Revision mode dispatches the existing Storyboard revision operation
   };
   const document={
     createElement:()=>({
-      children:[],type:'',checked:false,appendChild(child){this.children.push(child);},
+      children:[],type:'',checked:false,appendChild(child){this.children.push(child);},append(...children){this.children.push(...children);},
       addEventListener(){}
     }),
     createTextNode:text=>({textContent:text})
@@ -357,7 +359,7 @@ test('Studio Revise Scenes launcher uses the common Director composer', () => {
 });
 
 test('Studio operation mode hides conversation without deleting history, and pin remains available',()=>{
-  const header=html.split('<div class="director-chat-header-actions">')[1].split('</header>',1)[0];
+  const header=html.split('<header class="director-chat-drawer-header">')[1].split('</header>',1)[0];
   assert.match(header,/id="director-studio-composer-mode-select"/);
   assert.match(header,/id="director-chat-pin"/);
   assert.match(css,/\.director-chat-drawer\.studio-director\.studio-revision-mode \.director-chat-messages/);

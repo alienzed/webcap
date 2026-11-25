@@ -354,7 +354,6 @@ function getFilteredMediaItems(ignoreFocusSet) {
   var missingCaptionsOnly = !!(ui.advancedFilterMissingCaptionsEl && ui.advancedFilterMissingCaptionsEl.checked);
   var reviewedOnly = !!(ui.advancedFilterReviewedEl && ui.advancedFilterReviewedEl.checked);
   var unreviewedOnly = !!(ui.advancedFilterUnreviewedEl && ui.advancedFilterUnreviewedEl.checked);
-  var needsAiValidationOnly = !!(ui.advancedFilterNeedsAiValidationEl && ui.advancedFilterNeedsAiValidationEl.checked);
   var tagMismatchOnly = !!(ui.advancedFilterUntaggedEl && ui.advancedFilterUntaggedEl.checked);
   var starFilterState = getAdvancedStarFilterState();
   var flagFilterValues = getAdvancedFlagFilterValues();
@@ -405,9 +404,6 @@ function getFilteredMediaItems(ignoreFocusSet) {
       return mediaItemMatchesFilterQuery(item, queryTerms, textMatchMode);
     });
   }
-  if (needsAiValidationOnly) {
-    mediaItems = mediaItems.filter(function (item) { return !isAiValidatedForItem(item); });
-  }
   if (tagMismatchOnly) {
     mediaItems = mediaItems.filter(mediaItemHasTagMismatch);
   }
@@ -427,7 +423,6 @@ function hasAnyActiveMediaFilter() {
   if (ui.advancedFilterMissingCaptionsEl && ui.advancedFilterMissingCaptionsEl.checked) return true;
   if (ui.advancedFilterReviewedEl && ui.advancedFilterReviewedEl.checked) return true;
   if (ui.advancedFilterUnreviewedEl && ui.advancedFilterUnreviewedEl.checked) return true;
-  if (ui.advancedFilterNeedsAiValidationEl && ui.advancedFilterNeedsAiValidationEl.checked) return true;
   if (ui.advancedFilterUntaggedEl && ui.advancedFilterUntaggedEl.checked) return true;
   if (ui.advancedFilterInvalidArEl && ui.advancedFilterInvalidArEl.checked) return true;
   if (ui.advancedFilterSupersetEl && ui.advancedFilterSupersetEl.checked) return true;
@@ -657,7 +652,7 @@ function selectPathMedia(mediaItem, options) {
     setStatus(buildSelectedMediaStatus(mediaItem));
     updatePreviewActionControls(visibleMedia);
     renderChecklistPanel({ skipItemDetailRefresh: true });
-    aiValidationRefreshUi();
+    singleItemTagAssistRefreshUi();
     renderItemTagsPanel();
     renderItemMetadataPanel({ skipHeader: true });
     renderAnnotateStrip();

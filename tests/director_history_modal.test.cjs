@@ -22,6 +22,9 @@ test('automatic conversation titles use human requests and leave renamed titles 
   const legacy={title:'Read the selected saved context and acknowledge receipt. [WEBCAP EXPLICI',projectTitle:'Project One'};
   assert.equal(scope.historyDisplayTitle(legacy),'Project One · context');
   assert.ok(legacy.title.includes('[WEBCAP'),'presentation cleanup does not rewrite saved titles');
+  const saved={title:'Saved: Scene changes. Reviewed values are now authoritative. [WEBCAP APP',projectTitle:'Film'};
+  assert.equal(scope.historyDisplayTitle(saved),'Film · saved changes');
+  assert.ok(saved.title.includes('[WEBCAP'),'legacy titles are formatted without changing storage');
 });
 
 for(const failure of [false,true]) test('History selection closes only after successful loading, failure='+failure,async()=>{
@@ -31,7 +34,7 @@ for(const failure of [false,true]) test('History selection closes only after suc
   const finished=new Promise(resolve=>{done=resolve;});
   const scope=vm.createContext({state,el:()=>dialog,flushSessionSave:async()=>{},
     requestJson:async()=>{if(failure)throw Error('Exact history failure');return{chat:{id:'chosen',mode:'storyboard'}};},
-    restoreSession:chat=>{restored=chat.id;},finishProgress(){},syncModeUi(){},
+    restoreSession:chat=>{restored=chat.id;},studioWorkspaceVisible:()=>true,finishProgress(){},syncModeUi(){},
     showSessionFailure:e=>errors.push(e.message),syncControls(){if(!state.pending)done();}});
   vm.runInContext(part('  function selectSession(chatId) {','  function renameSession(chatId, title) {'),scope);
   scope.selectSession('chosen');await finished;

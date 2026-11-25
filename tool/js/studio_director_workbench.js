@@ -579,6 +579,7 @@
   function toggle(which) {
     var other = which === 'read' ? 'write' : 'read', panel = el('studio-dw-' + which + '-panel'),
       button = el('studio-dw-' + which), show = panel.classList.contains('hidden');
+    if (show && el('studio-dw-status').dataset.error !== 'true') status('', false);
     panel.classList.toggle('hidden', !show);
     button.setAttribute('aria-expanded', show ? 'true' : 'false');
     el('studio-dw-' + other + '-panel').classList.add('hidden');
@@ -1543,6 +1544,7 @@
     };
     function openDirectAction(which) {
       lastQuickAction = which;
+      if (el('studio-dw-status').dataset.error !== 'true') status('', false);
       el('director-chat-drawer').classList.add('studio-actions-open');
       // Keep the original deterministic Read/Write controls and initialization.
       var pending = el('studio-dw-' + which + '-panel').classList.contains('hidden')
@@ -1601,14 +1603,7 @@
     }
     launcherButton.onclick = function () {
       var opening = menu.classList.contains('hidden');
-      if (opening) {
-        // These commands own their enabled state in the existing chat
-        // controller. The launcher must not advertise an inert action.
-        menu.querySelector('[data-studio-tool="history"]').disabled =
-          el('director-chat-history-toggle').disabled;
-        menu.querySelector('[data-studio-tool="new-chat"]').disabled =
-          el('director-chat-clear').disabled;
-      }
+
       menu.classList.toggle('hidden', !opening);
       launcherButton.setAttribute('aria-expanded', opening ? 'true' : 'false');
       if (opening) {
@@ -1631,8 +1626,6 @@
             return refreshWrite();
           });
         }
-        if (tool === 'history') return el('director-chat-history-toggle').click();
-        if (tool === 'new-chat') return el('director-chat-clear').click();
         if (tool === 'io') {
           if (el('director-chat-drawer').classList.contains('studio-actions-open'))
             el('studio-dw-close-actions').click();

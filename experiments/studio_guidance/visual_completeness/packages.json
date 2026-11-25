@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "experiment": "creative-completeness-guidance-v1",
+  "description": "Six Classic/H3-director packages; identical role/toolkit/H3 technical reference; only one concise creative_addendum differs. D is frozen.",
+  "packages": [
+    {
+      "source": "frozen_default",
+      "profile": "studio.classic",
+      "toolkit": "h3.toolkit",
+      "revision": 1,
+      "authoring_addendum": "",
+      "id": "d-control",
+      "hypothesis": "Existing Classic plus H3 toolkit is sufficient.",
+      "creative_addendum": "",
+      "freeze_addendum": true,
+      "snapshot": "../frozen-d-20261122.json"
+    },
+    {
+      "source": "frozen_default",
+      "profile": "studio.classic",
+      "toolkit": "h3.toolkit",
+      "revision": 1,
+      "authoring_addendum": "",
+      "id": "thorough",
+      "hypothesis": "The direct specialist-origin cue 'exceptionally thorough and specific' improves output without detailed instructions.",
+      "creative_addendum": "Be exceptionally thorough and specific about the visuals that will actually be rendered.",
+      "snapshot": "../frozen-d-20261122.json"
+    },
+    {
+      "source": "frozen_default",
+      "profile": "studio.classic",
+      "toolkit": "h3.toolkit",
+      "revision": 1,
+      "authoring_addendum": "",
+      "id": "fully-defined",
+      "hypothesis": "Complete definitions and confident authoring of unspecified details outperform a general thoroughness cue.",
+      "creative_addendum": "Fully describe each intended visual element when it first appears in a Scene: its complete visible appearance, location, spatial relationships, and starting physical state. Make concrete choices for unspecified details. Carry each definition through later shots, describing intended changes where they happen.",
+      "snapshot": "../frozen-d-20261122.json"
+    },
+    {
+      "source": "frozen_default",
+      "profile": "studio.classic",
+      "toolkit": "h3.toolkit",
+      "revision": 1,
+      "authoring_addendum": "",
+      "id": "studio-baseline",
+      "hypothesis": "Clarifying the overview/invariants/standalone Scene relationships improves relevant continuity without imposing permanent restrictions.",
+      "creative_addendum": "Use the Project overview as a creative map and Invariants as a recurring baseline. Each Scene stands alone and fully specifies its intended image and sound. Carry forward relevant established details and define intentional changes within the Scene.",
+      "snapshot": "../frozen-d-20261122.json"
+    },
+    {
+      "source": "frozen_default",
+      "profile": "studio.classic",
+      "toolkit": "h3.toolkit",
+      "revision": 1,
+      "authoring_addendum": "",
+      "id": "clear-choices",
+      "hypothesis": "Clear element selection plus full description helps without reducing the desired scene's ambition or number of people.",
+      "creative_addendum": "Choose coherent, readily distinguishable visual elements suited to the Scene's ambition. Define each chosen element concretely and completely; keep recurring identities stable and give incidental elements detail appropriate to their role.",
+      "snapshot": "../frozen-d-20261122.json"
+    },
+    {
+      "source": "frozen_default",
+      "profile": "studio.classic",
+      "toolkit": "h3.toolkit",
+      "revision": 1,
+      "authoring_addendum": "",
+      "id": "combined",
+      "hypothesis": "A short synthesis of the most relevant principles outperforms individual cues without unnecessary prompt bloat.",
+      "creative_addendum": "Choose and describe every intended visual element comprehensively when first introduced. Make definite creative choices for unspecified details. Use established Project details as a baseline, carrying relevant identities and physical states into each independently generated Scene; describe changes as they occur.",
+      "snapshot": "../frozen-d-20261122.json"
+    }
+  ]
+}

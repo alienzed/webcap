@@ -1,0 +1,384 @@
+{
+  "version": 1,
+  "experiment": "h3-scene-authoring-focused-v1",
+  "description": "Nine development and three held-out independently generatable Scene Write cases. Each category exercises one failure mode and checks for side effects from other addenda.",
+  "cases": [
+    {
+      "id": "state-pool",
+      "split": "development",
+      "category": "visual-state",
+      "operation": "studio_scenes_draft",
+      "focus": "The water remains completely still while light, people, and sound supply density.",
+      "fidelity_checks": [
+        "Pool water is explicitly motionless with an undisturbed surface",
+        "No water ripples, drops, or splashes introduced",
+        "The scene remains visually/audio rich without requiring action"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "The water is still for the entire shot. The environmental density should come from the atmosphere."
+        }
+      ],
+      "project": {
+        "title": "Empty Pool",
+        "concept": "A quiet observational short.",
+        "style": "Dusky cyan and sodium amber, rich distant sound.",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      },
+      "instruction": "Write one 12-second H3 Scene: a fixed view of an abandoned indoor pool at blue hour. The pool water has a perfectly still, unbroken surface throughout. Reflections of cracked ceiling tiles stay clear. Distant ventilation, a faint electrical hum, and a low city rumble make the moment sonically textured. No character appears."
+    },
+    {
+      "id": "state-umbrella",
+      "split": "development",
+      "category": "visual-state",
+      "operation": "studio_scenes_draft",
+      "focus": "The umbrella is already inside-out before the first frame; this state persists.",
+      "fidelity_checks": [
+        "First shot establishes red umbrella already inside-out",
+        "Bent ribs stay bent",
+        "Rain, person, roof and sound remain coherent"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "The previous clip ended with the red umbrella inverted by the wind."
+        }
+      ],
+      "project": {
+        "title": "Weather Signs",
+        "concept": "Urban wind and rain moments.",
+        "style": "Wet rooftops, cold greys.",
+        "invariants": [],
+        "existingSceneTitles": [
+          "Inside-out"
+        ],
+        "existingScenes": [
+          {
+            "id": "s1",
+            "title": "Inside-out",
+            "prompt": "The red umbrella turns inside-out in a gust. Ribs bend visibly.",
+            "durationSeconds": 8
+          }
+        ],
+        "previousScene": {
+          "id": "s1",
+          "title": "Inside-out",
+          "prompt": "The red umbrella turns inside-out in a gust. Ribs bend visibly.",
+          "durationSeconds": 8
+        }
+      },
+      "instruction": "Write one 8-second continuation Scene independently generatable. From its first frame the same person is already holding the red umbrella inside-out, with its damaged ribs visibly bent. They struggle to collapse the inverted canopy while wind and rain batter the roof."
+    },
+    {
+      "id": "state-door",
+      "split": "development",
+      "category": "visual-state",
+      "operation": "studio_scenes_draft",
+      "focus": "An explicitly closed door remains closed while activity occurs elsewhere.",
+      "fidelity_checks": [
+        "The wooden door is explicitly closed at the start",
+        "The door stays shut for the whole clip",
+        "Activity comes from shadows, foliage, wind and sound"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "The closed door is the central image; I don't want a reveal."
+        }
+      ],
+      "project": {
+        "title": "Threshold",
+        "concept": "A visual essay about waiting.",
+        "style": "Late afternoon, warm film grain.",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      },
+      "instruction": "Write one 15-second observational H3 Scene centered on a weathered wooden door latched shut for the whole clip. Tree shadows move across it, leaves stir nearby and a passing bicycle bell sounds beyond the courtyard. The door remains motionless and closed throughout."
+    },
+    {
+      "id": "timing-watch",
+      "split": "development",
+      "category": "shot-timing",
+      "operation": "studio_scenes_draft",
+      "focus": "Exactly 6 consecutive 2-second shots across a 12-second montage.",
+      "fidelity_checks": [
+        "Exactly six labeled shots",
+        "Each shot is 2s long",
+        "Shots cover 0s to 12s contiguously",
+        "Each shot has tactile image and appropriate sound"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "A very fast, tactile macro montage of careful watch repair."
+        }
+      ],
+      "project": {
+        "title": "Watchmaker",
+        "concept": "Precision craft as visual poetry.",
+        "style": "Warm metal, high-contrast close-ups.",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      },
+      "instruction": "Write one 12-second H3 Scene as exactly six 2-second shots. The six shots, in order: tweezers lift a screw, an oiled gear meshes, a hand steadies a wheel, a spring settles, the second hand jumps, the finished watch clicks shut. Each has synchronized fine mechanical audio."
+    },
+    {
+      "id": "timing-espresso",
+      "split": "development",
+      "category": "shot-timing",
+      "operation": "studio_scenes_draft",
+      "focus": "Eight consecutive 1-second shots with distinct images and sound.",
+      "fidelity_checks": [
+        "Eight 1s labeled shots",
+        "Shot intervals span 0s to 8s without gaps",
+        "Specified espresso actions follow order",
+        "Fine synchronized sounds accent each cut"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "The editing itself should feel like percussion."
+        }
+      ],
+      "project": {
+        "title": "Morning Machine",
+        "concept": "A sensory espresso mini-film.",
+        "style": "Macro, tactile and precise.",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      },
+      "instruction": "Write an 8-second H3 espresso Scene, exactly eight 1-second cuts in this order: hand grips portafilter, coffee grinds, grounds level, tamper presses, basket locks, pump clicks, dark stream begins, crema swirls. Make each sound match its image."
+    },
+    {
+      "id": "timing-garden",
+      "split": "development",
+      "category": "shot-timing",
+      "operation": "studio_scenes_draft",
+      "focus": "Five 2-second shots with simple visual beats and clear rhythmic audio.",
+      "fidelity_checks": [
+        "Exactly five 2s intervals",
+        "They span 0s to 10s",
+        "Specified plant/soil imagery appears",
+        "Sound accents associate with the shots"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "I want 2-second cuts, not five lingering shots."
+        }
+      ],
+      "project": {
+        "title": "Planting",
+        "concept": "Close sensory plant observations.",
+        "style": "Morning sun, shallow focus.",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      },
+      "instruction": "Write one 10-second H3 Scene as exactly five 2-second shots: soil cracks apart in fingers, a small seed falls, a narrow hole is pressed, soil closes over it, water pours into the bed. Synchronize small sound details with each cut."
+    },
+    {
+      "id": "dialogue-ferry",
+      "split": "development",
+      "category": "dialogue-notation",
+      "operation": "studio_scenes_draft",
+      "focus": "Both precise lines are tagged as spoken text, with correct speaker separation.",
+      "fidelity_checks": [
+        "Both original lines preserved exactly",
+        "Spoken words are inside <d> tags and speaker labels outside",
+        "Every <d> has a matching </d>",
+        "Timing fits clip duration"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Their dialogue is the heart of this Scene."
+        }
+      ],
+      "project": {
+        "title": "The Crossing",
+        "concept": "An emotional reunion.",
+        "style": "Natural light and quiet river sound.",
+        "invariants": [
+          {
+            "kind": "character",
+            "title": "Mara",
+            "text": "Woman with short grey hair and red scarf."
+          }
+        ],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      },
+      "instruction": "Write one 10-second Scene on a dawn ferry. Mara asks exactly 'You still remember the bridge?' A man answers exactly 'Every time it rains.' Assign distinct voices, restrained performances and subtle engine rumble."
+    },
+    {
+      "id": "dialogue-whisper",
+      "split": "development",
+      "category": "dialogue-notation",
+      "operation": "studio_scenes_draft",
+      "focus": "One complete whispered sentence in one H3 tag with the actual words inside.",
+      "fidelity_checks": [
+        "Exact whisper preserved",
+        "The spoken line appears inside one complete <d>...</d> tag",
+        "Speaker description and whisper performance outside the tag"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Her words have to be heard precisely."
+        }
+      ],
+      "project": {
+        "title": "Little Secret",
+        "concept": "A child's confession.",
+        "style": "Intimate nighttime interiors.",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      },
+      "instruction": "Write one 7-second single-shot H3 Scene of a teenager in a dim hallway whispering exactly 'I hid the key under the blue bowl.' Include her breathy delivery, soft fabric rustle and quiet house ambience."
+    },
+    {
+      "id": "dialogue-interruption",
+      "split": "development",
+      "category": "dialogue-notation",
+      "operation": "studio_scenes_draft",
+      "focus": "Two speakers exchange exact lines in order, with a clear interruption.",
+      "fidelity_checks": [
+        "Both lines preserved exactly and in order",
+        "Speaker IDs distinguish the lines",
+        "Spoken words live inside complete H3 tags",
+        "Delivery and timing match interruption"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "The second line interrupts the first speaker."
+        }
+      ],
+      "project": {
+        "title": "Late Call",
+        "concept": "Two siblings on a voice call.",
+        "style": "Tight close-ups, muted domestic tones.",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      },
+      "instruction": "Write one 12-second H3 Scene: younger sibling says exactly 'I thought you'd never call again.' Older sibling interrupts with exactly 'I called every Sunday.' Give both distinct voices and timed cuts with subtle phone audio."
+    },
+    {
+      "id": "state-cracked-lantern",
+      "split": "holdout",
+      "category": "visual-state",
+      "operation": "studio_scenes_draft",
+      "focus": "A post-break physical condition remains visible from the opening frame.",
+      "fidelity_checks": [
+        "First frame already shows cracked lantern glass",
+        "Crack remains visible through the shot",
+        "Lantern stays unlit as requested"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Previous Scene ended with the lantern glass cracking and its flame going out."
+        }
+      ],
+      "project": {
+        "title": "Last Light",
+        "concept": "Clips about a cold mountain trail.",
+        "style": "Blue predawn light.",
+        "invariants": [],
+        "existingSceneTitles": [
+          "Break"
+        ],
+        "existingScenes": [
+          {
+            "id": "prior",
+            "title": "Break",
+            "prompt": "A lantern hits a rock. Its glass cracks and flame goes out.",
+            "durationSeconds": 6
+          }
+        ],
+        "previousScene": {
+          "id": "prior",
+          "title": "Break",
+          "prompt": "A lantern hits a rock. Its glass cracks and flame goes out.",
+          "durationSeconds": 6
+        }
+      },
+      "instruction": "Create one 9-second continuation Scene. From the opening frame the lantern's glass is already cracked and its wick is unlit. A hiker picks it up and examines the crack as wind scatters pine needles across the path. Keep the lantern dark for the whole Scene."
+    },
+    {
+      "id": "timing-twelve",
+      "split": "holdout",
+      "category": "shot-timing",
+      "operation": "studio_scenes_draft",
+      "focus": "Six 2-second contrasting images fill a 12-second sequence without timing collisions.",
+      "fidelity_checks": [
+        "Exactly six shots, each 2s",
+        "Continuous intervals 0–12s",
+        "Every specified image is present in order",
+        "Each sound lands in its corresponding shot"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "The rhythm is exactly two seconds per cut."
+        }
+      ],
+      "project": {
+        "title": "Old Train",
+        "concept": "Micro-images of a station waking.",
+        "style": "Grainy black-and-white.",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      },
+      "instruction": "Write one 12-second H3 montage with six 2-second shots: ticket stamp, train-wheel detail, swinging clock pendulum, hand touching cold railing, paper ticket in pocket, platform lamp flickering. Give each shot its own sync sound."
+    },
+    {
+      "id": "dialogue-exchange",
+      "split": "holdout",
+      "category": "dialogue-notation",
+      "operation": "studio_scenes_draft",
+      "focus": "Exact separate spoken lines, one English and one French, with speaker identity and tag scope.",
+      "fidelity_checks": [
+        "Line 1 exact English text inside <d> tag",
+        "Line 2 exact French text inside a different <d> tag",
+        "Language labels and speakers distinct",
+        "Every tag closes correctly"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Do the scene bilingually and keep each speaker's wording."
+        }
+      ],
+      "project": {
+        "title": "Station Goodbye",
+        "concept": "A multilingual reunion.",
+        "style": "Naturalistic station ambience.",
+        "invariants": [],
+        "existingSceneTitles": [],
+        "existingScenes": [],
+        "previousScene": null
+      },
+      "instruction": "Write one 11-second H3 Scene. A woman with a yellow scarf says exactly in English 'The last train is gone.' An older man responds exactly in French 'Alors, nous marcherons.' Use separate voice identities, accurate language markers and a few quiet reaction shots."
+    }
+  ]
+}

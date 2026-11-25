@@ -4,15 +4,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_settings_uses_five_top_level_configuration_tabs():
+def test_settings_has_a_separate_llm_guidance_tab():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     settings = (ROOT / "tool" / "js" / "app_settings.js").read_text(encoding="utf-8")
 
-    for tab in ("general", "models", "training", "director", "system"):
+    for tab in ("general", "models", "training", "director", "guidance", "system"):
         assert 'data-app-settings-tab="' + tab + '"' in html
         assert 'data-app-settings-panel="' + tab + '"' in html
 
-    assert "['general', 'models', 'training', 'director', 'system']" in settings
+    assert "['general', 'models', 'training', 'director', 'guidance', 'system']" in settings
 
 
 def test_test_staging_is_training_configuration_not_a_top_level_settings_area():
@@ -93,7 +93,7 @@ def test_director_chat_pin_is_ephemeral_ui_state():
 
     assert "pinned: false" in script
     assert "webcap.directorChat.pinned" not in script
-    assert "localStorage" not in script
+    assert "webcap.studioDirector.profile" in script  # Profile choice may persist; chat pin does not.
     assert "state.pinned = false;" in script
 
 

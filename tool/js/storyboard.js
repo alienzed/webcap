@@ -3513,7 +3513,7 @@
       : (storyState.generationCapabilities.error || 'ComfyUI LoRAs unavailable.');
     var statusText = storyState.generationCapabilities.available
       ? 'LoRA models available'
-      : 'LoRAs unavailable';
+      : (storyState.generationCapabilities.error || 'ComfyUI LoRAs unavailable.');
     Array.prototype.forEach.call(document.querySelectorAll('.storyboard-lora-status'), function (status) {
       status.title = statusTitle;
       status.textContent = statusText;
@@ -4164,7 +4164,7 @@
         : (storyState.generationCapabilities.error || 'ComfyUI LoRAs unavailable.');
       var loraStatusText = storyState.generationCapabilities.available
         ? (sceneMode === 'quality' ? 'Quality · 20 steps · no Turbo' : 'Turbo · 8 steps · Turbo 1.0')
-        : 'LoRAs unavailable';
+        : (storyState.generationCapabilities.error || 'ComfyUI LoRAs unavailable.');
       var referencesHtml = sceneReferences.map(function (reference) {
         if (!reference || !reference.role) return '';
         return '<span class="storyboard-reference-chip">' +

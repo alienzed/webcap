@@ -109,7 +109,7 @@ test('ordinary chat and explicit Write pass exact Read message text in full hist
   const requests=[];
   const requestJson=async url=>{
     requests.push(url);
-    assert.equal(url,'/fs/studio/director/guidance?targetModel=minimax_h3&profile=classic');
+    assert.equal(url,'/fs/studio/director/guidance?targetModel=minimax_h3&profile=classic&includePromptContract='+(requests.length===1?'0':'1'));
     return {system:'Creative partner',promptContract:'H3 Scene guidance'};
   };
   const maker=new Function('requestJson','studioAttachedStoryId','state',requestSource+

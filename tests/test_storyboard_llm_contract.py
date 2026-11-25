@@ -401,8 +401,8 @@ def test_individual_development_scene_uses_whole_outline_and_previous_authored_s
 def test_director_guidance_resolves_cross_scene_references_without_changing_h3_structure():
     request = storyboard_llm_contract.build_request(_story(), "", "develop_story")
     prompt = request["prompt"]
-    assert "Describe the current Scene with concrete audiovisual facts" in prompt
-    assert "Preserve established identities, objects, environments" in prompt
+    assert "Write complete, self-contained generation prompts" in prompt
+    assert "Preserve established identities and relevant recurring facts" in prompt
     assert "--- BEGIN EXAMPLE PROMPT SHAPE ---" in prompt
     assert "Environment / Continuity Anchors:" in prompt
     assert "integrated_multimodal_description:" in prompt

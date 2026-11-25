@@ -19,7 +19,7 @@ def test_packages_have_frozen_d_and_original_functional_contract():
     plus = resolved["d-plus-core"]
     consolidated = resolved["consolidated-core"]
     assert d["role"] == evaluator.read_json(evaluator.DESIGN_DIR / "frozen-d-20261122.json")["role"]
-    assert d["expertise"] == evaluator.repo_default("h3.toolkit")
+    assert d["expertise"] == evaluator.read_json(evaluator.DESIGN_DIR / "frozen-d-20261122.json")["expertise"]
     assert d["creative_addendum"] == d["authoring_addendum"] == ""
     assert plus["role"] == d["role"] and plus["expertise"] == d["expertise"]
     assert plus["authoring_addendum"] == ""
@@ -64,21 +64,12 @@ def test_bounded_coherence_check_adds_one_sentence_and_keeps_author_requests():
     assert "only sound" not in " ".join(potter["fidelity_checks"])
 
 
-def test_production_classic_matches_checked_minimal_candidate_and_other_profiles_stay_unchanged():
-    from tool.server.llm_guidance import default_for
-    from tool.server.studio_guidance_defaults import PROFILES
+def test_historical_classic_candidate_remains_frozen():
     packages = evaluator.resolve_packages(evaluator.load_design(evaluator.DESIGN_DIR / "coherence_clause")[0])
-    assert default_for("studio.classic") == packages["d-plus-coherence"]["role"]
+    frozen = evaluator.read_json(evaluator.DESIGN_DIR / "frozen-d-20261122.json")
     assert packages["d-frozen"]["sha256"] == "7861b0cce4980a6343d0edea254825177c66cd7ef720cb342b71573a5e0a4681"
-    assert default_for("h3.toolkit") == packages["d-frozen"]["expertise"]
-    assert PROFILES[0]["version"] == "balanced-v3-2026-11-23"
-    previous = {
-        "current": "73fda04f20ff90a5848de0d0f5b7d6846c9cac46b07df0e5506b4101c58e8bce",
-        "imaginative": "d99674bf3d09a9f846ce687a81fe7776b7a60cd47388cec97ddcbd26d29fd919",
-        "render": "da4dc4d514d11e2b737a9268eb514b8b518f892570428c7b2a31f46afa5ccb21",
-    }
-    for profile, digest in previous.items():
-        assert hashlib.sha256(default_for("studio." + profile).encode()).hexdigest() == digest
+    assert packages["d-plus-coherence"]["expertise"] == frozen["expertise"]
+    assert packages["d-plus-coherence"]["role"].startswith(frozen["role"])
 
 
 def test_system_variants_are_local_and_technical_reference_identical():

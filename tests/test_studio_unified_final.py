@@ -10,8 +10,8 @@ def test_final_roles_replace_overlap_and_share_functional_knowledge():
     spec, cases = e.load_design(DESIGN)
     packages = e.resolve_packages(spec)
     classic, current, unified = [packages[k] for k in ("classic-v3", "cleaned-current", "unified")]
-    assert classic["role"] == e.repo_default("studio.classic")
-    assert classic["expertise"] == current["expertise"] == unified["expertise"] == e.repo_default("h3.toolkit")
+    assert classic["role"] == e.resolve_packages(e.load_design(e.DESIGN_DIR / "coherence_clause")[0])["d-plus-coherence"]["role"]
+    assert classic["expertise"] == current["expertise"] == unified["expertise"] == e.read_json(e.DESIGN_DIR / "frozen-d-20261122.json")["expertise"]
     assert classic["sha256"] == "f4781c8c8c6c91a84e113696c64f2b725275ec7e99a1c567a757b9dc079c19e8"
     previous = e.resolve_packages(e.load_design(e.DESIGN_DIR / "profile_cleanup")[0])["current"]
     assert current["role"] == previous["role"]

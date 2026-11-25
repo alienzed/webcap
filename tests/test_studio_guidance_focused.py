@@ -19,7 +19,7 @@ def test_four_packages_share_the_exact_baseline_and_change_one_short_h3_focus():
     resolved = evals.resolve_packages(packages)
     baseline = resolved["d-control"]
     assert baseline["role"] == evals.read_json(evals.DESIGN_DIR / "frozen-d-20261122.json")["role"]
-    assert baseline["expertise"] == evals.repo_default("h3.toolkit")
+    assert baseline["expertise"] == evals.read_json(evals.DESIGN_DIR / "frozen-d-20261122.json")["expertise"]
     assert baseline["authoring_addendum"] == ""
     for package in packages:
         row = resolved[package["id"]]

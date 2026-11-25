@@ -39,7 +39,7 @@ def test_explicit_packages_are_independent_and_baseline_uses_historical_defaults
     assert resolved["b-medium"]["expertise"] in resolved["c-principles"]["expertise"]
     assert resolved["d-baseline"]["role"] == evaluation.read_json(
         evaluation.DESIGN_DIR / "frozen-d-20261122.json")["role"]
-    assert resolved["d-baseline"]["expertise"] == evaluation.repo_default("h3.toolkit")
+    assert resolved["d-baseline"]["expertise"] == evaluation.read_json(evaluation.DESIGN_DIR / "frozen-d-20261122.json")["expertise"]
     assert all(resolved[key]["sha256"] for key in resolved)
 
 

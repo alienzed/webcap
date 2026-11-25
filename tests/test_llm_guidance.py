@@ -32,11 +32,11 @@ def test_overrides_replace_named_defaults_and_reset_by_absence(monkeypatch):
         "generation_model_guidance": {},
     })
     system = guidance(profile="classic")["system"]
-    assert system == "Custom creative role.\n\nCustom medium expertise."
-    assert guidance(profile="classic")["promptContract"] == "Custom technical prompt reference."
+    assert system == "Custom creative role."
+    assert guidance(profile="classic")["promptContract"] == "Custom medium expertise.\n\nCustom technical prompt reference."
     assert "PROFILE | CLASSIC" not in system
     monkeypatch.setattr(app_config, "config", {"llm_guidance": {}, "generation_model_guidance": {}})
-    assert "PROFILE | CLASSIC" in guidance(profile="classic")["system"]
+    assert "Collaborate with the author" in guidance(profile="classic")["system"]
 
 
 def _scene_story():

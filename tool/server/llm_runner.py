@@ -1307,7 +1307,10 @@ def _request_diagnostic(client, contract):
         messages = normalize_freeform_messages(contract.get("messages"))
     else:
         prompt = str(contract.get("prompt") or "").strip()
-        messages = [{"role": "user", "content": prompt}] if prompt else []
+        system_prompt = str(contract.get("system_prompt") or "").strip()
+        messages = [{"role": "system", "content": system_prompt}] if system_prompt else []
+        if prompt:
+            messages.append({"role": "user", "content": prompt})
 
     diagnostic = {
         "messages": copy.deepcopy(messages),
@@ -1387,7 +1390,8 @@ def enqueue(client, model_id, contract, context=None, label=""):
             },
         )
     _ensure_monitor_started()
-    view = _job_view(execution_get_job(job["id"]))
+    # A fast runtime may already have moved this job to its terminal receipt.
+    view = job_status(job["id"])
     view["request"] = request_diagnostic
     return view
 

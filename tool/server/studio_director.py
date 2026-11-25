@@ -19,7 +19,7 @@ ACTIONS = (
 )
 
 from .studio_guidance_defaults import PROFILES, _PROFILE_IDS
-from .llm_guidance import text_for as llm_guidance_text
+from .llm_guidance import H3_CAPABILITIES, text_for as llm_guidance_text
 
 
 def chat_response_schema():
@@ -39,11 +39,13 @@ def guidance(target_model="minimax_h3", profile="classic", include_prompt_contra
         raise ValueError("Studio Writer's Workshop currently supports MiniMax H3.")
     if profile not in _PROFILE_IDS:
         raise ValueError("Unknown Studio Director creative profile.")
-    system = llm_guidance_text("studio." + profile) + "\n\n" + llm_guidance_text("h3.toolkit")
+    system = llm_guidance_text("studio." + profile)
+    if not include_prompt_contract:
+        system += "\n\n" + H3_CAPABILITIES
     prompt_contract = ""
     if include_prompt_contract:
         try:
-            prompt_contract = llm_guidance_text("h3.authoring")
+            prompt_contract = llm_guidance_text("h3.toolkit") + "\n\n" + llm_guidance_text("h3.authoring")
         except OSError as exc:
             raise RuntimeError("Studio production prompt guidance is unavailable.") from exc
         configured = app_config.config.get("generation_model_guidance", {})

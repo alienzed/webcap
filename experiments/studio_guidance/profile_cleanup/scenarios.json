@@ -1,0 +1,133 @@
+{
+  "version": 1,
+  "experiment": "profile-cleanup-v1",
+  "cases": [
+    {
+      "id": "cleanup-chat-semaphore",
+      "split": "development",
+      "category": "editorial-judgment",
+      "operation": "studio_chat",
+      "focus": "A consequential recommendation, natural collaboration and audiovisual judgment.",
+      "fidelity_checks": [
+        "Responds to uncertainty becoming trust, rather than making a generic mood piece.",
+        "Recommends a concrete keep/change choice with a reason.",
+        "Conversation remains proportionate; no unrequested Project form."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "A 12-second film about two strangers signaling across apartment windows should feel like uncertainty becoming trust. My draft has a crane shot, flickering neon and a sudden blackout. What would you keep or change? Give me a direction worth pursuing, not a finished script."
+        }
+      ]
+    },
+    {
+      "id": "cleanup-project-shadow",
+      "split": "development",
+      "category": "flexible-project",
+      "operation": "studio_project_draft",
+      "focus": "An inspiring collection with meaningful complete fields and room for different intentions.",
+      "fidelity_checks": [
+        "Meaningful title, concept, style and invariant values.",
+        "One recurring cobalt-blue umbrella remains the shared visible motif.",
+        "Independent films retain playful, unsettling and serene possibilities without a forced narrative."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "A collection of independent films about shadows behaving unexpectedly in ordinary places. A cobalt-blue umbrella recurs in every film. Different films may be playful, unsettling or serene; characters, locations and techniques can vary. I want a recognizable collection with real artistic range."
+        }
+      ],
+      "instruction": "Create one complete Project: a distinctive title, an inspiring Concept, developed Visual / atmosphere and only genuinely enduring Invariants."
+    },
+    {
+      "id": "cleanup-scene-phonograph",
+      "split": "development",
+      "category": "deliberate-restrained-scene",
+      "operation": "studio_scenes_draft",
+      "focus": "Complete renderable progression with image and sound serving an intentional restrained form.",
+      "fidelity_checks": [
+        "One 11-second Scene; one continuous fixed-camera shot.",
+        "A woman lowers the needle onto a spinning record, listens, then stops turning a small brass key in her fingers while the record keeps spinning.",
+        "Exact line: I remember now. Proper H3 dialogue notation and speaker assignment.",
+        "Quiet recognition; record surface noise and room sound support the experience."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "The feeling is quiet recognition, expressed through a small change in attention. Let the sound carry some of the meaning."
+        }
+      ],
+      "instruction": "Write one complete 11-second H3 Scene in one continuous fixed-camera shot. In a modest sunlit room, a woman lowers a needle onto a spinning record, listens, says exactly \"I remember now.\", and stops turning a small brass key in her fingers. The record keeps spinning. Choose her appearance and clothing. Use the record surface noise and room sounds purposefully; preserve the quiet recognition.",
+      "project": {
+        "title": "Familiar Sounds",
+        "concept": "Independent moments when an ordinary sound changes attention.",
+        "style": "Tactile natural light and specific physical sound.",
+        "invariants": []
+      }
+    },
+    {
+      "id": "cleanup-held-chat-laundromat",
+      "split": "holdout",
+      "category": "editorial-judgment",
+      "operation": "studio_chat",
+      "focus": "Respond to expansive comic ambition rather than reflexively simplifying.",
+      "fidelity_checks": [
+        "Preserves exuberant comic ambition.",
+        "Makes a concrete recommendation about the proposed treatment.",
+        "Useful conversation rather than a finished Project or Scene form."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "I want a joyous, extravagant 14-second laundromat ballet: strangers and laundry carts move together when every washer finishes at once. I am considering deadpan wide tableaux interrupted by frantic close-ups. Is that contrast worth pursuing? Recommend a direction; I want exuberance, not tasteful restraint."
+        }
+      ]
+    },
+    {
+      "id": "cleanup-held-project-reflections",
+      "split": "holdout",
+      "category": "flexible-project",
+      "operation": "studio_project_draft",
+      "focus": "Artistic range and meaningful shared identity with full practical fields.",
+      "fidelity_checks": [
+        "Meaningful title, concept, style and invariant values.",
+        "Recurring triangular mirror; independent films vary people, places and feeling.",
+        "Preserves both spectacular and intimate approaches without enforcing one house mood."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "A collection of independent short films where a triangular mirror changes how a place is experienced. The same small mirror recurs, but people and locations vary freely. Some films should be spectacular and kinetic; others intimate and still. Give the collection a clear identity without prescribing one emotional arc."
+        }
+      ],
+      "instruction": "Create one complete Project with a distinctive title, an inspiring Concept, developed Visual / atmosphere and enduring Invariants."
+    },
+    {
+      "id": "cleanup-held-scene-observatory",
+      "split": "holdout",
+      "category": "expansive-audiovisual-scene",
+      "operation": "studio_scenes_draft",
+      "focus": "An ambitious complete progression with authorial spatial choices and a usable H3 prompt.",
+      "fidelity_checks": [
+        "One 14-second Scene.",
+        "An astronomer releases paper constellations; they rise, orbit the telescope, then settle onto its dark dome as luminous star patterns.",
+        "Three consecutive authored shots covering the duration; dome begins dark.",
+        "Exact line: There you are. Correct H3 speaker and dialogue notation.",
+        "Exhilarating discovery with purposeful sound, not generic ornamental imagery."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Make discovery feel exhilarating and physically tangible, with sound helping the transformation find its rhythm."
+        }
+      ],
+      "instruction": "Write one complete 14-second H3 Scene in three consecutive shots. Inside an old observatory with a dark unlit dome, an astronomer releases a handful of paper constellations. They rise, orbit the telescope, and settle onto the dome as luminous star patterns. The astronomer says exactly \"There you are.\" Choose their appearance and clothing, and make the physical action, spatial relationships and sound clear.",
+      "project": {
+        "title": "Invented Instruments",
+        "concept": "Independent discoveries realized through tangible transformations.",
+        "style": "Handmade material detail with ambitious audiovisual design.",
+        "invariants": []
+      }
+    }
+  ]
+}

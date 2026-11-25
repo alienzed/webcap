@@ -14,13 +14,12 @@ def test_creative_role_is_concise_and_separate_from_technical_h3_reference(monke
     result = guidance(profile="current")
     system, reference = result["system"], result["promptContract"]
     assert system.startswith("STUDIO DIRECTOR | CREATIVE PARTNER")
-    assert "understand the author's vision" in system.lower()
+    assert "creative vision" in system.lower()
     assert "Concept / overview" in system
     assert "Visual / atmosphere" in system
     assert "Invariants" in system
-    assert "complete generation Prompt" in system
-    assert "WebCap saves Project and Scene fields" in system
-    assert "MiniMax H3" in system
+    assert "generation Prompt" in system
+    assert "MiniMax H3" in reference
     assert "Empirical observation about lip sync." not in system
     assert "Empirical observation about lip sync." in reference
     assert "integrated_multimodal_description:" in reference
@@ -30,21 +29,14 @@ def test_creative_role_is_concise_and_separate_from_technical_h3_reference(monke
 
 @pytest.mark.parametrize("profile", ["classic", "current", "imaginative", "render"])
 def test_all_profiles_share_core_expertise_without_automatic_event_bias(profile):
-    system = guidance(profile=profile)["system"]
-    for phrase in ("composition", "stillness", "dialogue", "montages",
-                   "independent clips", "recurring consistency matters",
-                   "author's vision", "Talk naturally and proportionately",
-                   "rapid 1–2-second montage", "synchronized audio",
-                   "consequential visible details"):
+    system = guidance(profile=profile, include_prompt_contract=False)["system"]
+    for phrase in ("montages", "independent clips", "creative vision",
+                   "Concept / overview", "Visual / atmosphere", "Invariants",
+                   "synchronized audio", "4 to 15 seconds"):
         assert phrase.casefold() in system.casefold()
-    assert "worthwhile event" not in system
-    assert "clear physical changes" not in system
-    assert "choose durations to suit" not in system
-    assert "intended progression" not in system
-    assert "durationSeconds" not in system
-    assert "H3 PROMPT AUTHORING REFERENCE" not in system
-    assert "integrated_multimodal_description:" not in system
-    assert "studio_scenes_draft" not in system
+    for phrase in ("worthwhile event", "clear physical changes",
+                   "integrated_multimodal_description:", "studio_scenes_draft"):
+        assert phrase not in system
     assert len(system) < 4000
 
 
@@ -56,36 +48,29 @@ def test_profiles_have_distinct_stances_but_same_project_scope():
     roles = {item["id"]: guidance(profile=item["id"])["system"] for item in PROFILES}
     assert len(set(roles.values())) == 4
     for role in roles.values():
-        assert "Concept expresses the premise" in role
-        assert "Invariants describe deliberately stable recurring subjects" in role
-        assert "individual Scenes carry their own actions" in role
-    assert "versatile creative partner" in roles["classic"]
+        assert "guides the development of Scenes" in role
+        assert "characteristics intended to remain consistent across Scenes" in role
+    assert "PROFILE |" not in roles["classic"]
     assert "active editorial role" in roles["current"]
     assert "bold, distinctive interpretations" in roles["imaginative"]
     assert "particularly attentive production judgment" in roles["render"]
 
 
 def test_chat_can_discuss_and_show_creative_drafts_without_saving():
-    system = guidance(profile="current")["system"]
-    assert "substantial requests merit developed ideas or complete drafts" in system
-    assert "Talk naturally and proportionately" in system
-    assert "Ask a focused question" in system
-    assert "Conversation can explore or draft creative content" in system
-    assert "through the author's explicit Write actions" in system
+    system = guidance(profile="current", include_prompt_contract=False)["system"]
+    assert "Respond proportionately" in system
+    assert "ask focused questions" in system
+    assert "H3 PROMPT AUTHORING REFERENCE" not in system
 
 
-def test_h3_toolkit_is_capability_knowledge_not_fixed_shot_structure():
+def test_h3_toolkit_is_scoped_prompt_writing_knowledge():
     toolkit = llm_guidance_text("h3.toolkit")
-    for phrase in ("up to 15 seconds", "rapid 1–2-second montage",
-                   "continuous fixed or moving shot", "dialogue-led coverage",
-                   "visually rich tableaux", "the exact spoken words",
-                   "speaker", "language", "vocal identity", "emotional delivery",
-                   "ambience", "music", "silence", "unambiguously",
-                   "continuity where an unintended variation"):
-        assert phrase.casefold() in toolkit.casefold()
-    for phrase in ("worthwhile event", "strong physical changes",
-                   "mandatory progression", "never", "avoid", "do not"):
-        assert phrase not in toolkit.casefold()
+    for phrase in ("complete, self-contained", "spatial relationships",
+                   "exact words", "speakers", "language and delivery", "shot timing"):
+        assert phrase in toolkit
+    assert "worthwhile event" not in toolkit
+    assert toolkit not in guidance(include_prompt_contract=False)["system"]
+    assert guidance()["promptContract"].count(toolkit) == 1
 
 
 def test_chat_can_skip_h3_authoring_load_and_empirical_playbook(monkeypatch):
@@ -113,7 +98,7 @@ def test_chat_can_skip_h3_authoring_load_and_empirical_playbook(monkeypatch):
     result = guidance(profile="classic", include_prompt_contract=False)
     assert result["system"]
     assert result["promptContract"] == ""
-    assert seen == ["studio.classic", "h3.toolkit"]
+    assert seen == ["studio.classic"]
 
 
 def test_action_catalog_excludes_low_value_studio_director_operations():
@@ -146,7 +131,7 @@ def test_studio_guidance_api_remains_read_only_and_scoped():
     scene_write = client.get("/fs/studio/director/guidance?profile=classic&includePromptContract=1")
     assert scene_write.status_code == 200
     assert "integrated_multimodal_description:" in scene_write.json["promptContract"]
-    assert scene_write.json["system"] == chat.json["system"]
+    assert chat.json["system"].startswith(scene_write.json["system"])
     assert scene_write.json["profile"] == chat.json["profile"]
 
 

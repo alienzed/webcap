@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "source": "Current /fs/director/chat with enqueue mocked; zero inference calls.",
+  "schemas": {
+    "studio_project_draft": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "concept": {
+          "type": "string"
+        },
+        "style": {
+          "type": "string"
+        },
+        "invariants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "kind",
+              "title",
+              "text"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "character",
+                  "location",
+                  "visual",
+                  "world",
+                  "sound",
+                  "custom"
+                ]
+              },
+              "title": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "studio_scenes_draft": {
+      "type": "object",
+      "required": [
+        "scenes"
+      ],
+      "properties": {
+        "scenes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "title",
+              "prompt",
+              "durationSeconds"
+            ],
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "prompt": {
+                "type": "string"
+              },
+              "durationSeconds": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "rationale": {
+          "type": "string"
+        }
+      }
+    },
+    "studio_chat": null
+  }
+}

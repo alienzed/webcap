@@ -2,6 +2,8 @@
 
 **Status:** opt-in experiment harness, isolated from normal Studio Settings and default guidance. It compares *creative primers* over real WebCap Director calls. It does not save Project or Scene results, invoke H3 rendering, run an LLM judge, or change model configuration.
 
+Historical compatibility: the established D role/toolkit in this design and its focused/completeness/charter follow-ups now resolve from `experiments/studio_guidance/frozen-d-20261122.json`. Their resolved content is unchanged even after the separately requested [Classic default refinement](studio-director-creative-charter-results.md). `--baseline-from` continues to freeze each run's technical reference and reject scenario changes. The harness does not automatically promote guidance, and the established 86-call PR #1099 comparison was not rerun.
+
 ## Implemented plan and phases
 
 1. **Freeze a controlled comparison.** \`experiments/studio_guidance/packages.json\` defines four named hypotheses. A is a minimal role, B adds concise H3 capabilities, C adds production-minded creative principles, and D resolves the current repository Classic profile plus H3 toolkit as a baseline. Each run writes exact, hashed guidance and the unmodified H3 authoring reference to its manifest.

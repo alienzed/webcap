@@ -758,7 +758,7 @@ function renderGroupWorkbench(options) {
     groupEl.classList.toggle('has-mismatch-term', groupHasMismatchTerm);
     groupEl.appendChild(termListEl);
     if (!isGridMode && hasItemTarget && targetEl.id === 'group-workbench-list') {
-      aiValidationRenderGroupSuggestions(groupEl, requirementLabel, mediaKey);
+      singleItemTagAssistRenderGroupSuggestions(groupEl, requirementLabel, mediaKey);
     }
     if (!isGridMode && hasItemTarget && isColorSuggestionRequirement(requirementLabel)) {
       renderColorSuggestionsForGroup(groupEl, requirementLabel, mediaKey, terms);

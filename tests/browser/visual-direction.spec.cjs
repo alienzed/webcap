@@ -34,7 +34,7 @@ test('Studio Scene Revision toolbar opens the current Director controls without 
   await expect(page.locator('#director-studio-revision-controls')).toBeVisible();
   await expect(page.locator('#director-studio-revision-target')).toContainText('3 of 3 Scenes');
   await expect(page.locator('#director-studio-revision-selection-count'))
-    .toHaveText('3 of 3 Scenes selected');
+    .toHaveText('3 of 3 selected');
   await expect(page.locator('#director-studio-revision-preset')).toHaveValue('');
   await expect(page.locator('#director-studio-revision-fresh')).not.toBeChecked();
 

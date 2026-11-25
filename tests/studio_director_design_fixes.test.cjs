@@ -294,7 +294,7 @@ test('Studio Revision mode dispatches the existing Storyboard revision operation
   const el=id=>{
     if (!nodes.has(id)) nodes.set(id,{
       value:'',checked:false,focus(){},classList:{toggle(){}},textContent:'',
-      dispatchEvent(){},readOnly:false,children:[],
+      dispatchEvent(){},readOnly:false,children:[],dataset:{},
       replaceChildren(...items){this.children=items;},
       appendChild(item){this.children.push(item);},
       querySelectorAll(selector){
@@ -308,7 +308,7 @@ test('Studio Revision mode dispatches the existing Storyboard revision operation
   };
   const document={
     createElement:()=>({
-      children:[],type:'',checked:false,appendChild(child){this.children.push(child);},
+      children:[],type:'',checked:false,appendChild(child){this.children.push(child);},append(...children){this.children.push(...children);},
       addEventListener(){}
     }),
     createTextNode:text=>({textContent:text})

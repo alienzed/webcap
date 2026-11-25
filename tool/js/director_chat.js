@@ -324,32 +324,44 @@
     var key = JSON.stringify([scope.projectId, ids, scope.sceneTitles || []]);
     var list = el('director-studio-revision-scenes');
     if (key !== revisionSceneScopeKey) {
+      // Preserve explicit choices when Scene titles/order refresh within the
+      // same Project. Switching Projects starts with all Scenes selected.
+      var previous = Array.from(list.querySelectorAll('input.director-studio-revision-scene'));
+      var sameProject = list.dataset.projectId === String(scope.projectId || '');
+      var previousAll = previous.length > 0 && previous.every(function (box) { return box.checked; });
+      var previousSelected = new Set(previous.filter(function (box) { return box.checked; })
+        .map(function (box) { return box.value; }));
       revisionSceneScopeKey = key;
+      list.dataset.projectId = String(scope.projectId || '');
       list.replaceChildren();
       ids.forEach(function (sceneId, index) {
+        var name = (scope.sceneTitles && scope.sceneTitles[index]) || 'Untitled Scene';
         var label = document.createElement('label');
         var checkbox = document.createElement('input');
+        var number = document.createElement('span');
+        var title = document.createElement('span');
+        label.className = 'director-studio-revision-scene-chip';
+        label.title = 'Scene ' + (index + 1) + ' · ' + name;
         checkbox.type = 'checkbox';
         checkbox.value = sceneId;
-        checkbox.checked = true;
+        checkbox.checked = !sameProject || previousAll || previousSelected.has(sceneId);
         checkbox.className = 'director-studio-revision-scene';
         checkbox.addEventListener('change', function () {
           syncStudioRevisionUi();
           syncControls();
         });
-        label.appendChild(checkbox);
-        label.appendChild(document.createTextNode((index + 1) + '. ' +
-          (scope.sceneTitles && scope.sceneTitles[index] || 'Untitled Scene')));
+        number.className = 'director-studio-revision-scene-number';
+        number.textContent = String(index + 1);
+        title.className = 'director-studio-revision-scene-title';
+        title.textContent = name;
+        label.append(checkbox, number, title);
         list.appendChild(label);
       });
     }
     var boxes = Array.from(list.querySelectorAll('input.director-studio-revision-scene'));
     var selected = boxes.filter(function (box) { return box.checked; }).length;
-    var all = el('director-studio-revision-all');
-    all.checked = boxes.length > 0 && selected === boxes.length;
-    all.indeterminate = selected > 0 && selected < boxes.length;
     el('director-studio-revision-selection-count').textContent =
-      selected + ' of ' + boxes.length + ' Scenes selected';
+      selected + ' of ' + boxes.length + ' selected';
     return boxes.filter(function (box) { return box.checked; }).map(function (box) { return box.value; });
   }
   function studioRevisionActive() {
@@ -1849,10 +1861,13 @@
     }
     revisionInput.disabled = studioRevisionRunning;
     el('director-studio-revision-preset').disabled = studioRevisionRunning;
-    el('director-studio-revision-all').disabled = studioRevisionRunning;
-    el('director-studio-revision-scenes').querySelectorAll('input').forEach(function (checkbox) {
-      checkbox.disabled = studioRevisionRunning;
-    });
+    var revisionBoxes = Array.from(el('director-studio-revision-scenes').querySelectorAll('input'));
+    revisionBoxes.forEach(function (checkbox) { checkbox.disabled = studioRevisionRunning; });
+    var revisionSelected = revisionBoxes.filter(function (checkbox) { return checkbox.checked; }).length;
+    el('director-studio-revision-select-all').disabled =
+      studioRevisionRunning || revisionSelected === revisionBoxes.length;
+    el('director-studio-revision-select-none').disabled =
+      studioRevisionRunning || revisionSelected === 0;
     el('director-studio-revision-fresh').disabled = studioRevisionRunning;
     el('director-studio-composer-mode-select').disabled = studioRevisionRunning;
     if (input) input.disabled = state.pending || (persistentMode(state.activeMode) && !state.sessionReady);
@@ -4101,15 +4116,15 @@
       syncStudioRevisionUi();
       syncControls();
     };
-    el('director-studio-revision-all').onchange = function () {
-      var checked = this.checked;
-      el('director-studio-revision-scenes').querySelectorAll('input').forEach(function (box) {
-        box.checked = checked;
-      });
-      syncRevisionSceneSelection();
-      syncStudioRevisionUi();
-      syncControls();
-    };
+    ['all', 'none'].forEach(function (choice) {
+      el('director-studio-revision-select-' + choice).onclick = function () {
+        el('director-studio-revision-scenes').querySelectorAll('input').forEach(function (box) {
+          box.checked = choice === 'all';
+        });
+        syncStudioRevisionUi();
+        syncControls();
+      };
+    });
     el('director-studio-revision-input').oninput = syncControls;
     el('director-studio-revision-fresh').onchange = syncControls;
     el('director-studio-revision-input').addEventListener('keydown', function (event) {

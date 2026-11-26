@@ -3526,7 +3526,7 @@
     qaSyncFocusReviewButton();
   }
 
-  var qaCorrectionCursor = {folder:'', key:'', index:0, busy:false};
+  var qaCorrectionCursor = {folder:'', key:'', index:0, busy:false, drafts:Object.create(null)};
 
   function qaCorrectionItems() {
     return qaDeepScanScopeItems().map(function (item) {
@@ -3576,7 +3576,7 @@
     if (card) card.focus({preventScroll:true});
   }
 
-  function qaDismissCorrection(mediaKey, findingId) {
+  function qaDismissCorrection(mediaKey, findingId, appliedWithoutChanges) {
     if (qaCorrectionCursor.busy) return;
     var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
     if (!item) throw new Error('The QA correction target is no longer in the current Set.');
@@ -3592,14 +3592,18 @@
     });
     qaCorrectionCursor.busy = true;
     return qaSaveReview(true).then(function () {
+      if (!findingId && String(state.folder || '') === folder) delete qaCorrectionCursor.drafts[mediaKey];
       qaSyncFocusReview();
-      setStatus('Rejected QA recommendation' + (findings.length === 1 ? '' : 's') + '. Annotations unchanged.');
+      setStatus(appliedWithoutChanges ? 'QA review completed. Annotations unchanged.' :
+        'Rejected QA recommendation' + (findings.length === 1 ? '' : 's') + '. Annotations unchanged.');
+      return true;
     }).catch(function (err) {
       if (String(state.folder || '') === folder) Object.keys(previous).forEach(function (key) {
         if (previous[key] === undefined) delete qaWorkbenchState.dispositions[key];
         else qaWorkbenchState.dispositions[key] = previous[key];
       });
       setStatus('Could not save QA rejection: ' + String(err && err.message || err));
+      return false;
     }).finally(function () {
       qaCorrectionCursor.busy = false;
       renderQaWorkbench();
@@ -3613,13 +3617,19 @@
       qaCorrectionCursor.folder = folder;
       qaCorrectionCursor.key = '';
       qaCorrectionCursor.index = 0;
+      qaCorrectionCursor.drafts = Object.create(null);
+    }
+    var oldCard = container.querySelector('.qa-correction-card');
+    // Keep the target and its editor in place until the explicit mutation finishes.
+    if (qaCorrectionCursor.busy && oldCard && oldCard.dataset.folder === folder) {
+      oldCard.querySelectorAll('button, textarea').forEach(function (control) { control.disabled = true; });
+      return;
     }
     var index = entries.findIndex(function (entry) { return entry.item.key === qaCorrectionCursor.key; });
     if (index < 0) index = Math.min(qaCorrectionCursor.index, Math.max(0, entries.length - 1));
     qaCorrectionCursor.index = index;
     var entry = entries[index];
     qaCorrectionCursor.key = entry ? entry.item.key : '';
-    var oldCard = container.querySelector('.qa-correction-card');
     var plan = entry ? qaCorrectionPlan(entry.item, entry.findings) : null;
     var fingerprint = entry ? JSON.stringify([folder, entry.item.key, entry.findings, plan]) : '';
     var subtitle = entries.length + ' pending' + (entry ? ' · Item ' + (index + 1) + ' of ' + entries.length : '');
@@ -3637,6 +3647,7 @@
       oldCard.querySelectorAll('button').forEach(function (button) {
         button.disabled = qaCorrectionCursor.busy || (button.dataset.qaAction === 'move-correction' && entries.length < 2);
       });
+      oldCard.querySelectorAll('textarea').forEach(function (editor) { editor.disabled = qaCorrectionCursor.busy; });
       return;
     }
     qaRenderHeader(container, 'QA Corrections', subtitle, 'corrections');
@@ -3653,6 +3664,7 @@
     var card = document.createElement('article');
     card.className = 'qa-correction-card';
     card.dataset.fingerprint = fingerprint;
+    card.dataset.folder = folder;
     card.tabIndex = 0;
     var media = document.createElement('div');
     media.className = 'qa-correction-media';
@@ -3675,7 +3687,7 @@
     title.title = item.fileName;
     body.appendChild(title);
     var heading = document.createElement('h3');
-    heading.textContent = entry.findings.length + ' suggested correction' + (entry.findings.length === 1 ? '' : 's');
+    heading.textContent = entry.findings.length + ' QA finding' + (entry.findings.length === 1 ? '' : 's');
     body.appendChild(heading);
     entry.findings.forEach(function (finding) {
       var row = document.createElement('div');
@@ -3709,17 +3721,12 @@
         }
         changes.appendChild(line);
       });
-      individual.tagActions.concat(individual.manualTagActions).forEach(function (action) {
-        var line = document.createElement('div');
-        line.textContent = (action.action === 'add' ? '+ ' : '− ') +
-          (action.group ? action.group + ' / ' : '') + action.term;
-        changes.appendChild(line);
-      });
       if (changes.childNodes.length) row.appendChild(changes);
       if (entry.findings.length > 1) row.appendChild(qaCreateButton('Reject this finding', '', 'reject-correction-finding', finding.id));
       body.appendChild(row);
     });
-    if (plan.captionAfter !== plan.captionBefore) {
+    var draft = qaCorrectionCursor.drafts[item.key];
+    if (plan.captionAfter !== plan.captionBefore || draft) {
       var caption = document.createElement('div');
       caption.className = 'qa-correction-caption';
       var captionLabel = document.createElement('strong');
@@ -3731,6 +3738,39 @@
         diff.appendChild(node);
       });
       caption.append(captionLabel, diff);
+      var edit = qaCreateButton('Accept caption & edit');
+      edit.classList.add('qa-correction-edit');
+      caption.appendChild(edit);
+      function showEditor(focus) {
+        edit.hidden = true;
+        var editor = document.createElement('textarea');
+        editor.className = 'qa-correction-editor';
+        editor.setAttribute('aria-label', 'Edited caption');
+        editor.rows = 5;
+        editor.value = draft.text;
+        editor.addEventListener('input', function () { draft.text = editor.value; });
+        caption.appendChild(editor);
+        if (draft.before !== plan.captionBefore) {
+          var warning = document.createElement('p');
+          warning.textContent = 'The saved caption changed. Reset the draft before applying.';
+          caption.appendChild(warning);
+        }
+        var reset = qaCreateButton('Reset to proposed caption');
+        reset.classList.add('qa-correction-edit');
+        reset.addEventListener('click', function () {
+          delete qaCorrectionCursor.drafts[item.key];
+          card.dataset.fingerprint = '';
+          renderQaWorkbench();
+        });
+        caption.appendChild(reset);
+        if (focus) editor.focus();
+      }
+      edit.addEventListener('click', function () {
+        draft = {before:plan.captionBefore, text:plan.captionAfter};
+        qaCorrectionCursor.drafts[item.key] = draft;
+        showEditor(true);
+      });
+      if (draft) showEditor(false);
       body.appendChild(caption);
     }
     if (plan.tagActions.length) {
@@ -3757,14 +3797,20 @@
     }
     var actions = document.createElement('div');
     actions.className = 'qa-correction-actions';
-    if (plan.hasChanges) actions.appendChild(qaCreateButton('Apply proposed corrections', 'qa-primary', 'apply-corrections', item.key));
+    if (plan.hasChanges || draft) actions.appendChild(qaCreateButton('Apply corrections', 'qa-primary', 'apply-corrections', item.key));
     actions.appendChild(qaCreateButton('Reject corrections', '', 'reject-corrections', item.key));
     body.appendChild(actions);
     var nav = document.createElement('div');
     nav.className = 'qa-correction-nav';
-    nav.appendChild(qaCreateButton('Previous', '', 'move-correction', -1));
+    var previous = qaCreateButton('←', '', 'move-correction', -1);
+    previous.setAttribute('aria-label', 'Previous');
+    previous.title = 'Previous';
+    var next = qaCreateButton('→', '', 'move-correction', 1);
+    next.setAttribute('aria-label', 'Next');
+    next.title = 'Next (leave unresolved)';
+    nav.appendChild(previous);
     nav.appendChild(qaCreateButton('Inspect in Single Item', '', 'inspect-correction-item', item.fileName));
-    nav.appendChild(qaCreateButton('Skip for now', '', 'move-correction', 1));
+    nav.appendChild(next);
     body.appendChild(nav);
     card.appendChild(body);
     card.querySelectorAll('button').forEach(function (button) {
@@ -3778,7 +3824,16 @@
     var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
     if (!item) throw new Error('The QA correction target is no longer in the current Set.');
     var plan = qaCorrectionPlan(item, qaFocusReviewCandidateFindings(item, true));
-    if (!plan.hasChanges) {
+    var draft = qaCorrectionCursor.drafts[mediaKey];
+    if (draft && draft.before !== plan.captionBefore) {
+      setStatus('The saved caption changed. Reset the draft before applying.');
+      return Promise.resolve(false);
+    }
+    var captionAfter = draft ? draft.text : plan.captionAfter;
+    if (draft && captionAfter === plan.captionBefore && !plan.tagActions.length) {
+      return qaDismissCorrection(mediaKey, undefined, true);
+    }
+    if (!plan.hasChanges && captionAfter === plan.captionBefore) {
       setStatus('No current applicable corrections remain for ' + item.fileName + '.');
       renderQaWorkbench(true);
       return Promise.resolve(false);
@@ -3787,9 +3842,9 @@
     qaCorrectionCursor.busy = true;
     renderQaWorkbench();
     var operations = Promise.resolve();
-    if (plan.captionAfter !== plan.captionBefore) {
+    if (captionAfter !== plan.captionBefore) {
       operations = operations.then(function () {
-        return saveCaptionDirect(folder, item.fileName, plan.captionAfter, key, {skipRenderFileList:true});
+        return saveCaptionDirect(folder, item.fileName, captionAfter, key, {skipRenderFileList:true});
       });
     }
     plan.tagActions.forEach(function (action) {
@@ -3807,6 +3862,7 @@
       if (folder !== String(state.folder || '') || !state.items.some(function (row) { return row.key === key; })) {
         throw new Error('The Set changed while QA corrections were being applied.');
       }
+      delete qaCorrectionCursor.drafts[key];
       qaRefreshComputedState(true);
       qaWorkbenchState.statusMessage = 'Applied QA corrections to ' + item.fileName + '.';
       renderQaWorkbench();

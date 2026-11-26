@@ -33,6 +33,29 @@ function setRequirementGroupAlias(label, alias) {
   return true;
 }
 
+function normalizeSetVariables(rows) {
+  var seen = new Set();
+  return (Array.isArray(rows) ? rows : []).reduce(function (out, row) {
+    var group = String(row && row.group || '').trim();
+    if (!group || seen.has(group)) return out;
+    var terms = [], termKeys = new Set();
+    (Array.isArray(row.terms) ? row.terms : []).forEach(function (raw) {
+      var term = String(raw || '').trim(), key = term.toLowerCase();
+      if (term && !termKeys.has(key)) { termKeys.add(key); terms.push(term); }
+    });
+    if (terms.length) {
+      seen.add(group);
+      out.push({ group: group, terms: terms, exclusive: !!row.exclusive, expected: !!row.expected });
+    }
+    return out;
+  }, []);
+}
+
+function scheduleSetDefinitionSave() {
+  var captured = captureCurrentFolderStateSave();
+  debouncedSaveFolderState(function () { writeCapturedFolderState(captured); });
+}
+
 function sanitizeFolderState(data) {
   var src = data || {};
   var stats = src.stats || {};
@@ -241,6 +264,8 @@ function sanitizeFolderState(data) {
   mediaFilterFlags = Array.from(new Set(mediaFilterFlags));
   return {
     version: FOLDER_STATE_VERSION,
+    set_training_focus: typeof src.set_training_focus === 'string' ? src.set_training_focus.trim().slice(0, 240) : null,
+    set_variables: normalizeSetVariables(src.set_variables),
     stats: {
       requiredPhrase: String(stats.requiredPhrase || ''),
       phrases: String(stats.phrases || ''),
@@ -530,6 +555,8 @@ function snapshotFolderStateFromDom() {
   // Add new fields here as needed
   return sanitizeFolderState({
     stats: stats,
+    set_training_focus: state.setTrainingFocus,
+    set_variables: state.setVariables,
     primer: primer,
     reviewedKeys: reviewedKeys,
     caption_assist_candidates: captionAssistSavedCandidatesByMedia,
@@ -576,6 +603,8 @@ function applyFolderStateToDom(folderState) {
   // IMPORTANT: If you add new fields to the folder state, you MUST handle them here
   // so they are restored to both the global state and the UI. This function must apply ALL fields.
   var clean = sanitizeFolderState(folderState);
+  state.setTrainingFocus = clean.set_training_focus;
+  state.setVariables = clean.set_variables;
   requirementGroupAliasOverrides = Object.assign({}, clean.primer.keyAliases);
   captionAssistSavedCandidatesByMedia = Object.assign({}, clean.caption_assist_candidates);
   singleItemTagAssistReset();

@@ -8,3 +8,5 @@ Accepted reference: mockup A (consolidated workspace). The modal and application
 4. Verify real browser rendering at normal zoom, scope, field persistence, narrow width, specialist handoffs, running operations, no duplicate IDs, no DOM relocation, no startup requests.
 
 Phase 1 is staged first. Subsequent phases require regression coverage before merge. No production inference or GPU queue changes.
+
+Phase 2: Set-owned fields `set_training_focus` and `set_variables` round-trip via existing folder state. Historical scoped QA receipts are retained; only a single unique prior nonempty focus can seed the new field. Conflicting prior intent is displayed for human resolution. Missing coverage is advisory; the prototype's >25% missing threshold applies only to variables explicitly marked expected on most media. Counts use grouped assignments, not caption substrings. Balance phrases use caption OR tag matching. No automatic correction or inference.

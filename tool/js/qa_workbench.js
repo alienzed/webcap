@@ -434,7 +434,7 @@
       if (!saved) return;
       // Restore the Set's saved intent on first entry, but never override a focus
       // deliberately chosen in this session (including an intentionally empty one).
-      if (!qaWorkbenchState.focusExplicitlyEdited && !focus && saved.trainingFocus) {
+      if (state.setTrainingFocus == null && !qaWorkbenchState.focusExplicitlyEdited && !focus && saved.trainingFocus) {
         qaWorkbenchState.trainingFocus = String(saved.trainingFocus);
       }
       var focusMatches = saved.trainingFocus === qaWorkbenchState.trainingFocus;
@@ -2912,6 +2912,13 @@
     var scopeKey = qaBuildScopeKey(items);
     var folderChanged = !!qaWorkbenchState.folderKey && qaWorkbenchState.folderKey !== folderKey;
     var scopeChanged = !!qaWorkbenchState.scopeKey && qaWorkbenchState.scopeKey !== scopeKey;
+    if (state.setTrainingFocus != null) {
+      qaWorkbenchState.trainingFocus = state.setTrainingFocus;
+      qaWorkbenchState.focusExplicitlyEdited = true;
+    } else if (folderChanged) {
+      qaWorkbenchState.trainingFocus = '';
+      qaWorkbenchState.focusExplicitlyEdited = false;
+    }
     var inputSignature = qaBuildDeepScanSignature(items);
     var inputsChanged = !!qaWorkbenchState.deepScanInputSignature
       && qaWorkbenchState.deepScanInputSignature !== inputSignature;
@@ -2927,8 +2934,6 @@
       if (folderChanged) qaWorkbenchState.conceptQuery = '';
     }
     if (folderChanged) {
-      qaWorkbenchState.trainingFocus = '';
-      qaWorkbenchState.focusExplicitlyEdited = false;
       qaWorkbenchState.parentFocusSet = undefined;
       qaWorkbenchState.returnTrainingFiles = null;
       qaWorkbenchState.returnFindingId = '';
@@ -4345,12 +4350,7 @@
     if (action === 'save-focus') {
       var focusInput = document.getElementById('qa-training-focus-input');
       if (!focusInput) throw new Error('QA training focus input is missing.');
-      var nextFocus = qaNormalizeLabel(focusInput.value).slice(0, 240);
-      if (nextFocus !== qaWorkbenchState.trainingFocus && qaWorkbenchState.deepScanSessionActive) {
-        qaInvalidateDeepScanSession('Deep QA stopped because the training focus changed.');
-      }
-      qaWorkbenchState.trainingFocus = nextFocus;
-      qaWorkbenchState.focusExplicitlyEdited = true;
+      setQaTrainingFocus(focusInput.value);
       renderQaWorkbench();
     }
   }
@@ -4387,8 +4387,33 @@
     });
   }
 
+  function setQaTrainingFocus(value) {
+    var nextFocus = qaNormalizeLabel(value).slice(0, 240);
+    if (nextFocus !== qaWorkbenchState.trainingFocus && qaWorkbenchState.deepScanSessionActive) {
+      qaInvalidateDeepScanSession('Deep QA stopped because the training focus changed.');
+    }
+    state.setTrainingFocus = nextFocus;
+    qaWorkbenchState.trainingFocus = nextFocus;
+    qaWorkbenchState.focusExplicitlyEdited = true;
+    scheduleSetDefinitionSave();
+    return nextFocus;
+  }
+
   function getQaTrainingFocus() {
-    return qaWorkbenchState.trainingFocus;
+    if (state.setTrainingFocus != null) return state.setTrainingFocus;
+    return qaWorkbenchState.folderKey === String(state.folder || '') ? qaWorkbenchState.trainingFocus : '';
+  }
+
+  function loadLegacySetTrainingFocus() {
+    var folder = String(state.folder || '');
+    if (state.setTrainingFocus != null) return Promise.resolve([]);
+    return qaRequestJson('/fs/qa/review?definition=1&folder=' + encodeURIComponent(folder)).then(function (payload) {
+      if (String(state.folder || '') !== folder || state.setTrainingFocus != null) return [];
+      var candidates = payload.trainingFocusCandidates;
+      if (!Array.isArray(candidates)) throw new Error('Set training focus migration response is invalid.');
+      if (candidates.length === 1) setQaTrainingFocus(candidates[0]);
+      return candidates;
+    });
   }
 
   function getQaTrainingItemsForAssistant() {
@@ -4429,6 +4454,8 @@
   window.wireQaWorkbench = wireQaWorkbench;
   window.returnToQaWorkbenchFromFocusSet = returnToQaWorkbenchFromFocusSet;
   window.getQaTrainingFocus = getQaTrainingFocus;
+  window.setQaTrainingFocus = setQaTrainingFocus;
+  window.loadLegacySetTrainingFocus = loadLegacySetTrainingFocus;
   window.getQaTrainingItemsForAssistant = getQaTrainingItemsForAssistant;
   window.qaInputsUpdated = qaInputsUpdated;
   window.qaStartFocusReview = qaStartFocusReview;

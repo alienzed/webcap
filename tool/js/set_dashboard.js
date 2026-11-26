@@ -7,6 +7,8 @@
   var openedFolder = '';
   var returnFocus = null;
   var distributionParent = null;
+  var focusMigrationFolder = '';
+  var focusMigrationStatus = '';
 
   function el(id) { return document.getElementById(id); }
 
@@ -93,6 +95,7 @@
 
   function renderDistribution(s) {
     var root = el('set-dashboard-distribution');
+    var sources = [];
     var existing = new Map(Array.from(root.children).map(function (row) { return [row.dataset.phrase, row]; }));
     s.balances.forEach(function (phrase) {
       var files = [], captionCount = 0, tagCount = 0;
@@ -126,6 +129,7 @@
       var button = row.lastElementChild;
       button.textContent = files.length + ' / ' + s.visibleTotal;
       button.title = captionCount + ' captions · ' + tagCount + ' tags · ' + files.length + ' either';
+      sources.push(phrase + ': ' + button.title);
       button.setAttribute('aria-label', phrase + ': ' + button.title + '. Inspect matching media');
       button.disabled = !files.length;
       button.onclick = function () { inspectDistribution(files, phrase); };
@@ -134,6 +138,147 @@
       if (root.children[s.balances.indexOf(phrase)] !== row) root.insertBefore(row, root.children[s.balances.indexOf(phrase)] || null);
     });
     existing.forEach(function (row) { row.remove(); });
+    el('set-dashboard-distribution-sources').textContent = sources.join('\n');
+  }
+
+  function variableCoverage(variable, items) {
+    var rows = variable.terms.map(function (term) { return { label: term, files: [] }; });
+    var neither = [], multiple = [];
+    items.forEach(function (item) {
+      var assigned = new Set(getChecklistAssignedTagsForMediaKey(item.key, variable.group).map(function (term) {
+        return String(term).trim().toLowerCase();
+      }));
+      var matches = 0;
+      rows.forEach(function (row) {
+        if (assigned.has(row.label.toLowerCase())) { row.files.push(item.fileName); matches++; }
+      });
+      if (!matches) neither.push(item.fileName);
+      if (matches > 1) multiple.push(item.fileName);
+    });
+    if (variable.exclusive) rows.push({ label: 'Multiple exclusive terms', files: multiple });
+    rows.push({ label: 'None of the selected terms', files: neither });
+    return { rows: rows, neither: neither.length, multiple: multiple.length };
+  }
+
+  function variableRow(host, label, files, total, group) {
+    var row = document.createElement('div');
+    row.className = 'set-dashboard-dist-row';
+    var title = document.createElement('span');
+    title.textContent = label;
+    var bar = document.createElement('span');
+    bar.className = 'set-dashboard-progress-track';
+    var fill = document.createElement('span');
+    fill.className = 'set-dashboard-progress-fill';
+    fill.style.width = (total ? files.length * 100 / total : 0) + '%';
+    bar.appendChild(fill);
+    var count = document.createElement('button');
+    count.type = 'button';
+    count.className = 'set-dashboard-dist-count';
+    count.textContent = files.length + ' / ' + total;
+    count.disabled = !files.length;
+    count.setAttribute('aria-label', group + ' · ' + label + ': inspect ' + files.length + ' media');
+    count.onclick = function () { inspectDistribution(files, group + ' · ' + label); };
+    row.append(title, bar, count);
+    host.appendChild(row);
+  }
+
+  function renderVariables(s) {
+    var host = el('set-dashboard-variables');
+    var variables = state.setVariables || [];
+    setHidden(el('set-dashboard-variable-empty'), !!variables.length);
+    // This view has no editable controls; keep the configuration form separate.
+    host.replaceChildren();
+    variables.forEach(function (variable) {
+      var section = document.createElement('section');
+      section.className = 'set-dashboard-variable-card';
+      var title = document.createElement('h5');
+      title.textContent = variable.group;
+      section.appendChild(title);
+      var kind = document.createElement('div');
+      kind.className = 'set-dashboard-distribution-note';
+      kind.textContent = (variable.exclusive ? 'Mutually exclusive' : 'May coexist') + (variable.expected ? ' · Expected on most media' : '');
+      section.appendChild(kind);
+      var result = variableCoverage(variable, s.visibleItems);
+      result.rows.forEach(function (row) { variableRow(section, row.label, row.files, s.visibleTotal, variable.group); });
+      var warnings = [];
+      // Advisory heuristic from the approved prototype; individual absence is valid.
+      if (variable.expected && s.visibleTotal && result.neither / s.visibleTotal > .25) warnings.push(Math.round(result.neither * 100 / s.visibleTotal) + '% without selected terms');
+      if (variable.exclusive && result.multiple) warnings.push(result.multiple + ' media with multiple exclusive terms');
+      if (warnings.length) {
+        var notice = document.createElement('div');
+        notice.className = 'set-dashboard-warning';
+        notice.textContent = warnings.join(' · ');
+        section.appendChild(notice);
+      }
+      host.appendChild(section);
+    });
+  }
+
+  function makeVariableCheckbox(label, checked, type, value) {
+    var wrapper = document.createElement('label');
+    var input = document.createElement('input');
+    input.type = 'checkbox'; input.checked = checked; input.dataset.variableType = type;
+    if (value !== undefined) input.value = value;
+    wrapper.append(input, document.createTextNode(' ' + label));
+    return wrapper;
+  }
+
+  function openVariableEditor() {
+    var host = el('set-dashboard-variable-groups');
+    host.replaceChildren();
+    var saved = new Map((state.setVariables || []).map(function (row) { return [row.group, row]; }));
+    var groups = Array.from(new Set(checklistItems.concat(Array.from(saved.keys()))));
+    groups.forEach(function (group) {
+      var row = saved.get(group) || { terms: [], exclusive: false, expected: false };
+      var field = document.createElement('details');
+      field.className = 'set-dashboard-variable-group';
+      field.dataset.group = group;
+      var summary = document.createElement('summary');
+      summary.textContent = group;
+      field.appendChild(summary);
+      field.open = saved.has(group);
+      var terms = Array.from(new Set(getChecklistKeywordTermsForRequirement(group).concat(row.terms)));
+      terms.forEach(function (term) {
+        field.appendChild(makeVariableCheckbox(term, row.terms.includes(term), 'term', term));
+      });
+      var options = document.createElement('div');
+      options.className = 'set-dashboard-variable-options';
+      options.append(makeVariableCheckbox('Mutually exclusive', row.exclusive, 'exclusive'), makeVariableCheckbox('Expected on most media', row.expected, 'expected'));
+      field.appendChild(options);
+      host.appendChild(field);
+    });
+    setHidden(el('set-dashboard-variable-editor'), false);
+  }
+
+  function applyVariableEditor() {
+    var rows = Array.from(el('set-dashboard-variable-groups').children).map(function (field) {
+      return {
+        group: field.dataset.group,
+        terms: Array.from(field.querySelectorAll('[data-variable-type="term"]:checked')).map(function (input) { return input.value; }),
+        exclusive: field.querySelector('[data-variable-type="exclusive"]').checked,
+        expected: field.querySelector('[data-variable-type="expected"]').checked
+      };
+    });
+    state.setVariables = normalizeSetVariables(rows);
+    scheduleSetDefinitionSave();
+    setHidden(el('set-dashboard-variable-editor'), true);
+    renderStage();
+  }
+
+  function renderDefinition(s) {
+    var input = el('set-dashboard-training-focus');
+    var value = window.getQaTrainingFocus();
+    if (document.activeElement !== input) input.value = value;
+    var missing = [];
+    if (!input.value.trim()) missing.push('Training focus');
+    if (!s.phrase) missing.push('Required key phrase');
+    var definition = el('set-dashboard-definition-status');
+    definition.textContent = missing.length ? missing.join(' and ') + ' missing' : '';
+    setHidden(definition, !missing.length);
+    input.classList.toggle('set-dashboard-missing', !input.value.trim());
+    el('stats-required-phrase').classList.toggle('set-dashboard-missing', !s.phrase);
+    el('set-dashboard-focus-migration').textContent = focusMigrationStatus;
+    setHidden(el('set-dashboard-focus-migration'), !focusMigrationStatus);
   }
 
   function renderStage() {
@@ -154,10 +299,7 @@
     el('set-dashboard-tags-count').textContent = annotationPercent === null ? '—' : annotationPercent + '%';
     el('set-dashboard-captions-count').textContent = s.captions + ' / ' + s.total;
     if (selected !== 'analyze') return;
-    var definition = el('set-dashboard-definition-status');
-    definition.textContent = s.phrase ? '' : 'Required key phrase missing';
-    setHidden(definition, !!s.phrase);
-    el('stats-required-phrase').classList.toggle('set-dashboard-missing', !s.phrase);
+    renderDefinition(s);
     el('set-dashboard-template-preview').textContent = String(statsGetPrimerOptionsFromDom().template || '');
     if (!window.isSetIntelligenceOpen()) window.openSetIntelligence();
     var tagsStatus = el('set-dashboard-tags-status');
@@ -180,10 +322,12 @@
     el('set-dashboard-curate').disabled = !s.visibleTotal;
     el('set-dashboard-secondary').disabled = !s.visibleCaptions;
     renderDistribution(s);
+    renderVariables(s);
   }
 
   function openDashboard(preferredStage) {
     if (!isSetFolderPath(state.folder) || !Array.isArray(state.items) || !state.items.length) return;
+    if (openedFolder !== String(state.folder || '')) focusMigrationStatus = '';
     openedFolder = String(state.folder || '');
     returnFocus = document.activeElement;
     selected = stages.indexOf(preferredStage) !== -1 ? preferredStage : 'analyze';
@@ -191,6 +335,21 @@
     open = true;
     setHidden(el('set-dashboard-modal'), false);
     renderStage();
+    if (focusMigrationFolder !== openedFolder && state.setTrainingFocus == null) {
+      focusMigrationFolder = openedFolder;
+      focusMigrationStatus = '';
+      var folder = openedFolder;
+      window.loadLegacySetTrainingFocus().then(function (candidates) {
+        if (String(state.folder || '') !== folder) return;
+        focusMigrationStatus = candidates.length > 1 ? 'Previous QA reviews used different training focuses. Set your intended focus here.' : '';
+        if (open) renderStage();
+      }).catch(function (err) {
+        reportConsoleError('Set Definition · training focus', err);
+        if (String(state.folder || '') !== folder) return;
+        focusMigrationStatus = 'Previous training focus could not be checked. You can still set it here.';
+        if (open) renderStage();
+      });
+    }
     var active = document.querySelector('[data-set-dashboard-tab="' + selected + '"]');
     if (active) active.focus();
   }
@@ -198,6 +357,7 @@
   function closeDashboard() {
     if (!open) return;
     open = false;
+    setHidden(el('set-dashboard-variable-editor'), true);
     if (window.isSetIntelligenceOpen()) window.closeSetIntelligence();
     setHidden(el('set-dashboard-modal'), true);
     var target = returnFocus;
@@ -212,6 +372,15 @@
       throw new Error('Set Dashboard UI is incomplete.');
     }
     launcher.addEventListener('click', openDashboard);
+    el('set-dashboard-training-focus').addEventListener('input', function () { if (open) renderDefinition(snapshot()); });
+    el('set-dashboard-training-focus').addEventListener('change', function () {
+      window.setQaTrainingFocus(el('set-dashboard-training-focus').value);
+      focusMigrationStatus = '';
+      renderStage();
+    });
+    el('set-dashboard-configure-variables').onclick = openVariableEditor;
+    el('set-dashboard-variable-apply').onclick = applyVariableEditor;
+    el('set-dashboard-variable-cancel').onclick = function () { setHidden(el('set-dashboard-variable-editor'), true); };
     var destinations = {
       'set-dashboard-tags-primary': 'annotation', 'set-dashboard-tags-groups': 'groups',
       'set-dashboard-tags-guided': 'guided', 'set-dashboard-primary': 'caption',

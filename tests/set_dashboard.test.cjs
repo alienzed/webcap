@@ -13,7 +13,7 @@ function dashboard(options = {}) {
     if (elements[id]) return elements[id];
     const classes = new Set(id.startsWith('set-dashboard-') && !['set-dashboard-tags-guided', 'set-dashboard-tags-groups'].includes(id) ? ['hidden'] : []);
     return elements[id] = {
-      id, textContent: '', value: '', isConnected: true, open: false, style: {}, children: [],
+      id, textContent: '', value: '', isConnected: true, open: false, style: {}, children: [], replaceChildren() { this.children = []; },
       removeAttribute(name) { delete elements[id + ':' + name]; },
       classList: {
         toggle(name, enabled) { if (enabled) classes.add(name); else classes.delete(name); },
@@ -43,7 +43,7 @@ function dashboard(options = {}) {
   element('stats-required-phrase').value = options.phrase || '';
   element('stats-phrases').value = '';
   const folder = 'Sets/Test';
-  const state = { folder, items: options.items || [{ key: 'a', fileName: 'a.png', hasCaption: false, caption: '', metadata: {} }] };
+  const state = { folder, setTrainingFocus: '', setVariables: [], items: options.items || [{ key: 'a', fileName: 'a.png', hasCaption: false, caption: '', metadata: {} }] };
   const actions = [];
   let sightOpen = false;
   const context = {
@@ -51,6 +51,8 @@ function dashboard(options = {}) {
     statsGetPrimerOptionsFromDom: () => ({ template: 'example template' }),
     window: {
       addEventListener() {},
+      getQaTrainingFocus: () => state.setTrainingFocus,
+      setQaTrainingFocus: value => { state.setTrainingFocus = value; },
       isSetIntelligenceOpen: () => sightOpen,
       openSetIntelligence: () => { sightOpen = true; actions.push('prepare'); },
       closeSetIntelligence: () => { sightOpen = false; actions.push('hide-prepare'); }
@@ -99,7 +101,7 @@ test('preparation is the default and preserves direct specialist handoffs', () =
 });
 test('missing guidance warns without blocking captioning or curation', () => {
   const app = dashboard();
-  assert.equal(app.elements['set-dashboard-definition-status'].textContent, 'Required key phrase missing');
+  assert.equal(app.elements['set-dashboard-definition-status'].textContent, 'Training focus and Required key phrase missing');
   assert.equal(app.elements['set-dashboard-primary'].disabled, false);
   assert.equal(app.elements['set-dashboard-curate'].disabled, false);
 });

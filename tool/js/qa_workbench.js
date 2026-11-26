@@ -16,6 +16,20 @@
     captioning: 'Vocabulary or caption patterns likely to matter in training.'
   };
 
+  var qaDashboardHost = false;
+  var qaReturnToDashboard = false;
+  var curateDashboardOrigin = '';
+
+  function qaActiveRoot() {
+    return document.getElementById(qaDashboardHost ? 'set-dashboard-qa-workbench' : 'qa-workbench');
+  }
+
+  function qaLeaveDashboardForInspection() {
+    if (!qaDashboardHost) return;
+    qaReturnToDashboard = true;
+    window.closeSetDashboard();
+  }
+
   var qaInteractiveRefreshCount = 0;
   var qaInteractiveRefreshWaiters = [];
 
@@ -1359,7 +1373,7 @@
       qaWorkbenchState.conceptStatus = 'Concept check · ' + session.index + '/' + session.items.length + ' examined';
       qaPublishConceptActivity(session, 'Reviewing batch');
       // Polling must not replace the recommendation browser while the user is reading it.
-      var progress = document.querySelector('#qa-workbench .qa-recommendation-status, #qa-workbench .qa-deep-scan-note');
+      var progress = qaActiveRoot().querySelector('.qa-recommendation-status, .qa-deep-scan-note');
       if (progress) progress.textContent = qaWorkbenchState.conceptStatus;
       return qaRequestJson('/fs/qa/concept-check', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1570,8 +1584,8 @@
     // The progressive run owns its own item chain. An annotation edit never
     // starts a second concurrent scan or silently changes its captured inputs.
     if (
-      normalizeWorkspaceSurface(workspaceState.surface) === 'reviewOutput' &&
-      reviewWorkspaceState.detailTab === 'qa'
+      qaDashboardHost || (normalizeWorkspaceSurface(workspaceState.surface) === 'reviewOutput' &&
+      reviewWorkspaceState.detailTab === 'qa')
     ) {
       renderQaWorkbench();
     }
@@ -2204,6 +2218,10 @@
   }
 
   function qaOpenUtility(tab) {
+    if (qaDashboardHost) {
+      window.closeSetDashboard();
+      setWorkspaceSurface('reviewOutput');
+    }
     setReviewDetailTab(tab);
   }
 
@@ -2285,7 +2303,7 @@
 
   function qaRenderOverview(container, items, health) {
     qaRenderHeader(container, 'Quality Assurance', qaFileCountText(items.length) + ' in current training selection', 'overview');
-    qaRenderTrainingFocus(container);
+    if (!qaDashboardHost) qaRenderTrainingFocus(container);
 
     var recommendations = qaGetRecommendations();
     var undisposed = recommendations.filter(function (finding) { return !qaWorkbenchState.dispositions[finding.id]; });
@@ -3578,7 +3596,7 @@
     qaCorrectionCursor.index = (Math.max(0, index) + offset + entries.length) % entries.length;
     qaCorrectionCursor.key = entries[qaCorrectionCursor.index].item.key;
     renderQaWorkbench();
-    var card = document.querySelector('#qa-workbench .qa-correction-card');
+    var card = qaActiveRoot().querySelector('.qa-correction-card');
     if (card) card.focus({preventScroll:true});
   }
 
@@ -3943,9 +3961,8 @@
   }
 
   function renderQaWorkbench(force) {
-    if (normalizeWorkspaceSurface(workspaceState.surface) !== 'reviewOutput') return;
-    if (reviewWorkspaceState.detailTab !== 'qa') return;
-    var root = document.getElementById('qa-workbench');
+    if (!qaDashboardHost && (normalizeWorkspaceSurface(workspaceState.surface) !== 'reviewOutput' || reviewWorkspaceState.detailTab !== 'qa')) return;
+    var root = qaActiveRoot();
     if (!root) throw new Error('QA workbench root is missing.');
     var currentItems = qaGetTrainingItems();
     // Prune/Duplicate utilities run only when explicitly opened; QA reads ready results.
@@ -4021,6 +4038,7 @@
     qaWorkbenchState.parentFocusSet = qaCloneFocusSet(state.focusSet);
     qaWorkbenchState.returnFindingId = String(findingId || '');
     qaWorkbenchState.statusMessage = '';
+    qaLeaveDashboardForInspection();
     selectByFileName(clean[0], clean, source || 'Quality Assurance', 'qa', { preserveMediaFilters: true });
   }
 
@@ -4053,6 +4071,7 @@
     }
     // Other QA findings are not full caption responses; those still use
     // Caption Assist's normal per-item Sight/Director path.
+    qaLeaveDashboardForInspection();
     activateFocusSet(clean, source || 'Quality Assurance', 'qa');
     selectPathMedia(target).then(function () {
       startFocusedReview(target.key);
@@ -4071,6 +4090,7 @@
       if (item && item.fileName) byName[item.fileName] = item;
     });
     var evidence = qaBuildDeepScanItems(selected.map(function (name) { return byName[name]; }).filter(Boolean));
+    if (qaDashboardHost) window.closeSetDashboard();
     window.openQaFindingAssistant({
       folder: String(state.folder || ''),
       trainingFocus: qaWorkbenchState.trainingFocus,
@@ -4139,6 +4159,7 @@
     qaWorkbenchState.parentFocusSet = qaCloneFocusSet(state.focusSet);
     qaWorkbenchState.returnFindingId = finding.id;
     qaWorkbenchState.statusMessage = '';
+    qaLeaveDashboardForInspection();
     activateFocusSet(finding.files, 'QA · ' + finding.title, 'qa');
     openMediaGridSurface();
   }
@@ -4172,6 +4193,13 @@
     renderFileList(ui.filterEl.value);
     pruneCandidatesScopeChanged();
     duplicateCandidatesScopeChanged();
+    if (qaReturnToDashboard && !returnToCurate) {
+      qaReturnToDashboard = false;
+      setWorkspaceSurface('default');
+      window.openSetDashboard('review');
+      return;
+    }
+    qaReturnToDashboard = false;
     setWorkspaceWorkflowMode('review');
     setWorkspaceSurface('reviewOutput');
     renderQaWorkbench(true);
@@ -4179,6 +4207,12 @@
 
   function qaHandleAction(action, value) {
     if (action === 'qa-curate-start') {
+      if (qaDashboardHost) {
+        curateDashboardOrigin = 'review';
+        window.closeSetDashboard();
+        setWorkspaceSurface('reviewOutput');
+        setReviewDetailTab('qa');
+      }
       try {
         startQaCuration(qaBuildCurateItems(qaGetTrainingItems()),
           qaWorkbenchState.trainingFocus, qaBuildDeepScanSignature(qaGetTrainingItems()));
@@ -4356,8 +4390,9 @@
   }
 
   function wireQaWorkbench() {
-    var root = document.getElementById('qa-workbench');
-    if (!root) throw new Error('QA workbench root is missing.');
+    ['qa-workbench', 'set-dashboard-qa-workbench'].forEach(function (id) {
+    var root = document.getElementById(id);
+    if (!root) throw new Error('QA workbench root is missing: ' + id);
     root.addEventListener('click', function (event) {
       var button = event.target.closest('[data-qa-action]');
       if (!button || !root.contains(button)) return;
@@ -4384,6 +4419,7 @@
         event.preventDefault();
         qaHandleAction('save-focus', '');
       }
+    });
     });
   }
 
@@ -4424,12 +4460,27 @@
     var detail = event && event.detail ? event.detail : {};
     if (String(detail.folder || '') !== String(state.folder || '')) return;
     qaWorkbenchState.externalAnalysisAttemptKey = '';
-    if (normalizeWorkspaceSurface(workspaceState.surface) !== 'reviewOutput') return;
-    if (reviewWorkspaceState.detailTab !== 'qa') return;
+    if (!qaDashboardHost && (normalizeWorkspaceSurface(workspaceState.surface) !== 'reviewOutput' || reviewWorkspaceState.detailTab !== 'qa')) return;
     renderQaWorkbench(true);
   });
 
-  window.qaStartCurationFromDashboard = function () { qaHandleAction('qa-curate-start', ''); };
+  window.showQaInSetDashboard = function () {
+    if (qaDashboardHost) return;
+    document.getElementById('qa-workbench').replaceChildren();
+    qaDashboardHost = true;
+    if (qaWorkbenchState.view === 'curate') qaWorkbenchState.view = 'overview';
+    renderQaWorkbench(true);
+  };
+  window.hideQaInSetDashboard = function () {
+    if (!qaDashboardHost) return;
+    qaDashboardHost = false;
+    document.getElementById('set-dashboard-qa-workbench').replaceChildren();
+    renderQaWorkbench();
+  };
+  window.qaStartCurationFromDashboard = function (origin) {
+    curateDashboardOrigin = origin;
+    qaHandleAction('qa-curate-start', '');
+  };
   window.qaCurrentCurationEvidence = function(fileNames) {
     var wanted = new Set(fileNames || []);
     var items = (state.items || []).filter(function(item) {
@@ -4448,7 +4499,17 @@
   window.qaInspectCurationItem = qaInspectCurationItem;
   window.qaUseCuratedSelectionForTraining = qaUseCuratedSelectionForTraining;
   window.qaShowCuration = function () { qaWorkbenchState.view = 'curate'; renderQaWorkbench(); };
-  window.qaShowOverviewFromCuration = function () { qaWorkbenchState.view = 'overview'; renderQaWorkbench(); };
+  window.qaShowOverviewFromCuration = function () {
+    qaWorkbenchState.view = 'overview';
+    if (curateDashboardOrigin) {
+      var origin = curateDashboardOrigin;
+      curateDashboardOrigin = '';
+      setWorkspaceSurface('default');
+      window.openSetDashboard(origin);
+      return;
+    }
+    renderQaWorkbench();
+  };
   window.renderQaWorkbench = renderQaWorkbench;
   window.refreshQaWorkbench = function () { renderQaWorkbench(true); };
   window.wireQaWorkbench = wireQaWorkbench;

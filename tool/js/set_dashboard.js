@@ -65,7 +65,7 @@
       setWorkspaceSurface('reviewOutput');
       if (destination === 'curate') {
         setReviewDetailTab('qa');
-        return window.qaStartCurationFromDashboard();
+        return window.qaStartCurationFromDashboard('analyze');
       }
       return setReviewDetailTab(destination);
     }
@@ -335,6 +335,7 @@
     open = true;
     setHidden(el('set-dashboard-modal'), false);
     renderStage();
+    if (selected === 'review') window.showQaInSetDashboard();
     if (focusMigrationFolder !== openedFolder && state.setTrainingFocus == null) {
       focusMigrationFolder = openedFolder;
       focusMigrationStatus = '';
@@ -359,6 +360,7 @@
     open = false;
     setHidden(el('set-dashboard-variable-editor'), true);
     if (window.isSetIntelligenceOpen()) window.closeSetIntelligence();
+    window.hideQaInSetDashboard();
     setHidden(el('set-dashboard-modal'), true);
     var target = returnFocus;
     returnFocus = null;
@@ -384,7 +386,7 @@
     var destinations = {
       'set-dashboard-tags-primary': 'annotation', 'set-dashboard-tags-groups': 'groups',
       'set-dashboard-tags-guided': 'guided', 'set-dashboard-primary': 'caption',
-      'set-dashboard-secondary': 'captions', 'set-dashboard-review-qa': 'qa',
+      'set-dashboard-secondary': 'captions',
       'set-dashboard-curate': 'curate', 'set-dashboard-review-captions': 'captions',
       'set-dashboard-review-report': 'report', 'set-dashboard-review-metadata': 'metadata',
       'set-dashboard-review-prune': 'prune', 'set-dashboard-review-duplicates': 'duplicates'
@@ -405,8 +407,11 @@
     });
     document.querySelectorAll('[data-set-dashboard-tab]').forEach(function (button) {
       button.addEventListener('click', function () {
+        var previous = selected;
         selected = button.getAttribute('data-set-dashboard-tab');
+        if (previous === 'review' && selected !== 'review') window.hideQaInSetDashboard();
         renderStage();
+        if (selected === 'review' && previous !== 'review') window.showQaInSetDashboard();
       });
       button.addEventListener('keydown', function (event) {
         var index = stages.indexOf(button.getAttribute('data-set-dashboard-tab'));

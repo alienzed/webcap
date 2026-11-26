@@ -52,6 +52,8 @@ function dashboard(options = {}) {
     window: {
       addEventListener() {},
       getQaTrainingFocus: () => state.setTrainingFocus,
+      showQaInSetDashboard: () => actions.push('embedded-qa'),
+      hideQaInSetDashboard: () => {},
       setQaTrainingFocus: value => { state.setTrainingFocus = value; },
       isSetIntelligenceOpen: () => sightOpen,
       openSetIntelligence: () => { sightOpen = true; actions.push('prepare'); },
@@ -109,11 +111,11 @@ test('QA and reports tabs do not launch inference', () => {
   const app = dashboard();
   app.listeners['tab-review:click']();
   assert.equal(app.selected(), 'review');
-  assert.deepEqual(app.actions, ['prepare', 'hide-prepare']);
+  assert.deepEqual(app.actions, ['prepare', 'hide-prepare', 'embedded-qa']);
   app.listeners['tab-reports:click']();
   assert.equal(app.selected(), 'reports');
   app.elements['set-dashboard-review-report'].onclick();
-  assert.deepEqual(app.actions, ['prepare', 'hide-prepare', 'workspace', 'qa']);
+  assert.deepEqual(app.actions, ['prepare', 'hide-prepare', 'embedded-qa', 'workspace', 'qa']);
 });
 test('authoritative fields and Sight remain unique and footer follows scrolling content', () => {
   const html = fs.readFileSync(path.join(__dirname, '../tool/tool.html'), 'utf8');

@@ -642,3 +642,6 @@
 .set-dashboard-variable-group input { width:18px; height:18px; }
 .set-dashboard-variable-options { padding-top:8px; margin-top:8px; border-top:1px solid var(--border); }
 #set-dashboard-distribution-sources { white-space:pre-line; }
+
+#set-dashboard-review { display:block; }
+#set-dashboard-qa-workbench { max-width:100%; }

@@ -9,7 +9,7 @@
     analysis: null, balanceGroups: new Set(), overriddenGroups: new Set(), conceptRoles: new Map(), availableGroups: [],
     status: '', ignored: 0, draftStale: false, initialChoices: [],
     sourceEvidence: {}, sourceFiles: [], drift: null, reviewReturn: null, galleryGroup: '', previousDraft: null,
-    pairGroups: [], captionConcepts: [], progressLabel: ''
+    pairGroups: [], captionConcepts: [], progressLabel: '', heatmapMode: 'curated', heatmapOpen: false, galleryIds: []
   };
 
   var draftWrite = Promise.resolve();
@@ -663,7 +663,6 @@
       trainButton.disabled = !selectedCount();
       trainButton.textContent = 'Use for Training · ' + selectedCount() + ' items';
     }
-    var byId = new Map(session.eligible.map(function (c) {return [c.id,c];}));
     var counts = new Map(session.eligible.map(function (c) {return [c.id,0];}));
     session.rows.forEach(function(row) {
       if (!selected.has(row.fileName)) return;
@@ -681,26 +680,65 @@
       node.title = 'Weighted learning-evidence change: ' + delta.toFixed(2) +
         ' percentage points (not predicted training quality)';
     });
-    root.querySelectorAll('[data-curation-pair-left]').forEach(function(cell) {
-      var left = cell.getAttribute('data-curation-pair-left');
-      var right = cell.getAttribute('data-curation-pair-right');
-      var total = Number(cell.getAttribute('data-curation-pair-total'));
-      var selectedPair = session.rows.filter(function(row) {
-        return selected.has(row.fileName) && row.ids.includes(left) && row.ids.includes(right);
-      }).length;
-      cell.textContent = selectedPair + ' / ' + total;
-    });
-    root.querySelectorAll('[data-curation-concept]').forEach(function(node) {
-      var id = node.getAttribute('data-curation-concept'), concept = byId.get(id);
-      if (!concept) throw new Error('QA curation concept meter is stale: ' + id);
-      var count = counts.get(id)||0;
-      var total = node.querySelector('[data-curation-concept-count]');
-      var meter = node.querySelector('progress');
-      total.textContent = count + '/' + concept.count;
-      meter.value = Math.round(100 * count / Math.max(1, concept.count));
-    });
+    updateBalanceVisuals(root, selected);
   }
 
+
+  // Counts use the frozen inventory, including supporting/ignored tags. Tags can
+  // overlap; neither a chart nor a heatmap implies mutually exclusive categories.
+  function updateBalanceVisuals(root, selected) {
+    var counts = new Map(), pairCounts = new Map();
+    var pairs = pairEvidence(session.rows,primaryConcepts(session.eligible,session.balanceGroups),session.pairGroups);
+    session.rows.forEach(function(row) {
+      if (!selected.has(row.fileName)) return;
+      row.inventoryIds.forEach(function(id) { counts.set(id,(counts.get(id)||0)+1); });
+      (pairs.byFile.get(row.fileName)||[]).forEach(function(id) {
+        pairCounts.set(id,(pairCounts.get(id)||0)+1);
+      });
+    });
+    root.querySelectorAll('[data-curation-distribution]').forEach(function(node) {
+      var id = node.getAttribute('data-curation-distribution');
+      var original = Number(node.getAttribute('data-curation-original'));
+      var count = counts.get(id)||0;
+      node.querySelector('[data-curation-concept-count]').textContent = count + ' / ' + original;
+      var fill = node.querySelector('.qa-curation-distribution-fill');
+      fill.style.width = (original ? 100*count/original : 0) + '%';
+      var inspect = node.querySelector('button');
+      inspect.setAttribute('aria-label',inspect.dataset.label + ': ' + count + ' retained of ' +
+        original + ' original. Inspect images.');
+    });
+    var maximum = Math.max(1,...pairs.available.values());
+    root.querySelectorAll('[data-curation-pair-left]').forEach(function(cell) {
+      var key = cell.dataset.curationPairLeft + '|' + cell.dataset.curationPairRight;
+      var total = pairs.available.get(key)||0, retained = pairCounts.get(key)||0;
+      var value = session.heatmapMode === 'original' ? total :
+        session.heatmapMode === 'reduction' ? total-retained : retained;
+      var control = cell.querySelector('button');
+      control.textContent = total ? String(value) : '–';
+      control.disabled = !total;
+      control.style.setProperty('--qa-heat-level',String(value/maximum));
+      control.dataset.empty = total ? 'false' : 'true';
+      control.dataset.zero = total && !value ? 'true' : 'false';
+      control.dataset.mode = session.heatmapMode;
+      control.title = control.dataset.label + ': ' + total + ' original, ' + retained +
+        ' retained, ' + (total-retained) + ' pruned';
+      control.setAttribute('aria-label',control.title + '. Inspect images.');
+    });
+    var scale = root.querySelector('[data-curation-heat-scale]');
+    if (scale) scale.textContent = '0–' + maximum + ' images · – = absent from original';
+  }
+
+  function inspectDistribution(host, group, ids) {
+    session.galleryGroup = group;
+    session.galleryIds = ids.slice();
+    session.filter = 'all';
+    session.limit = 72;
+    renderQaCuration(host,session.signature);
+    var target = host.querySelector('.qa-curation-gallery-filters');
+    if (target && target.scrollIntoView) target.scrollIntoView({block:'start'});
+    var clear = host.querySelector('[data-curation-clear-drilldown]');
+    if (clear) clear.focus();
+  }
 
   function openCurateReview(host, startGroup, startCursor) {
     var group = startGroup || 'selected', cursor = Number(startCursor) || 0, autoNext = false;
@@ -966,177 +1004,6 @@
       host.appendChild(driftDetails);
     }
 
-    var priorities = element('section', 'qa-curation-priorities');
-    priorities.appendChild(element('h3', '', 'Balance priorities'));
-    priorities.appendChild(element('p', 'qa-curation-helper',
-      'Director suggestions are preselected. Check groups whose variations should drive the shortlist; other Director concepts remain supporting variation.'));
-    var groupChoices = element('div', 'qa-curation-balance-groups');
-    session.availableGroups.forEach(function (group) {
-      var label = element('label', 'qa-curation-balance-choice');
-      var toggle = element('input');
-      toggle.type = 'checkbox';
-      toggle.checked = session.balanceGroups.has(group);
-      toggle.setAttribute('data-curation-balance-group', group);
-      toggle.setAttribute('aria-label', 'Prioritize balancing ' + group);
-      toggle.onchange = function () {
-        session.overriddenGroups.add(group);
-        session.concepts.filter(function (concept) { return concept.group === group; }).forEach(function (concept) {
-          session.conceptRoles.delete(concept.id);
-        });
-        if (toggle.checked) session.balanceGroups.add(group);
-        else session.balanceGroups.delete(group);
-        applyBalancePriorities();
-        saveDraft();
-        renderQaCuration(host, session.signature);
-      };
-      label.appendChild(toggle);
-      label.appendChild(element('span', '', group));
-      groupChoices.appendChild(label);
-    });
-    priorities.appendChild(groupChoices);
-    var conceptDetails = element('details', 'qa-curation-concept-controls');
-    var conceptSummary = element('summary', '', 'Fine-tune concepts · Balance / Supporting / Ignore');
-    conceptDetails.appendChild(conceptSummary);
-    var conceptChoices = element('div', 'qa-curation-concept-choices');
-    var eligibleById = new Map(session.eligible.map(function (feature) { return [feature.id, feature]; }));
-    session.concepts.forEach(function (concept) {
-      var current = eligibleById.get(concept.id);
-      var control = element('label', 'qa-curation-concept-choice');
-      var name = element('span', '', concept.group + ' · ' + concept.term + ' (' + concept.count + ')');
-      var select = element('select');
-      [['core', 'Balance'], ['supporting', 'Supporting'], ['ignore', 'Ignore']].forEach(function (choice) {
-        var option = element('option', '', choice[1]);
-        option.value = choice[0];
-        select.appendChild(option);
-      });
-      select.value = current ? current.role : 'ignore';
-      select.setAttribute('aria-label', 'Priority for ' + concept.group + ': ' + concept.term);
-      select.onchange = function () {
-        session.conceptRoles.set(concept.id, select.value);
-        applyBalancePriorities();
-        saveDraft();
-        renderQaCuration(host, session.signature);
-        var nextDetails = host.querySelector('.qa-curation-concept-controls');
-        if (nextDetails) nextDetails.open = true;
-      };
-      control.appendChild(name);
-      control.appendChild(select);
-      conceptChoices.appendChild(control);
-    });
-    conceptDetails.appendChild(conceptChoices);
-    priorities.appendChild(conceptDetails);
-    if (session.preset === 'custom') priorities.appendChild(element('p', 'qa-curation-helper',
-      'Manual image selections are preserved. Choose Lean, Balanced, or Broad to apply the new ranking.'));
-    host.appendChild(priorities);
-    var coreFeatures = session.eligible.filter(function(c) {
-      return session.balanceGroups.has(c.group);
-    }).sort(function(a,b) {
-      return a.group.localeCompare(b.group) || a.label.localeCompare(b.label);
-    });
-    coreFeatures = coreFeatures.filter(function(c) {return c.role === 'core';});
-    if (!coreFeatures.length) host.appendChild(element('p','qa-curation-helper',
-      session.captionConcepts.length
-        ? 'No tag balance priorities selected. Captioned visual distinctions still influence the shortlist.'
-        : 'Select at least one priority group to calculate an automatic shortlist. Your manual choices are preserved.'));
-    host.appendChild(element('h3','', 'Priority-group representation · Selected / Available'));
-    host.appendChild(element('p','qa-curation-helper',
-      'Every prioritized concept is shown. This is observed coverage, not an equal-quota target or predicted LoRA accuracy.'));
-    var conceptGrid = element('div', 'qa-curation-concepts');
-    coreFeatures.forEach(function (feature) {
-      var cell = element('div','qa-curation-concept');
-      cell.setAttribute('data-curation-concept',feature.id);
-      var heading = element('div','qa-curation-concept-heading');
-      heading.appendChild(element('span','', feature.group + ' · ' + feature.label +
-        (feature.role === 'core' ? ' (priority)' : ' (supporting)')));
-      var total = element('strong','','0/' + feature.count);
-      total.setAttribute('data-curation-concept-count','');
-      heading.appendChild(total);
-      cell.appendChild(heading);
-      var meter = element('progress','qa-curation-concept-progress');
-      meter.max=100;meter.value=0;
-      meter.setAttribute('aria-label',feature.label + ' evidence coverage');
-      cell.appendChild(meter);
-      conceptGrid.appendChild(cell);
-    });
-    host.appendChild(conceptGrid);
-    var matrixGroups = session.pairGroups.slice();
-    var availablePairGroups = prioritizedTaggedGroups();
-    if (matrixGroups.length === 2) {
-      var approvedIds = new Set(session.concepts.filter(function(c) {
-        return c.source === 'tag';
-      }).map(function(c) {return c.id;}));
-      var first = session.eligible.filter(function(c) {
-        return c.group === matrixGroups[0] && c.role === 'core' && approvedIds.has(c.id);
-      });
-      var second = session.eligible.filter(function(c) {
-        return c.group === matrixGroups[1] && c.role === 'core' && approvedIds.has(c.id);
-      });
-      if (first.length && second.length) {
-        var matrix = element('details','qa-curation-pair');
-        matrix.appendChild(element('summary','',
-          'Cross-category coverage · '+matrixGroups[0]+' × '+matrixGroups[1]));
-        matrix.appendChild(element('p','qa-curation-helper',
-          'These two groups drive the small pairwise ranking bonus. Observed tags only; no equal quotas.'));
-        var selectors = element('div','qa-curation-pair-axes');
-        [0,1].forEach(function(index) {
-          var label = element('label','',index === 0 ? 'First group' : 'Second group');
-          var select = element('select','qa-curation-pair-select');
-          select.setAttribute('data-curation-pair-axis',String(index));
-          availablePairGroups.forEach(function(group) {
-            var option = element('option','',group);
-            option.value = group;
-            select.appendChild(option);
-          });
-          select.value = matrixGroups[index];
-          select.onchange = function() {
-            var next = session.pairGroups.slice();
-            var old = next[index];
-            next[index] = select.value;
-            if (next[index] === next[1-index]) next[1-index] = old; // Swap, never silently collapse to one axis.
-            session.pairGroups = next;
-            applyBalancePriorities();
-            saveDraft();
-            renderQaCuration(host,session.signature);
-            var details = host.querySelector('.qa-curation-pair');
-            if (details) details.open = true;
-          };
-          label.appendChild(select);
-          selectors.appendChild(label);
-        });
-        matrix.appendChild(selectors);
-        var scroll = element('div','qa-curation-pair-scroll');
-        var table = element('table','qa-curation-pair-table');
-        var head = element('tr');
-        head.appendChild(element('th','',matrixGroups[0]+' / '+matrixGroups[1]));
-        second.forEach(function(c) {head.appendChild(element('th','',c.label));});
-        table.appendChild(head);
-        first.forEach(function(left) {
-          var line = element('tr');
-          line.appendChild(element('th','',left.label));
-          second.forEach(function(right) {
-            var found = 0, selected = 0;
-            session.rows.forEach(function(row) {
-              if (row.ids.includes(left.id) && row.ids.includes(right.id)) {
-                found += 1;
-                if (session.choices.has(row.fileName)) selected += 1;
-              }
-            });
-            var pairCell = element('td','',selected+' / '+found);
-            pairCell.setAttribute('data-curation-pair-left',left.id);
-            pairCell.setAttribute('data-curation-pair-right',right.id);
-            pairCell.setAttribute('data-curation-pair-total',String(found));
-            line.appendChild(pairCell);
-          });
-          table.appendChild(line);
-        });
-        scroll.appendChild(table);
-        matrix.appendChild(scroll);
-        host.appendChild(matrix);
-      }
-    }
-    if (session.ignored) host.appendChild(element('p', 'qa-curation-helper',
-      session.ignored + ' uncommon or redundant labels fell outside the Director inventory; they were not scored.'));
-
     var presets = element('div', 'qa-curation-controls qa-curation-presets');
     [['lean','Lean'], ['balanced','Standard'], ['broad','Broad']].forEach(function (entry) {
       var name = entry[0], label = entry[1], size = session.sizes[name];
@@ -1158,6 +1025,203 @@
     host.appendChild(presets);
     host.appendChild(element('p','qa-curation-helper',
       'Lean / Standard / Broad follow diminishing returns in selected tag groups and captioned visual distinctions. Supporting tags cannot extend a preset; native resolution breaks near-ties.'));
+
+    var priorities = element('section', 'qa-curation-priorities');
+    priorities.appendChild(element('h3', '', 'Distribution'));
+    priorities.appendChild(element('p', 'qa-curation-helper',
+      'Balance checked groups; select a bar to inspect its images. Tags may overlap.'));
+    var legend = element('div','qa-curation-distribution-legend');
+    ['Retained','Pruned'].forEach(function(label) {
+      var item = element('span','qa-curation-legend-item',label);
+      item.prepend(element('i','qa-curation-legend-swatch ' +
+        (label === 'Retained' ? 'is-retained' : 'is-pruned')));
+      legend.appendChild(item);
+    });
+    priorities.appendChild(legend);
+    var conceptGrid = element('div','qa-curation-concepts');
+    var eligibleById = new Map(session.eligible.map(function(feature) {return [feature.id,feature];}));
+    var maximum = Math.max(1,...session.concepts.map(function(c) {return c.count;}));
+    var groups = session.availableGroups.slice().sort(function(a,b) {
+      return Number(session.balanceGroups.has(b))-Number(session.balanceGroups.has(a)) || a.localeCompare(b);
+    });
+    groups.forEach(function(group) {
+      var panel = element('section','qa-curation-distribution-group');
+      panel.setAttribute('data-curation-distribution-group',group);
+      var label = element('label','qa-curation-balance-choice');
+      var toggle = element('input');
+      toggle.type = 'checkbox';
+      toggle.checked = session.balanceGroups.has(group);
+      toggle.setAttribute('data-curation-balance-group',group);
+      toggle.setAttribute('aria-label','Prioritize balancing ' + group);
+      toggle.onchange = function() {
+        session.overriddenGroups.add(group);
+        session.concepts.filter(function(c) {return c.group === group;}).forEach(function(c) {
+          session.conceptRoles.delete(c.id);
+        });
+        if (toggle.checked) session.balanceGroups.add(group);
+        else session.balanceGroups.delete(group);
+        applyBalancePriorities();
+        saveDraft();
+        renderQaCuration(host,session.signature);
+      };
+      label.appendChild(toggle);
+      label.appendChild(element('span','',group));
+      panel.appendChild(label);
+      session.concepts.filter(function(c) {return c.group === group;})
+        .sort(function(a,b) {return b.count-a.count || a.term.localeCompare(b.term);})
+        .forEach(function(concept) {
+          var current = eligibleById.get(concept.id);
+          var row = element('div','qa-curation-concept-choice qa-curation-distribution-row');
+          row.setAttribute('data-curation-distribution',concept.id);
+          row.setAttribute('data-curation-original',String(concept.count));
+          if (current && current.role === 'core' && session.balanceGroups.has(group))
+            row.setAttribute('data-curation-concept',concept.id);
+          var inspect = button('',function() {inspectDistribution(host,group,[concept.id]);},
+            'qa-curation-distribution-inspect');
+          inspect.dataset.label = group + ' · ' + concept.term;
+          var heading = element('span','qa-curation-distribution-heading');
+          heading.appendChild(element('span','',concept.term));
+          var count = element('strong','','0 / '+concept.count);
+          count.setAttribute('data-curation-concept-count','');
+          heading.appendChild(count);
+          inspect.appendChild(heading);
+          var track = element('span','qa-curation-distribution-track');
+          var original = element('span','qa-curation-distribution-original');
+          original.style.width = (100*concept.count/maximum)+'%';
+          original.appendChild(element('span','qa-curation-distribution-fill'));
+          track.appendChild(original);
+          inspect.appendChild(track);
+          row.appendChild(inspect);
+          var select = element('select');
+          [['core','Balance'],['supporting','Supporting'],['ignore','Ignore']].forEach(function(choice) {
+            var option = element('option','',choice[1]);
+            option.value = choice[0];
+            select.appendChild(option);
+          });
+          select.value = current ? current.role : 'ignore';
+          select.setAttribute('aria-label','Priority for '+group+': '+concept.term);
+          select.onchange = function() {
+            session.conceptRoles.set(concept.id,select.value);
+            applyBalancePriorities();
+            saveDraft();
+            renderQaCuration(host,session.signature);
+            var next = Array.from(host.querySelectorAll('[data-curation-distribution]')).find(function(item) {
+              return item.dataset.curationDistribution === concept.id;
+            });
+            if (next) next.querySelector('select').focus();
+          };
+          row.appendChild(select);
+          panel.appendChild(row);
+        });
+      conceptGrid.appendChild(panel);
+    });
+    priorities.appendChild(conceptGrid);
+    if (!primaryConcepts(session.eligible,session.balanceGroups).length) priorities.appendChild(
+      element('p','qa-curation-helper',session.captionConcepts.length
+        ? 'No tag balance priorities selected. Captioned visual distinctions still influence the shortlist.'
+        : 'Select at least one priority group to calculate an automatic shortlist. Your manual choices are preserved.'));
+    if (session.preset === 'custom') priorities.appendChild(element('p','qa-curation-helper',
+      'Manual image selections are preserved. Choose Lean, Standard, or Broad to apply the new ranking.'));
+    host.appendChild(priorities);
+    var matrixGroups = session.pairGroups.slice();
+    var availablePairGroups = prioritizedTaggedGroups();
+    if (matrixGroups.length === 2) {
+      var approvedIds = new Set(session.concepts.filter(function(c) {
+        return c.source === 'tag';
+      }).map(function(c) {return c.id;}));
+      var first = session.eligible.filter(function(c) {
+        return c.group === matrixGroups[0] && c.role === 'core' && approvedIds.has(c.id);
+      });
+      var second = session.eligible.filter(function(c) {
+        return c.group === matrixGroups[1] && c.role === 'core' && approvedIds.has(c.id);
+      });
+      if (first.length && second.length) {
+        var matrix = element('details','qa-curation-pair');
+        matrix.open = session.heatmapOpen;
+        matrix.ontoggle = function() { session.heatmapOpen = matrix.open; };
+        matrix.appendChild(element('summary','',
+          'Combined variation · '+matrixGroups[0]+' × '+matrixGroups[1]));
+        matrix.appendChild(element('p','qa-curation-helper',
+          'The selected axes also drive the existing pairwise ranking bonus. Click a combination to inspect images.'));
+        var selectors = element('div','qa-curation-pair-axes');
+        [0,1].forEach(function(index) {
+          var label = element('label','',index === 0 ? 'First group' : 'Second group');
+          var select = element('select','qa-curation-pair-select');
+          select.setAttribute('data-curation-pair-axis',String(index));
+          availablePairGroups.forEach(function(group) {
+            var option = element('option','',group);
+            option.value = group;
+            select.appendChild(option);
+          });
+          select.value = matrixGroups[index];
+          select.onchange = function() {
+            var next = session.pairGroups.slice();
+            var old = next[index];
+            next[index] = select.value;
+            if (next[index] === next[1-index]) next[1-index] = old; // Swap, never silently collapse to one axis.
+            session.pairGroups = next;
+            session.heatmapOpen = true;
+            applyBalancePriorities();
+            saveDraft();
+            renderQaCuration(host,session.signature);
+          };
+          label.appendChild(select);
+          selectors.appendChild(label);
+        });
+        matrix.appendChild(selectors);
+        var modes = element('div','qa-curation-heat-modes');
+        [['original','Original'],['curated','Curated'],['reduction','Reduction']].forEach(function(entry) {
+          var mode = button(entry[1],function() {
+            session.heatmapMode = entry[0];
+            modes.querySelectorAll('button').forEach(function(item) {
+              item.setAttribute('aria-pressed',String(item.dataset.curationHeatMode === session.heatmapMode));
+            });
+            updateBalanceVisuals(host,currentSelection());
+          });
+          mode.dataset.curationHeatMode = entry[0];
+          mode.setAttribute('aria-pressed',String(session.heatmapMode === entry[0]));
+          modes.appendChild(mode);
+        });
+        matrix.appendChild(modes);
+        var scale = element('p','qa-curation-heat-scale');
+        scale.setAttribute('data-curation-heat-scale','');
+        matrix.appendChild(scale);
+        var scroll = element('div','qa-curation-pair-scroll');
+        var table = element('table','qa-curation-pair-table');
+        var head = element('tr');
+        head.appendChild(element('th','',matrixGroups[0]+' / '+matrixGroups[1]));
+        second.forEach(function(c) {
+          var th = element('th','',c.label);
+          th.scope = 'col';
+          head.appendChild(th);
+        });
+        table.appendChild(head);
+        first.forEach(function(left) {
+          var line = element('tr');
+          var th = element('th','',left.label);
+          th.scope = 'row';
+          line.appendChild(th);
+          second.forEach(function(right) {
+            var pairCell = element('td');
+            pairCell.setAttribute('data-curation-pair-left',left.id);
+            pairCell.setAttribute('data-curation-pair-right',right.id);
+            var inspect = button('',function() {
+              session.heatmapOpen = true;
+              inspectDistribution(host,'',[left.id,right.id]);
+            },'qa-curation-heat-cell');
+            inspect.dataset.label = left.label+' × '+right.label;
+            pairCell.appendChild(inspect);
+            line.appendChild(pairCell);
+          });
+          table.appendChild(line);
+        });
+        scroll.appendChild(table);
+        matrix.appendChild(scroll);
+        host.appendChild(matrix);
+      }
+    }
+    if (session.ignored) host.appendChild(element('p', 'qa-curation-helper',
+      session.ignored + ' uncommon or redundant labels fell outside the Director inventory; they were not scored.'));
 
     host.appendChild(button('Reset selections to original recommendation', function() {
       session.choices = new Set(session.initialChoices);
@@ -1201,6 +1265,7 @@
     groupSelect.value = session.galleryGroup || '';
     groupSelect.onchange = function() {
       session.galleryGroup = groupSelect.value;
+      session.galleryIds = [];
       session.limit = 72;
       renderQaCuration(host,session.signature);
     };
@@ -1208,17 +1273,33 @@
     galleryFilters.appendChild(groupLabel);
     galleryFilters.appendChild(element('span','qa-curation-helper',
       'Default order is recommendation rank, not alphabetical or random.'));
+    if (session.galleryIds.length) {
+      var labels = session.galleryIds.map(function(id) {
+        var concept = session.concepts.find(function(c) {return c.id === id;});
+        return concept ? concept.group+' · '+concept.term : id;
+      });
+      var clear = button('Clear · '+labels.join(' × '),function() {
+        session.galleryIds = [];
+        session.galleryGroup = '';
+        renderQaCuration(host,session.signature);
+      });
+      clear.setAttribute('data-curation-clear-drilldown','');
+      galleryFilters.appendChild(clear);
+    }
     host.appendChild(galleryFilters);
     var images = session.filter === 'selected'
       ? session.order.filter(function (file) { return session.choices.has(file); })
       : session.order;
-    if (session.galleryGroup) {
-      var ids = new Set(session.eligible.filter(function(feature) {
+    if (session.galleryIds.length || session.galleryGroup) {
+      var ids = new Set(session.concepts.filter(function(feature) {
         return feature.group === session.galleryGroup;
       }).map(function(feature) {return feature.id;}));
+      var inventoryByFile = new Map(session.rows.map(function(row) {return [row.fileName,row];}));
       images = images.filter(function(file) {
-        var row = session.rows.find(function(item) {return item.fileName === file;});
-        return row && row.ids.some(function(id) {return ids.has(id);});
+        var row = inventoryByFile.get(file);
+        return session.galleryIds.length
+          ? session.galleryIds.every(function(id) {return row.inventoryIds.includes(id);})
+          : row.inventoryIds.some(function(id) {return ids.has(id);});
       });
     }
     var grid = element('div', 'qa-curation-grid');
@@ -1525,6 +1606,9 @@
     session.jobId = '';
     session.draftStale = false;
     session.galleryGroup = '';
+    session.galleryIds = [];
+    session.heatmapMode = 'curated';
+    session.heatmapOpen = false;
     window.qaShowCuration();
     renderCurrent();
     if (reanalyze) {

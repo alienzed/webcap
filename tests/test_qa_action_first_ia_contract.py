@@ -72,11 +72,15 @@ def test_deep_qa_corrections_are_action_first_and_caption_assist_remains_separat
     assert "Reject this finding" in corrections
     assert "qaCorrectionPlan(item, [finding])" in corrections
     assert "Tag changes" in corrections
-    assert "Apply proposed corrections" in corrections
+    assert "Apply corrections" in corrections
+    assert "Accept caption & edit" in corrections
+    assert "draft.text = editor.value" in corrections
+    assert "individual.tagActions.concat" not in corrections
     assert "Inspect in Single Item" in corrections
     assert "captionVisionValidatePatch(caption, patch)" in qa
     assert "captionVisionApplyPatchToText(caption, validated, -1)" in qa
-    assert "saveCaptionDirect(folder, item.fileName, plan.captionAfter" in apply
+    assert "saveCaptionDirect(folder, item.fileName, captionAfter" in apply
+    assert "var captionAfter = draft ? draft.text : plan.captionAfter" in apply
     assert "assignChecklistTagToMediaKey(key, action.group, action.term)" in apply
     assert "unassignChecklistTagFromMediaKey(key, action.group, action.term)" in apply
     assert "qaSetView('corrections')" in qa

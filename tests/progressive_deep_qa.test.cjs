@@ -476,7 +476,7 @@ test('correction plans never apply patches for a different file', () => {
 test('rejecting a single correction persists only that finding, without changing annotations', async () => {
   const item = { key:'a', fileName:'a.jpg', caption:'Original.' };
   const sandbox = {
-    qaCorrectionCursor:{busy:false},
+    qaCorrectionCursor:{busy:false,drafts:{}},
     qaWorkbenchState:{dispositions:{}},
     state:{folder:'set', items:[item]},
     qaFocusReviewCandidateFindings: () => [{id:'first'}, {id:'second'}],
@@ -498,7 +498,7 @@ test('rejecting a single correction persists only that finding, without changing
 test('failed correction rejection restores pending state', async () => {
   const item = { key:'a', fileName:'a.jpg' };
   const sandbox = {
-    qaCorrectionCursor:{busy:false},
+    qaCorrectionCursor:{busy:false,drafts:{}},
     qaWorkbenchState:{dispositions:{}},
     state:{folder:'set', items:[item]},
     qaFocusReviewCandidateFindings: () => [{id:'first'}],
@@ -514,4 +514,44 @@ test('failed correction rejection restores pending state', async () => {
   assert.equal(sandbox.qaWorkbenchState.dispositions['first|a.jpg'],undefined);
   assert.match(sandbox.status,/disk failure/);
   assert.equal(sandbox.qaCorrectionCursor.busy,false);
+});
+
+test('QA Apply saves the authored caption, preserves existing tag behavior, and clears draft on success', async () => {
+  const item = {key:'a', fileName:'a.jpg', caption:'A red shirt.'};
+  const calls = [];
+  const sandbox = {
+    qaCorrectionCursor:{busy:false,drafts:{a:{before:item.caption,text:'A red striped shirt.'}}},
+    qaWorkbenchState:{}, state:{folder:'set',items:[item]},
+    qaFocusReviewCandidateFindings: () => [],
+    qaCorrectionPlan: () => ({captionBefore:item.caption,captionAfter:'A blue shirt.',hasChanges:true,tagActions:[{action:'add',group:'Pattern',term:'striped'}]}),
+    saveCaptionDirect: async (_folder,_file,text) => { calls.push(text); item.caption=text; },
+    assignChecklistTagToMediaKey: (...args) => { calls.push(args.join('/')); return true; },
+    qaRefreshComputedState() {}, renderQaWorkbench() {}, setStatus() {},
+    reportConsoleError(_source,err) { throw err; }
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(functionSource('qaApplyCorrectionsForItem','renderQaWorkbench')+'\nthis.apply = qaApplyCorrectionsForItem;',sandbox);
+  assert.equal(await sandbox.apply('a'),true);
+  assert.deepEqual(calls,['A red striped shirt.','a/Pattern/striped']);
+  assert.equal(sandbox.qaCorrectionCursor.drafts.a,undefined);
+  assert.equal(sandbox.qaCorrectionCursor.busy,false);
+});
+
+test('QA Apply retains edited draft when caption save fails', async () => {
+  const item = {key:'a',fileName:'a.jpg',caption:'Original.'};
+  const draft = {before:item.caption,text:'Edited.'};
+  const sandbox = {
+    qaCorrectionCursor:{busy:false,drafts:{a:draft}},
+    qaWorkbenchState:{},state:{folder:'set',items:[item]},
+    qaFocusReviewCandidateFindings: () => [],
+    qaCorrectionPlan: () => ({captionBefore:item.caption,captionAfter:'Proposal.',hasChanges:true,tagActions:[]}),
+    saveCaptionDirect: async () => { throw Error('disk failure'); },
+    renderQaWorkbench() {},setStatus() {},reportConsoleError() {}
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(functionSource('qaApplyCorrectionsForItem','renderQaWorkbench')+'\nthis.apply = qaApplyCorrectionsForItem;',sandbox);
+  assert.equal(await sandbox.apply('a'),false);
+  assert.equal(sandbox.qaCorrectionCursor.drafts.a,draft);
+  assert.equal(sandbox.qaCorrectionCursor.busy,false);
+  assert.match(sandbox.qaWorkbenchState.statusMessage,/disk failure/);
 });

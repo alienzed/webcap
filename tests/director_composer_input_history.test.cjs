@@ -134,7 +134,7 @@ test('changing the visible conversation starts history from its draft slot', () 
   const create = source.slice(source.indexOf('  function newChat(options) {'),
     source.indexOf('  function jobRequest(jobId) {'));
   assert.match(create, /inputHistoryIndex = inputHistory.length;/);
-  const remove = source.slice(source.indexOf('  function deleteSession(chatId) {'),
+  const remove = source.slice(source.indexOf('  function removeDeletedSession(chat) {'),
     source.indexOf('  function formatElapsed(ms) {'));
   assert.match(remove, /inputHistoryIndex = inputHistory.length;/);
 });

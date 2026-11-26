@@ -994,3 +994,7 @@
 .qa-correction-finding-changes { width:100%; overflow-wrap:anywhere; line-height:1.5; }
 .qa-correction-finding-changes del { color:#f19b9b; }
 .qa-correction-finding-changes ins { color:#9adead; text-decoration:none; }
+
+.qa-correction-editor { display:block; box-sizing:border-box; width:100%; margin-top:12px; padding:12px; resize:vertical; font:inherit; line-height:1.5; color:var(--text); background:var(--panel-soft); border:1px solid var(--border); border-radius:8px; }
+.qa-correction-edit { margin-top:12px; font-size:16px; }
+.app.shell-revamp .qa-correction-nav button[data-qa-action="move-correction"] { flex:0 0 64px; font-size:24px; }

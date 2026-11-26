@@ -317,4 +317,29 @@ async function generationLibraryBindingTests() {
   assert.equal(env.document.getElementById('generate-create-view').classList.contains('hidden'), false);
 }
 
-(async () => { await sweepTests(); generationNumberInputTests(); await generationLibraryBindingTests(); generateTakeIdentityTests(); generationPreviewExecutionFocusTests(); generationCancelQueuedOwnershipTests(); timingTests(); console.log('Generations regression tests passed.'); })().catch(err => { console.error(err); process.exitCode = 1; });
+function testExactComfyPresetValues() {
+  const env = environment();
+  load('test_generations.js', env, `
+    isTestModelSupported = function () { return true; };
+    selectedCandidateFiles = function () { return ['candidate.safetensors']; };
+    currentTestModelId = function () { return 'krea2'; };
+    prepared = { settings: ['dimensions', 'seed'] };
+    defaultCandidateStrength = 1;
+    candidateStrengths = {};
+    sweepMode = false;
+    window.api = { criteria: testRunCriteria };
+  `);
+  env.document.getElementById('test-generations-prompt').value = '  prompt  ';
+  env.document.getElementById('test-generations-variation-group').value = '';
+  env.document.getElementById('test-generations-seed').value = '42';
+  const dimensions = env.document.getElementById('test-generations-dimensions');
+  for (const value of [' 832 x 1216 (portrait)', ' 832 x 1216  (portrait)', '1024 x 1024 (square)']) {
+    dimensions.value = value;
+    const criteria = JSON.parse(JSON.stringify(env.window.api.criteria()));
+    assert.equal(criteria.settings.dimensions, value, 'ComfyUI preset must survive submission unchanged');
+    assert.equal(criteria.settings.seed, '42');
+    assert.equal(criteria.prompt, 'prompt');
+  }
+}
+
+(async () => { testExactComfyPresetValues(); await sweepTests(); generationNumberInputTests(); await generationLibraryBindingTests(); generateTakeIdentityTests(); generationPreviewExecutionFocusTests(); generationCancelQueuedOwnershipTests(); timingTests(); console.log('Generations regression tests passed.'); })().catch(err => { console.error(err); process.exitCode = 1; });

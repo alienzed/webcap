@@ -156,8 +156,8 @@ test('unattended Director curation creates a real checklist without equal quotas
 
   const chosenBefore = Number(h.root.querySelector('[data-curation-selected]').textContent);
   assert.ok(chosenBefore > 0 && chosenBefore < 95);
-  const coreMeters = () => Array.from(h.root.querySelectorAll('[data-curation-concept] progress'))
-    .map(el => Number(el.value));
+  const coreMeters = () => Array.from(h.root.querySelectorAll('[data-curation-concept] .qa-curation-distribution-fill'))
+    .map(el => parseFloat(el.style.width));
   const metersBefore = coreMeters();
   const initial = h.root.querySelector('.qa-curation-card input[type=checkbox]');
   initial.checked = false;
@@ -355,7 +355,7 @@ test('checking a priority group elevates its eligible terms without a second Dir
   assert.equal(h.root.querySelector('[data-curation-balance-group="Shape"]').checked, true);
   assert.equal(h.root.querySelectorAll('[data-curation-concept]').length, 2,
     'both Director-classified terms in the prioritized Shape group contribute');
-  assert.doesNotMatch(h.root.querySelector('.qa-curation-concepts').textContent,/supporting/);
+  assert.ok(Array.from(h.root.querySelectorAll('[data-curation-concept] select')).every(select=>select.value==='core'));
   let shape = h.root.querySelector('[data-curation-balance-group="Shape"]');
   shape.checked = false;
   shape.dispatchEvent(new h.ctx.window.Event('change', {bubbles:true}));
@@ -364,7 +364,7 @@ test('checking a priority group elevates its eligible terms without a second Dir
   shape.dispatchEvent(new h.ctx.window.Event('change', {bubbles:true}));
   assert.equal(h.root.querySelectorAll('[data-curation-concept]').length, 2,
     'explicit group override retains all terms');
-  assert.doesNotMatch(h.root.querySelector('.qa-curation-concepts').textContent,/supporting/);
+  assert.ok(Array.from(h.root.querySelectorAll('[data-curation-concept] select')).every(select=>select.value==='core'));
 });
 
 test('core-weighted group priority changes deterministic ranking', () => {
@@ -535,6 +535,16 @@ test('chosen tag groups show a pair matrix that tracks local inclusion edits', a
   const cells = () => Array.from(h.root.querySelectorAll('[data-curation-pair-left]'));
   assert.ok(cells().length > 0);
   const before = cells().map(cell=>cell.textContent);
+  const original = h.root.querySelector('[data-curation-heat-mode="original"]');
+  const selectedCount = h.root.querySelector('[data-curation-selected]').textContent;
+  original.click();
+  const originals = cells().map(cell=>cell.textContent);
+  h.root.querySelector('[data-curation-heat-mode="reduction"]').click();
+  assert.ok(cells().some((cell,i)=>cell.textContent !== originals[i]));
+  assert.equal(h.root.querySelector('[data-curation-selected]').textContent,selectedCount);
+  assert.equal(h.calls.submitted.length,1);
+  h.root.querySelector('[data-curation-heat-mode="curated"]').click();
+  assert.deepEqual(cells().map(cell=>cell.textContent),before);
   const selected = h.root.querySelector('.qa-curation-card input[type=checkbox]');
   selected.checked = false;
   selected.dispatchEvent(new h.ctx.window.Event('change',{bubbles:true}));
@@ -542,6 +552,30 @@ test('chosen tag groups show a pair matrix that tracks local inclusion edits', a
   assert.notDeepEqual(after,before,'the displayed pair distribution must update after a checkbox decision');
 });
 
+
+test('distribution charts share a count scale, include non-priority tags and drill down without changing choices', async () => {
+  const h = harness();
+  h.ctx.window.startQaCuration(entries(),'geometry','same-scope');
+  await new Promise(resolve=>setTimeout(resolve,55));
+  const panels = h.root.querySelectorAll('[data-curation-distribution-group]');
+  assert.equal(panels.length,2);
+  const rows = Array.from(h.root.querySelectorAll('[data-curation-distribution]'));
+  assert.equal(rows.length,4);
+  const max = Math.max(...rows.map(row=>Number(row.dataset.curationOriginal)));
+  rows.forEach(row=>{
+    assert.equal(parseFloat(row.querySelector('.qa-curation-distribution-original').style.width),
+      100*Number(row.dataset.curationOriginal)/max);
+  });
+  const chosen = h.root.querySelector('[data-curation-selected]').textContent;
+  const rare = rows.find(row=>row.querySelector('button').dataset.label === 'Shape · rare');
+  rare.querySelector('button').click();
+  assert.ok(h.root.querySelector('[data-curation-clear-drilldown]'));
+  assert.equal(h.root.querySelectorAll('.qa-curation-card').length,15);
+  assert.equal(h.root.querySelector('[data-curation-selected]').textContent,chosen);
+  assert.equal(h.calls.submitted.length,1);
+  h.root.querySelector('[data-curation-clear-drilldown]').click();
+  assert.equal(h.root.querySelector('[data-curation-clear-drilldown]'),null);
+});
 
 test('Director completion uses its submitted concept inventory even if current QA evidence changes', async () => {
   const h = harness(), rows = entries(), live = entries();

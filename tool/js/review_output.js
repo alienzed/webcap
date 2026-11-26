@@ -33,6 +33,7 @@ function activateFocusSet(fileNames, source, reportType) {
 }
 
 function getFocusSetReportLabel(reportType) {
+  if (reportType === 'dashboardDistribution') return 'Distribution & Balance';
   if (reportType === 'qa') return 'Quality Assurance';
   if (reportType === 'review') return 'Review Set';
   if (reportType === 'pruneCandidates') return 'Prune Candidates';
@@ -188,6 +189,10 @@ function rerunFocusSetReport() {
   var focusSet = state && state.focusSet;
   var reportType = String(focusSet && focusSet.reportType || '');
   if (!reportType) return;
+  if (reportType === 'dashboardDistribution') {
+    window.returnToSetDashboardDistribution();
+    return;
+  }
   if (reportType === 'qa') {
     returnToQaWorkbenchFromFocusSet();
     return;

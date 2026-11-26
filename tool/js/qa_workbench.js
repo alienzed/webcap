@@ -4404,6 +4404,7 @@
     renderQaWorkbench(true);
   });
 
+  window.qaStartCurationFromDashboard = function () { qaHandleAction('qa-curate-start', ''); };
   window.qaCurrentCurationEvidence = function(fileNames) {
     var wanted = new Set(fileNames || []);
     var items = (state.items || []).filter(function(item) {

@@ -4547,6 +4547,12 @@
   window.qaInspectCurationItem = qaInspectCurationItem;
   window.qaUseCuratedSelectionForTraining = qaUseCuratedSelectionForTraining;
   window.qaShowCuration = function () { qaWorkbenchState.view = 'curate'; renderQaWorkbench(); };
+  window.qaCurationReturnLabel = function () {
+    return curateDashboardOrigin ? 'Set Dashboard' : 'Quality Assurance';
+  };
+  window.qaFocusReturnLabel = function () {
+    return qaWorkbenchState.returnToCurate ? 'Curate' : 'Quality Assurance';
+  };
   window.qaCurationSurfaceActive = function () {
     return !qaDashboardHost && qaWorkbenchState.view === 'curate' &&
       normalizeWorkspaceSurface(workspaceState.surface) === 'reviewOutput' && reviewWorkspaceState.detailTab === 'qa';

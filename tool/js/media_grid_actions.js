@@ -128,7 +128,7 @@ function renderMediaGridSurfaceHeader() {
   els.meta.title = String(state.folder || 'Root');
   var returnButton = document.getElementById('media-grid-return-to-analysis-btn');
   var reportType = String(state.focusSet && state.focusSet.reportType || '');
-  var returnLabel = reportType === 'qa' ? 'Return to QA' :
+  var returnLabel = reportType === 'qa' ? 'Return to ' + window.qaFocusReturnLabel() :
     reportType === 'dashboardDistribution' ? 'Return to Distribution' : '';
   returnButton.classList.toggle('hidden', !returnLabel);
   returnButton.textContent = returnLabel;

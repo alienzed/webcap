@@ -163,3 +163,27 @@ test('Curate stays visible outside the preparation content, and Grid has an expl
   assert.ok(html.indexOf('id="set-dashboard-curate"') < html.indexOf('id="set-dashboard-stage"'));
   assert.match(html, /id="media-grid-return-to-analysis-btn"/);
 });
+
+test('folder snapshots cannot overwrite later explicit Set edits or cancel another Set', async () => {
+  const folderSource=fs.readFileSync(path.join(__dirname,'../tool/js/folder_state.js'),'utf8');
+  const start=folderSource.indexOf('var folderStatePendingSaves = new Map();');
+  const end=folderSource.indexOf('function captureCurrentFolderStateSave()',start);
+  const saveStart=folderSource.indexOf('async function saveFolderStateForCurrentRoot()');
+  const saveEnd=folderSource.indexOf('\n\nfunction renderMultilineTemplate',saveStart);
+  const writes=[], timers=new Map();
+  let seq=0, folder='Set A', snapshot={focus:'old'};
+  const sandbox={
+    captureCurrentFolderStateSave:()=>({folderPath:folder,snapshot:{...snapshot}}),
+    writeCapturedFolderState:async saved=>{writes.push(saved);return true;},
+    setTimeout:fn=>{timers.set(++seq,fn);return seq;},
+    clearTimeout:id=>timers.delete(id)
+  };
+  vm.runInNewContext(folderSource.slice(start,end)+folderSource.slice(saveStart,saveEnd),sandbox);
+  sandbox.scheduleFolderStateSnapshotSave();
+  folder='Set B';snapshot={focus:'B'};
+  sandbox.scheduleFolderStateSnapshotSave();
+  folder='Set A';snapshot={focus:'new'};
+  await sandbox.saveFolderStateForCurrentRoot();
+  for(const fn of [...timers.values()])fn();
+  assert.deepEqual(writes,[{folderPath:'Set A',snapshot:{focus:'new'}},{folderPath:'Set B',snapshot:{focus:'B'}}]);
+});

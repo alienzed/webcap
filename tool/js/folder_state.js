@@ -328,6 +328,28 @@ function sanitizeFolderState(data) {
  * @returns {Promise<boolean>} - Resolves to true if successful, false otherwise
  */
 var folderStateWriteChains = {};
+// Stats, templates and Set definition share one folder snapshot. A pending
+// older snapshot must not replace a newer explicit edit, or another Set's save.
+var folderStatePendingSaves = new Map();
+
+function cancelPendingFolderStateSave(folderPath) {
+  var timer = folderStatePendingSaves.get(folderPath);
+  if (timer === undefined) return;
+  clearTimeout(timer);
+  folderStatePendingSaves.delete(folderPath);
+}
+
+function scheduleFolderStateSnapshotSave() {
+  var capturedSave = captureCurrentFolderStateSave();
+  if (!capturedSave) return;
+  var folderPath = capturedSave.folderPath;
+  cancelPendingFolderStateSave(folderPath);
+  var timer = setTimeout(function () {
+    folderStatePendingSaves.delete(folderPath);
+    writeCapturedFolderState(capturedSave);
+  }, 600);
+  folderStatePendingSaves.set(folderPath, timer);
+}
 
 function captureCurrentFolderStateSave() {
   var folderPath = String((state && state.folder) || '');
@@ -705,6 +727,7 @@ function applyFolderStateToDom(folderState) {
 async function saveFolderStateForCurrentRoot() {
   var capturedSave = captureCurrentFolderStateSave();
   if (!capturedSave) return false;
+  cancelPendingFolderStateSave(capturedSave.folderPath);
   return writeCapturedFolderState(capturedSave);
 }
 

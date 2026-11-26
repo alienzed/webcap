@@ -1417,7 +1417,7 @@
     if (!host) throw new Error('QA curation requires the QA workbench root.');
     clearNode(host);
     var header = element('div', 'qa-curation-header');
-    header.appendChild(button('← Set Dashboard', function () {
+    header.appendChild(button('← ' + window.qaCurationReturnLabel(), function () {
       if (session.phase === 'analyzing') stopQaCuration();
       window.qaShowOverviewFromCuration();
     }));
@@ -1578,7 +1578,8 @@
 
   function startQaCuration(items, focus, signature, options) {
     var reanalyze = !!(options && options.reanalyze);
-    if (!reanalyze && session.phase === 'ready' && session.folder === String(state.folder || '')) {
+    if (!reanalyze && (session.phase === 'ready' || session.phase === 'analyzing') &&
+        session.folder === String(state.folder || '')) {
       window.qaShowCuration();
       renderCurrent();
       return;
@@ -1703,12 +1704,19 @@
       // instead of becoming balance targets merely because their group is checked.
       var declared = session.concepts.filter(function (concept) { return explicitPriority(concept, intent); });
       var declaredGroups = new Set(declared.map(function (concept) { return concept.group; }));
+      var initialGroups = new Set(session.balanceGroups);
+      var variableGroups = new Set(intent.variables.map(function (variable) {
+        return normalize(variable.group).toLowerCase();
+      }));
       declaredGroups.forEach(function (group) { session.balanceGroups.add(group); });
       var declaredIds = new Set(declared.map(function (concept) { return concept.id; }));
       session.concepts.forEach(function (concept) {
         if (declaredIds.has(concept.id)) session.conceptRoles.set(concept.id, 'core');
         else if (declaredGroups.has(concept.group) &&
+          (variableGroups.has(normalize(concept.group).toLowerCase()) || !initialGroups.has(concept.group)) &&
           (result.coreIds.includes(concept.id) || result.supportingIds.includes(concept.id))) {
+          // A declared variable narrows its group's balance terms. A standalone
+          // phrase adds a priority without demoting an already balanced group.
           session.conceptRoles.set(concept.id, 'supporting');
         }
       });

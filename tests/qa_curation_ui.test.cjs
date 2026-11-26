@@ -57,6 +57,7 @@ function harness(savedDraft = null) {
   dom.window.qaShowCuration = () => {};
   dom.window.qaShowOverviewFromCuration = () => {};
   dom.window.qaCurationSurfaceActive = () => true;
+  dom.window.qaCurationReturnLabel = () => 'Quality Assurance';
   dom.window.reportConsoleError = (name, error) => calls.errors.push(String(error.message || error));
   vm.createContext(ctx);
   vm.runInContext(source, ctx);
@@ -966,4 +967,29 @@ test('older Sight-weighted draft is restored without reinstating Sight in rankin
   assert.equal(restored.calls.draft,legacy); // No implicit rewrite of saved draft.
   assert.equal(restored.root.querySelector('[data-curation-balance-group="Sight · detail"]'),null);
   assert.equal(Number(restored.root.querySelector('[data-curation-selected]').textContent),1);
+});
+
+test('fresh curation uses exact declared variable terms without erasing other group priorities', async () => {
+  const h = harness();
+  h.ctx.window.startQaCuration(entries(), 'geometry', 'same-scope', {
+    intent: {variables:[{group:'Shape',terms:['rare']}],phrases:['rear']}
+  });
+  await new Promise(resolve=>setTimeout(resolve,60));
+  assert.equal(h.calls.errors.length,0);
+  const draft=h.calls.draft;
+  assert.ok(draft);
+  const roles=new Map(draft.conceptRoles);
+  const byTerm=new Map(draft.snapshot.concepts.map(c=>[c.group+':'+c.term,c.id]));
+  assert.equal(roles.get(byTerm.get('Shape:rare')),'core');
+  assert.equal(roles.get(byTerm.get('Shape:common')),'supporting');
+  assert.equal(roles.get(byTerm.get('View:rear')),'core');
+  assert.equal(roles.get(byTerm.get('View:front')),'supporting');
+});
+test('reopening an in-flight curation does not submit a second analysis', async () => {
+  const h=harness();
+  h.ctx.window.startQaCuration(entries(),'geometry','same-scope');
+  h.ctx.window.startQaCuration(entries(),'geometry','same-scope');
+  await new Promise(resolve=>setTimeout(resolve,60));
+  assert.equal(h.calls.submitted.length,1);
+  assert.equal(h.calls.errors.length,0);
 });

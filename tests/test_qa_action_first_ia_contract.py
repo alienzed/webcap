@@ -81,6 +81,7 @@ def test_deep_qa_corrections_are_action_first_and_caption_assist_remains_separat
     assert "captionVisionApplyPatchToText(caption, validated, -1)" in qa
     assert "saveCaptionDirect(folder, item.fileName, captionAfter" in apply
     assert "var captionAfter = draft ? draft.text : plan.captionAfter" in apply
+    assert "return saveMediaAnnotationState(key)" in apply
     assert "assignChecklistTagToMediaKey(key, action.group, action.term)" in apply
     assert "unassignChecklistTagFromMediaKey(key, action.group, action.term)" in apply
     assert "qaSetView('corrections')" in qa

@@ -860,6 +860,33 @@ test('caption batches include every authored caption without new Sight requests'
   assert.ok(h.calls.captionSubmitted.every(batch => !('visionSight' in batch)));
 });
 
+test('Curate retains caption evidence and completes later batches after invalid observations', async () => {
+  const h = harness();
+  const rows = entries();
+  const original = h.ctx.fetch;
+  h.ctx.fetch = async (url, opts) => {
+    if (url.startsWith('/fs/director/job?') && h.calls.pendingKind === 'captions') {
+      const batch = h.calls.captionSubmitted.at(-1);
+      const first = batch.captions[0];
+      return {ok:true,json:async()=>({ok:true,job:{status:'completed',result:{
+        captionObservations:[{fileName:first.fileName,concept:'caption distinction',
+          quote:first.caption}],
+        captionObservationWarnings:h.calls.captionSubmitted.length === 1
+          ? ['Observation 2: filename does not match a supplied caption.'] : []
+      }}})};
+    }
+    return original(url,opts);
+  };
+  h.ctx.window.startQaCuration(rows,'construction','same-scope');
+  await new Promise(resolve => setTimeout(resolve,90));
+  assert.ok(h.calls.captionSubmitted.length > 1);
+  assert.equal(h.calls.errors.length,1);
+  assert.match(h.calls.errors[0],/filename/);
+  assert.match(h.root.textContent,/Partial caption analysis: 1 invalid observations skipped/);
+  assert.equal(h.calls.draft.snapshot.captionConcepts.length,1);
+  assert.equal(h.calls.draft.snapshot.captionConcepts[0].count,h.calls.captionSubmitted.length);
+});
+
 test('caption-only Set can produce a shortlist without inventing balance tags', async () => {
   const h = harness();
   const one = [{fileName:'unique.png',caption:'crossed straps beneath raised arms', groupedTags:[],analysis:{}}];

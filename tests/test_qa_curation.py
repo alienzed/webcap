@@ -147,10 +147,31 @@ def test_caption_curate_contract_is_bounded_and_grounded():
     assert normalize_caption_curation_result(answer, contract["caption_sources"]) == [
         answer["observations"][0], answer["observations"][2]
     ]
-    with pytest.raises(ValueError, match="not supported"):
-        normalize_caption_curation_result({"observations": [
-            {"fileName": "a.png", "concept": "phantom buckle", "quote": "metal buckle"}
-        ]}, contract["caption_sources"])
+    rejected = []
+    mixed = {"observations": [
+        answer["observations"][0],
+        {"fileName": "unknown.png", "concept": "straps", "quote": "crossed straps"},
+        {"fileName": "a.png", "concept": "phantom buckle", "quote": "metal buckle"},
+        {"fileName": "b.png", "concept": "", "quote": "Hands raised"},
+        {"fileName": "b.png", "concept": "raised hands", "quote": ""},
+        None,
+        answer["observations"][2],
+    ]}
+    assert normalize_caption_curation_result(mixed, contract["caption_sources"], rejected) == [
+        answer["observations"][0], answer["observations"][2]
+    ]
+    assert len(rejected) == 5
+    assert "filename" in rejected[0]
+    assert "not supported" in rejected[1]
+    assert "concept" in rejected[2]
+    assert "quote is missing" in rejected[3]
+    assert "observation object" in rejected[4]
+    assert normalize_caption_curation_result({"observations": [mixed["observations"][1]]},
+                                             contract["caption_sources"], []) == []
+    assert normalize_caption_curation_result({"observations": []},
+                                             contract["caption_sources"], []) == []
+    with pytest.raises(ValueError, match="no structured observations"):
+        normalize_caption_curation_result({}, contract["caption_sources"])
     with pytest.raises(ValueError, match="context budget"):
         build_caption_curation_request([{"fileName": "a.png", "caption": "a" * 7900},
                                         {"fileName": "b.png", "caption": "b" * 7900}])

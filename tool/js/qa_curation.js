@@ -1435,10 +1435,10 @@
   }
 
   function analyzeCaptionBatches(items, model, token) {
-    var batches = captionBatches(items), observed = [];
+    var batches = captionBatches(items), observed = [], rejectedCount = 0;
     function step(index) {
       if (token !== session.token) return Promise.resolve(null);
-      if (index >= batches.length) return Promise.resolve(observed);
+      if (index >= batches.length) return Promise.resolve({observations:observed,rejectedCount:rejectedCount});
       session.progressLabel = 'Reading authored captions · batch ' +
         (index+1) + ' / ' + batches.length;
       session.status = session.progressLabel;
@@ -1456,6 +1456,12 @@
         if (!job.result || !Array.isArray(job.result.captionObservations))
           throw new Error('Director did not return validated caption observations.');
         observed.push.apply(observed,job.result.captionObservations);
+        var warnings = job.result.captionObservationWarnings || [];
+        if (warnings.length) {
+          rejectedCount += warnings.length;
+          window.reportConsoleError('QA Curate · Caption batch ' + (index+1),
+            new Error(warnings.join('\n')));
+        }
         return step(index+1);
       });
     }
@@ -1574,8 +1580,9 @@
       coreIds:[], supportingIds:[]});
     priorityJob.then(function(result) {
       if (!result || token !== session.token) return null;
-      return analyzeCaptionBatches(items,model,token).then(function(observations) {
-        return observations === null ? null : {result:result,observations:observations};
+      return analyzeCaptionBatches(items,model,token).then(function(captions) {
+        return captions === null ? null : {result:result,observations:captions.observations,
+          rejectedCount:captions.rejectedCount};
       });
     }).then(function(completed) {
       if (!completed || token !== session.token) return;
@@ -1611,6 +1618,10 @@
         ? 'Analyzed ' + items.length + ' images · ' + session.captionConcepts.length +
           ' captioned visual distinctions identified.'
         : 'Analyzed ' + items.length + ' images · no distinctive caption concepts identified.';
+      if (completed.rejectedCount) {
+        session.status += ' Partial caption analysis: ' + completed.rejectedCount +
+          ' invalid observations skipped (see Console).';
+      }
       session.phase = 'ready';
       session.jobId = '';
       session.previousDraft = null;

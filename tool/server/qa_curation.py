@@ -133,8 +133,9 @@ def build_caption_curation_request(captions, training_focus="", known_concepts=N
         "[TRAINING FOCUS] " + (str(training_focus or "").strip()[:300] or "Not specified") +
         "\n[KNOWN CANONICAL LABELS] " + json.dumps(known, ensure_ascii=False) +
         "\n[CAPTIONS] " + json.dumps(compact, ensure_ascii=False) +
-        "\n[OUTPUT] Return up to 64 observations. Each observation has fileName, "
-        "concept (concise canonical visual concept), quote (exact caption substring)."
+        "\n[OUTPUT] Return up to 64 observations. Each observation has fileName "
+        "(copy exactly from the supplied caption entry), concept (short canonical visual "
+        "concept, 1-100 characters), quote (exact nonempty caption substring)."
     )
     return {
         "operation": "qa_curate_caption", "output": "json", "prompt": prompt,
@@ -154,26 +155,37 @@ def build_caption_curation_request(captions, training_focus="", known_concepts=N
     }
 
 
-def normalize_caption_curation_result(data, captions_by_file):
+def normalize_caption_curation_result(data, captions_by_file, rejected=None):
     import re
     if not isinstance(data, dict) or not isinstance(data.get("observations"), list):
         raise ValueError("Curate caption analysis returned no structured observations.")
-    values = data["observations"]
-    if len(values) > 64:
-        raise ValueError("Curate caption analysis exceeded its observation limit.")
     result, seen = [], set()
-    for entry in values:
+    for index, entry in enumerate(data["observations"], 1):
+        reason = None
         if not isinstance(entry, dict):
-            raise ValueError("Curate caption observation is invalid.")
-        name = str(entry.get("fileName") or "").strip()
-        concept = str(entry.get("concept") or "").strip()
-        quote = str(entry.get("quote") or "").strip()
-        if name not in captions_by_file or not 2 <= len(concept) <= 100 or not quote:
-            raise ValueError("Curate caption observation has an invalid file, concept or quote.")
-        source = re.sub(r"\s+", " ", captions_by_file[name]).casefold()
-        evidence = re.sub(r"\s+", " ", quote).casefold()
-        if evidence not in source:
-            raise ValueError("Curate caption observation is not supported by its source caption: " + name)
+            reason = "expected an observation object"
+        else:
+            name = entry.get("fileName")
+            concept = entry.get("concept")
+            quote = entry.get("quote")
+            name = name.strip() if isinstance(name, str) else ""
+            concept = concept.strip() if isinstance(concept, str) else ""
+            quote = quote.strip() if isinstance(quote, str) else ""
+            if name not in captions_by_file:
+                reason = "filename does not match a supplied caption"
+            elif not 1 <= len(concept) <= 100:
+                reason = "concept is missing or exceeds 100 characters"
+            elif not quote:
+                reason = "supporting quote is missing"
+            else:
+                source = re.sub(r"\s+", " ", captions_by_file[name]).casefold()
+                evidence = re.sub(r"\s+", " ", quote).casefold()
+                if evidence not in source:
+                    reason = "quote is not supported by its source caption"
+        if reason is not None:
+            if rejected is not None:
+                rejected.append(f"Observation {index}: {reason}.")
+            continue
         key = (name, concept.casefold())
         if key not in seen:
             seen.add(key)

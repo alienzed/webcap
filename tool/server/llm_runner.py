@@ -248,11 +248,15 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
         operation = str((frozen_contract or {}).get("operation") or "").strip()
         if operation == "qa_curate_caption":
             from .qa_curation import normalize_caption_curation_result
+            rejected = []
+            observations = normalize_caption_curation_result(
+                llm_result.get("data"),
+                (frozen_contract or {}).get("caption_sources") or {},
+                rejected,
+            )
             return {
-                "captionObservations": normalize_caption_curation_result(
-                    llm_result.get("data"),
-                    (frozen_contract or {}).get("caption_sources") or {},
-                ),
+                "captionObservations": observations,
+                "captionObservationWarnings": rejected,
                 "model": llm_result["model"],
                 "finishReason": llm_result.get("finishReason"),
                 "usage": llm_result.get("usage"),

@@ -83,7 +83,7 @@ test('successful completion hides redundant status while errors and live status 
     el: id => id === 'set-scan-stage' ? stage : status,
     renderSetIntelligence() {}, publishSetIntelligenceActivity() {}
   };
-  const update = vm.runInNewContext(source.slice(from, to) + '\\nsetSetIntelligenceStatus', context);
+  const update = vm.runInNewContext(source.slice(from, to) + '\nsetSetIntelligenceStatus', context);
   update('Set understood', 'Cached Sight is available.', true);
   assert.equal(summary.classes.has('hidden'), true);
   update('Sight', 'Checking item 1');

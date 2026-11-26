@@ -3620,7 +3620,6 @@
   }
 
   function qaRenderCorrections(container, items) {
-    var entries = qaCorrectionItems();
     var folder = String(state.folder || '');
     if (qaCorrectionCursor.folder !== folder) {
       qaCorrectionCursor.folder = folder;
@@ -3628,6 +3627,7 @@
       qaCorrectionCursor.index = 0;
       qaCorrectionCursor.drafts = Object.create(null);
     }
+    var entries = qaCorrectionItems();
     var oldCard = container.querySelector('.qa-correction-card');
     // Keep the target and its editor in place until the explicit mutation finishes.
     if (qaCorrectionCursor.busy && oldCard && oldCard.dataset.folder === folder) {
@@ -3640,7 +3640,8 @@
     var entry = entries[index];
     qaCorrectionCursor.key = entry ? entry.item.key : '';
     var plan = entry ? qaCorrectionPlan(entry.item, entry.findings) : null;
-    var fingerprint = entry ? JSON.stringify([folder, entry.item.key, entry.findings, plan]) : '';
+    var activeDraft = entry && qaCorrectionCursor.drafts[entry.item.key];
+    var fingerprint = entry ? JSON.stringify([folder, entry.item.key, entry.findings, plan, !!(activeDraft && activeDraft.retry)]) : '';
     var subtitle = entries.length + ' pending' + (entry ? ' · Item ' + (index + 1) + ' of ' + entries.length : '');
     // Preserve the active media element and expanded details during live Deep QA refreshes.
     if (oldCard && oldCard.dataset.fingerprint === fingerprint) {
@@ -3731,7 +3732,11 @@
         changes.appendChild(line);
       });
       if (changes.childNodes.length) row.appendChild(changes);
-      if (entry.findings.length > 1) row.appendChild(qaCreateButton('Reject this finding', '', 'reject-correction-finding', finding.id));
+      if (entry.findings.length > 1) {
+        var reject = qaCreateButton('Reject this finding', '', 'reject-correction-finding', finding.id);
+        reject.title = 'Reject this finding; an edited caption remains yours to revise.';
+        row.appendChild(reject);
+      }
       body.appendChild(row);
     });
     var draft = qaCorrectionCursor.drafts[item.key];
@@ -3890,6 +3895,28 @@
       if (folder !== String(state.folder || '') || !state.items.some(function (row) { return row.key === key; })) {
         throw new Error('The Set changed while QA corrections were being applied.');
       }
+      // Explicitly resolve any reviewed findings still applicable after a
+      // manual caption edit (notably deterministic findings).
+      var remaining = qaFocusReviewCandidateFindings(item, true).filter(function (finding) {
+        return findings.some(function (reviewed) { return reviewed.id === finding.id; });
+      });
+      if (!remaining.length) return;
+      var signature = qaCurrentItemSignatureMap([item])[item.fileName];
+      var previous = {};
+      remaining.forEach(function (finding) {
+        var id = finding.id + '|' + item.fileName;
+        previous[id] = qaWorkbenchState.dispositions[id];
+        qaWorkbenchState.dispositions[id] = {status:'dismissed', signature:signature};
+      });
+      return qaSaveReview(true).catch(function (err) {
+        if (String(state.folder || '') === folder) Object.keys(previous).forEach(function (id) {
+          if (previous[id] === undefined) delete qaWorkbenchState.dispositions[id];
+          else qaWorkbenchState.dispositions[id] = previous[id];
+        });
+        throw err;
+      });
+    }).then(function () {
+      if (folder !== String(state.folder || '')) throw new Error('The Set changed while QA corrections were being applied.');
       delete qaCorrectionCursor.drafts[key];
       qaRefreshComputedState(true);
       qaWorkbenchState.statusMessage = 'Applied QA corrections to ' + item.fileName + '.';

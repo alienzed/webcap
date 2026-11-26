@@ -713,6 +713,7 @@
     var panel = el('director-chat-history-panel');
     if (!list || !button || !panel) return;
     list.replaceChildren();
+    el('director-chat-history-delete-all').disabled = state.pending || state.attachmentPending || !state.sessionReady || !state.sessionList.length;
     if (!state.sessionList.length) {
       var empty = document.createElement('p');
       empty.textContent = 'No saved conversations yet.';
@@ -1027,38 +1028,90 @@
     });
   }
 
+  function removeDeletedSession(chat) {
+    state.sessionList = state.sessionList.filter(function (item) { return item.id !== chat.id; });
+    var current = state.sessionByMode[chat.mode];
+    if (!current || current.id !== chat.id) return;
+    state.sessionByMode[chat.mode] = null;
+    state.sessionActiveByMode[chat.mode] = null;
+    state.sessionDirty[chat.mode] = false;
+    state.sceneRead = null;
+    state.requestDiagnostic = null;
+    state.lastStudioIoError = '';
+    state.lastStudioIoRaw = '';
+    el('studio-director-inspect').dataset.newResult = 'false';
+    if (chat.mode === 'chat') {
+      state.messages = [];
+      state.elapsedByAssistantIndex = {};
+      state.metricsByAssistantIndex = {};
+    } else {
+      state.modeMessages.storyboard = [];
+      state.modeElapsedByAssistantIndex.storyboard = {};
+      state.modeMetricsByAssistantIndex.storyboard = {};
+      state.storyboardAttachments = {};
+      state.studioStoryAccess = null;
+      state.studioAccessIndex = null;
+      state.workshop = null;
+      state.workshopProposal = null;
+      state.studioActionIndex = -1;
+      state.studioWorkingDraft = {projects:{},scenes:{},newProject:{},newScene:{},sourceRequest:''};
+      state.studioOperations = [];
+      state.studioWriteIo = [];
+      state.studioReadiness = {checks:[],readHints:[],writeHint:'',writeFields:[],sceneId:''};
+      state.studioSceneProposal = null;
+      state.studioProjectProposal = null;
+      state.studioScenesProposal = null;
+      state.studioScenesReviewsByResponse = {};
+      state.studioBriefProposal = null;
+      if (window.studioDirectorWorkbench) window.studioDirectorWorkbench.resetConversation();
+      el('director-chat-workshop-status').textContent = '';
+    }
+    state.draftByMode[chat.mode] = '';
+    if (state.activeMode === chat.mode) {
+      el('director-chat-input').value = '';
+      inputHistoryIndex = inputHistory.length;
+      inputHistoryDraft = '';
+    }
+  }
+
   function deleteSession(chatId) {
-    if (!state.sessionReady || state.pending) return;
-    var chat = state.sessionList.find(function (item) { return item.id === chatId; });
-    if (!chat || !window.confirm('Permanently delete conversation "' + chat.title + '"?')) return;
+    return deleteSessions(chatId);
+  }
+
+  function deleteAllSessions() {
+    return deleteSessions();
+  }
+
+  function deleteSessions(chatId) {
+    if (!state.sessionReady || state.pending || state.attachmentPending) return;
+    if (chatId && !state.sessionList.some(function (item) { return item.id === chatId; })) return;
+    if (!chatId && !state.sessionList.length) return;
     state.pending = true;
     syncControls();
-    flushSessionSave().then(function () {
-      return requestJson('/fs/director/chats/' + encodeURIComponent(chatId), { method: 'DELETE' });
-    }).then(function () {
-      state.sessionList = state.sessionList.filter(function (item) { return item.id !== chatId; });
-      var current = state.sessionByMode[chat.mode];
-      if (current && current.id === chatId) {
-        state.sessionByMode[chat.mode] = null;
-        state.sessionActiveByMode[chat.mode] = null;
-        if (chat.mode === 'chat') state.messages = [];
-        else {
-          state.modeMessages.storyboard = [];
-          state.storyboardAttachments = {};
-          state.studioStoryAccess = null;
-          state.studioAccessIndex = null;
-          state.workshop = null;
+    var failures = [];
+    var deleted = 0;
+    return flushSessionSave().then(async function () {
+      // Take the full unfiltered list after pending saves have settled.
+      var chats = state.sessionList.filter(function (item) { return !chatId || item.id === chatId; });
+      for (var chat of chats) {
+        try {
+          await requestJson('/fs/director/chats/' + encodeURIComponent(chat.id), { method: 'DELETE' });
+        } catch (error) {
+          failures.push(chat.title + ': ' + String(error.message || error));
+          continue;
         }
-        state.draftByMode[chat.mode] = '';
-        if (state.activeMode === chat.mode) {
-          el('director-chat-input').value = '';
-          inputHistoryIndex = inputHistory.length;
-          inputHistoryDraft = '';
-        }
+        removeDeletedSession(chat);
+        deleted++;
+        renderSessionHistory();
       }
-      renderSessionHistory();
+      if (!chatId && !failures.length) {
+        inputHistory.length = 0;
+        inputHistoryIndex = 0;
+        inputHistoryDraft = '';
+      }
       syncModeUi();
-      showSessionStatus('Conversation deleted', false);
+      if (failures.length) throw new Error('Deleted ' + deleted + ' conversation(s); ' + failures.join('; '));
+      showSessionStatus(chatId ? 'Conversation deleted' : 'All conversations deleted', false);
     }).catch(showSessionFailure).finally(function () {
       state.pending = false;
       syncControls();
@@ -1876,6 +1929,7 @@
     if (clear) clear.disabled = state.pending || (persistentMode(state.activeMode) && !state.sessionReady);
     var history = el('director-chat-history-toggle');
     if (history) history.disabled = state.pending || !state.sessionReady;
+    el('director-chat-history-delete-all').disabled = state.pending || state.attachmentPending || !state.sessionReady || !state.sessionList.length;
     syncStudioFlow();
     resizeStudioComposer();
     if (state.activeMode === 'storyboard' && window.studioDirectorWorkbench) {
@@ -4100,6 +4154,7 @@
     };
     el('director-chat-history-close').onclick = function () {el('director-chat-history-panel').close();};
     el('director-chat-history-search').oninput = renderSessionHistory;
+    el('director-chat-history-delete-all').onclick = deleteAllSessions;
     el('director-chat-history-panel').addEventListener('close',function () {
       el('director-chat-history-toggle').setAttribute('aria-expanded','false');
       el('director-chat-history-toggle').focus();

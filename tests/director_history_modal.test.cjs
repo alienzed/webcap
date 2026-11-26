@@ -69,3 +69,43 @@ test('Chat History renders Rename and Delete side by side without a More menu',(
   assert.match(render,/item\.appendChild\(actions\)/);
   assert.doesNotMatch(render,/document\.createElement\('details'\)|textContent = 'More'/);
 });
+
+for (const scenario of ['single', 'all', 'partial']) test('History deletion: '+scenario, async()=>{
+  const a={id:'a',mode:'chat',title:'First'}, b={id:'b',mode:'storyboard',title:'Second'};
+  const state={sessionReady:true,pending:false,attachmentPending:false,activeMode:'storyboard',
+    sessionList:[a,b],sessionByMode:{chat:a,storyboard:b},sessionActiveByMode:{chat:'a',storyboard:'b'},
+    sessionDirty:{chat:false,storyboard:false},messages:[{content:'old'}],modeMessages:{storyboard:[{content:'old'}]},
+    modeElapsedByAssistantIndex:{},modeMetricsByAssistantIndex:{},draftByMode:{chat:'draft',storyboard:'draft'},
+    studioWriteIo:['old']};
+  const calls=[],errors=[],nodes={};let resets=0;
+  const scope=vm.createContext({state,window:{studioDirectorWorkbench:{resetConversation(){resets++;}}},
+    el:id=>nodes[id] ||= {dataset:{},value:'draft'},
+    inputHistory:['old'],inputHistoryIndex:1,inputHistoryDraft:'draft',
+    syncControls(){},syncModeUi(){},renderSessionHistory(){},showSessionStatus(){},
+    showSessionFailure:e=>errors.push(e.message),
+    flushSessionSave:async()=>{calls.push('flush');},
+    requestJson:async(url,options)=>{assert.equal(options.method,'DELETE');calls.push(url.split('/').pop());if(scenario==='partial'&&url.endsWith('/a'))throw Error('failed');}});
+  vm.runInContext(part('  function removeDeletedSession(chat) {','  function formatElapsed(ms) {'),scope);
+  if(scenario==='single') await scope.deleteSession('b'); else await scope.deleteAllSessions();
+  assert.deepEqual(calls,scenario==='single'?['flush','b']:['flush','a','b']);
+  assert.deepEqual(Array.from(state.sessionList,x=>x.id),scenario==='all'?[]:['a']);
+  assert.equal(state.sessionByMode.storyboard,null);
+  assert.equal(state.sessionActiveByMode.storyboard,null);
+  assert.equal(state.modeMessages.storyboard.length,0);
+  assert.equal(state.studioWriteIo.length,0);
+  assert.equal(state.draftByMode.storyboard,'');
+  assert.equal(resets,1);
+  assert.equal(state.pending,false);
+  assert.equal(errors.length,scenario==='partial'?1:0);
+  if(scenario==='all') {
+    assert.equal(state.sessionByMode.chat,null);
+    assert.equal(state.messages.length,0);
+    assert.equal(scope.inputHistory.length,0);
+  }
+});
+
+test('History header exposes Delete All and binds it directly',()=>{
+  const markup=fs.readFileSync(path.join(__dirname,'../tool/tool.html'),'utf8');
+  assert.match(markup,/id="director-chat-history-delete-all"[^>]*>Delete All<\/button>/);
+  assert.match(source,/el\('director-chat-history-delete-all'\)\.onclick = deleteAllSessions/);
+});

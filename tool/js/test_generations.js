@@ -5811,7 +5811,7 @@
     [['aspectRatio', 'test-generations-aspect'], ['megapixels', 'test-generations-megapixels'],
       ['duration', 'test-generations-duration'], ['samplingMode', 'test-generations-sampling-mode'], ['dimensions', 'test-generations-dimensions'],
       ['seed', 'test-generations-seed']].forEach(function (pair) {
-      if (declared.indexOf(pair[0]) !== -1) settings[pair[0]] = String(el(pair[1]).value || '').trim();
+      if (declared.indexOf(pair[0]) !== -1) settings[pair[0]] = String(el(pair[1]).value || '');
     });
     if (!selectedFiles.length) throw new Error('Select at least one staged LoRA to test.');
     if (!prompt) throw new Error('A test prompt is required.');

@@ -527,12 +527,13 @@ test('QA Apply saves the authored caption, preserves existing tag behavior, and 
     saveCaptionDirect: async (_folder,_file,text) => { calls.push(text); item.caption=text; },
     assignChecklistTagToMediaKey: (...args) => { calls.push(args.join('/')); return true; },
     qaRefreshComputedState() {}, renderQaWorkbench() {}, setStatus() {},
+    cancelEditorAutosaveForCaption() {}, saveMediaAnnotationState: async () => { calls.push('persisted'); return true; },
     reportConsoleError(_source,err) { throw err; }
   };
   vm.createContext(sandbox);
   vm.runInContext(functionSource('qaApplyCorrectionsForItem','renderQaWorkbench')+'\nthis.apply = qaApplyCorrectionsForItem;',sandbox);
   assert.equal(await sandbox.apply('a'),true);
-  assert.deepEqual(calls,['A red striped shirt.','a/Pattern/striped']);
+  assert.deepEqual(calls,['A red striped shirt.','a/Pattern/striped','persisted']);
   assert.equal(sandbox.qaCorrectionCursor.drafts.a,undefined);
   assert.equal(sandbox.qaCorrectionCursor.busy,false);
 });
@@ -546,7 +547,7 @@ test('QA Apply retains edited draft when caption save fails', async () => {
     qaFocusReviewCandidateFindings: () => [],
     qaCorrectionPlan: () => ({captionBefore:item.caption,captionAfter:'Proposal.',hasChanges:true,tagActions:[]}),
     saveCaptionDirect: async () => { throw Error('disk failure'); },
-    renderQaWorkbench() {},setStatus() {},reportConsoleError() {}
+    renderQaWorkbench() {},setStatus() {},reportConsoleError() {}, cancelEditorAutosaveForCaption() {}
   };
   vm.createContext(sandbox);
   vm.runInContext(functionSource('qaApplyCorrectionsForItem','renderQaWorkbench')+'\nthis.apply = qaApplyCorrectionsForItem;',sandbox);
@@ -554,4 +555,31 @@ test('QA Apply retains edited draft when caption save fails', async () => {
   assert.equal(sandbox.qaCorrectionCursor.drafts.a,draft);
   assert.equal(sandbox.qaCorrectionCursor.busy,false);
   assert.match(sandbox.qaWorkbenchState.statusMessage,/disk failure/);
+});
+
+test('QA Apply awaits tag persistence and can retry after source findings become stale', async () => {
+  const item = {key:'a',fileName:'a.jpg',caption:'Original.'};
+  const finding = {id:'first'};
+  let tagAssigned = false, persisted = false, saves = 0;
+  const sandbox = {
+    qaCorrectionCursor:{busy:false,drafts:{a:{before:item.caption,text:'Edited.'}}},
+    qaWorkbenchState:{dispositions:{}},state:{folder:'set',items:[item]},
+    qaFocusReviewCandidateFindings: () => item.caption === 'Original.' ? [finding] : [],
+    qaCorrectionPlan: (_item, findings) => ({captionBefore:item.caption,captionAfter:'Proposal.',hasChanges:!!findings.length,
+      tagActions:tagAssigned ? [] : [{action:'add',group:'Pattern',term:'striped'}]}),
+    saveCaptionDirect: async (_folder,_file,text) => { saves++; item.caption=text; },
+    assignChecklistTagToMediaKey: () => { tagAssigned=true; return true; },
+    saveMediaAnnotationState: async () => persisted,
+    cancelEditorAutosaveForCaption() {}, renderQaWorkbench() {}, setStatus() {},
+    reportConsoleError() {}, qaRefreshComputedState() {}
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(functionSource('qaApplyCorrectionsForItem','renderQaWorkbench')+'\nthis.apply = qaApplyCorrectionsForItem;',sandbox);
+  assert.equal(await sandbox.apply('a'),false);
+  assert.equal(sandbox.qaCorrectionCursor.drafts.a.retry,true);
+  assert.equal(sandbox.qaCorrectionCursor.drafts.a.before,'Edited.');
+  persisted=true;
+  assert.equal(await sandbox.apply('a'),true);
+  assert.equal(saves,1);
+  assert.equal(sandbox.qaCorrectionCursor.drafts.a,undefined);
 });

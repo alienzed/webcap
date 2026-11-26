@@ -48,6 +48,10 @@ function mediaGridWireSurface() {
   els.selectAllBtn.onclick = mediaGridSelectAll;
   els.clearBtn.onclick = mediaGridClearSelection;
   els.closeBtn.onclick = closeMediaGridSurface;
+  document.getElementById('media-grid-return-to-analysis-btn').onclick = function () {
+    closeMediaGridSurface();
+    rerunFocusSetReport();
+  };
   guidedBtn.onclick = function () {
     window.openGuidedTagPass({ source: 'grid' });
   };
@@ -122,6 +126,12 @@ function renderMediaGridSurfaceHeader() {
   if (!els.meta || !els.status || !els.selectAllBtn || !els.clearBtn) return;
   els.meta.textContent = mediaGridBuildSurfaceMetaText();
   els.meta.title = String(state.folder || 'Root');
+  var returnButton = document.getElementById('media-grid-return-to-analysis-btn');
+  var reportType = String(state.focusSet && state.focusSet.reportType || '');
+  var returnLabel = reportType === 'qa' ? 'Return to QA' :
+    reportType === 'dashboardDistribution' ? 'Return to Distribution' : '';
+  returnButton.classList.toggle('hidden', !returnLabel);
+  returnButton.textContent = returnLabel;
   els.status.textContent = mediaGridState.status;
   els.status.classList.toggle('hidden', !mediaGridState.status);
   els.clearBtn.disabled = selectedCount <= 0;

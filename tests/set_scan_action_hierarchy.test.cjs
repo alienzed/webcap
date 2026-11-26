@@ -27,11 +27,11 @@ function button() {
   };
 }
 
-function scenario({ known = false, current = 0, total = 10, attention = 0, running = false, scope = 10 } = {}) {
+function scenario({ known = false, current = 0, total = 10, attention = 0, running = false, scope = 10, phase = 'idle' } = {}) {
   const rescan = button(), force = button(), retry = button(), actions = button();
   const stop = { parentElement: actions };
   const state = {
-    running, hasRun: known, coverage: { known, openCurrent: current, total },
+    running, phase, hasRun: known, coverage: { known, openCurrent: current, total },
     sightItems: Array.from({ length: attention }, (_, i) => ({ file: String(i), issue: 'Retry' }))
   };
   const decision = decide(state, scope, rescan, force, retry, stop, items => items.length);
@@ -91,4 +91,70 @@ test('successful completion hides redundant status while errors and live status 
   update('Set Intelligence refresh failed', 'Previous report preserved.');
   assert.equal(summary.classes.has('hidden'), false);
   assert.equal(status.textContent, 'Previous report preserved.');
+});
+
+test('pending cached coverage never flashes the Run action before the result', () => {
+  const pending = scenario({ phase: 'checking-cache' });
+  assert.equal(pending.rescan.classes.has('hidden'), true);
+  assert.equal(pending.actions.classes.has('hidden'), true);
+
+  const complete = scenario({ known: true, current: 10, phase: 'complete' });
+  assert.equal(complete.actions.classes.has('hidden'), true);
+
+  const missing = scenario({ known: true, current: 0 });
+  assert.equal(missing.rescan.classes.has('hidden'), false);
+  assert.equal(missing.actions.classes.has('hidden'), false);
+
+  // A failed cache lookup can still offer the explicit scan action.
+  const unavailable = scenario();
+  assert.equal(unavailable.rescan.classes.has('hidden'), false);
+});
+
+test('opening Sight hides stale status and actions before the first render', async () => {
+  const from = source.indexOf('  function openSetIntelligence()');
+  const to = source.indexOf('  function closeSetIntelligence()', from);
+  const statusFrom = source.indexOf('  function setSetIntelligenceStatus(');
+  const statusTo = source.indexOf('  function showRawResponse(', statusFrom);
+  assert.ok(from >= 0 && to > from && statusFrom >= 0 && statusTo > statusFrom);
+  const summary = button(), stage = { parentElement: summary }, status = {};
+  const renders = [];
+  let resolveCached;
+  const cache = new Promise(resolve => { resolveCached = resolve; });
+  const setScanState = {
+    running: false, open: false, folder: '/set', scopeRequestToken: 0,
+    phase: 'complete', coverage: { known: true, total: 1, openCurrent: 1 }
+  };
+  const context = {
+    setScanState, state: { folder: '/set', items: [{}] },
+    window: { setStatus() {} },
+    isSetFolderContext: () => true,
+    getSetIntelligenceScopeFiles: () => ['one.jpg'],
+    el: id => id === 'set-scan-stage' ? stage : status,
+    publishSetIntelligenceActivity() {},
+    reportConsoleError(label, error) { assert.fail(label + ': ' + error); },
+    renderSetIntelligence() {
+      const view = scenario({ phase: setScanState.phase, known: setScanState.coverage.known,
+        current: setScanState.coverage.openCurrent, total: setScanState.coverage.total });
+      renders.push({ statusHidden: summary.classes.has('hidden'), actionsHidden: view.actions.classes.has('hidden') });
+    },
+    restoreCachedIntelligence() {
+      return cache.then(() => {
+        setScanState.coverage = { known: true, total: 1, openCurrent: 1 };
+        setScanState.phase = 'complete';
+        context.update('Set understood', 'Cached Sight is available.', true);
+        return true;
+      });
+    }
+  };
+  vm.createContext(context);
+  vm.runInContext(source.slice(statusFrom, statusTo) + source.slice(from, to) +
+    '\nthis.openSight = openSetIntelligence; this.update = setSetIntelligenceStatus;', context);
+  context.openSight();
+  assert.deepEqual(renders, [{ statusHidden: true, actionsHidden: true }]);
+  resolveCached();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(renders, [
+    { statusHidden: true, actionsHidden: true },
+    { statusHidden: true, actionsHidden: true }
+  ]);
 });

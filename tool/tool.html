@@ -1114,6 +1114,7 @@
                         <div id="media-grid-surface-header" class="media-grid-surface-header">
                             <div class="media-grid-surface-copy">
                                 <button id="media-grid-surface-close-btn" type="button" class="media-grid-btn media-grid-surface-back-btn" aria-label="Return to item view" title="Return to item view">&lt;</button>
+                                <button id="media-grid-return-to-analysis-btn" type="button" class="media-grid-btn hidden">Return to analysis</button>
                                 <div id="media-grid-surface-meta" class="media-grid-surface-meta"></div>
                             </div>
                             <div class="media-grid-surface-center-controls">
@@ -3679,7 +3680,7 @@
         <div id="modal-overlay" class="modal-overlay hidden"></div>
         <div id="set-dashboard-modal" class="set-dashboard-modal hidden" role="dialog" aria-modal="true" aria-labelledby="set-dashboard-title">
   <div class="set-dashboard-dialog">
-    <header class="set-dashboard-header"><div><h2 id="set-dashboard-title">Set Dashboard</h2><span id="set-dashboard-name"></span></div><div class="set-dashboard-header-scope"><strong id="set-dashboard-scope"></strong><button type="button" id="set-dashboard-close" aria-label="Close Set Dashboard" title="Close">×</button></div></header>
+    <header class="set-dashboard-header"><div><h2 id="set-dashboard-title">Set Dashboard</h2><span id="set-dashboard-name"></span></div><div class="set-dashboard-header-scope"><strong id="set-dashboard-scope"></strong><button type="button" id="set-dashboard-curate" class="set-dashboard-primary">Curate Training Set</button><button type="button" id="set-dashboard-close" aria-label="Close Set Dashboard" title="Close">×</button></div></header>
     <div class="set-dashboard-tabs" role="tablist" aria-label="Set preparation">
       <button type="button" role="tab" data-set-dashboard-tab="analyze" aria-controls="set-dashboard-stage" aria-selected="false" tabindex="-1">Set Preparation</button>
       <button type="button" role="tab" data-set-dashboard-tab="review" aria-controls="set-dashboard-stage" aria-selected="false" tabindex="-1">QA</button>
@@ -3696,10 +3697,9 @@
           <div id="set-dashboard-phrase" class="set-dashboard-guidance-edit"><label for="stats-required-phrase">Required key phrase</label><input id="stats-required-phrase" type="text" placeholder="e.g. subject name"></div>
 
             <div class="set-dashboard-template-action"><span>Caption Template</span><button id="set-dashboard-template-open" type="button" class="set-dashboard-quiet">Edit Template</button></div>
-            <div id="set-dashboard-template-preview" class="set-dashboard-template-preview"></div>
+            <details class="set-dashboard-template-disclosure"><summary>Preview template</summary><div id="set-dashboard-template-preview" class="set-dashboard-template-preview"></div></details>
           </section>
           <section class="set-dashboard-work-panel set-dashboard-intelligence-panel" aria-label="Sight and Vocabulary">
-            <h4>Sight &amp; Vocabulary</h4>
         <div class="set-dashboard-sight-panel">
           <div class="set-dashboard-sight-heading">
             <h4>Sight</h4>
@@ -3725,15 +3725,15 @@
                       </div>
                       <div id="set-scan-quality-summary" class="set-scan-quality-summary" aria-live="polite"></div>
                     </div>
-                    <div class="set-scan-progress-track" role="progressbar" aria-label="Sight scan progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                    <div class="set-scan-progress-track hidden" role="progressbar" aria-label="Sight scan progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
                       <span id="set-scan-progress-fill"></span>
                     </div>
                     <div id="set-scan-timing" class="set-scan-timing" aria-live="off" hidden></div>
-                    <div class="set-scan-summary">
+                    <div class="set-scan-summary hidden">
                       <strong id="set-scan-stage">Checking Set</strong>
                       <span id="set-scan-status" aria-live="polite"></span>
                     </div>
-                    <div id="set-scan-open-detail" class="set-scan-evidence-detail">Checking saved coverage…</div>
+                    <div id="set-scan-open-detail" class="set-scan-evidence-detail hidden">Checking saved coverage…</div>
                   </section>
                   <div class="set-scan-scope-row">
                     <div class="set-scan-scope-caption">
@@ -3743,7 +3743,7 @@
                     <label><input id="set-scan-entire-set" type="checkbox" aria-label="Scan entire Set, ignoring filters"> Entire Set</label>
                     
                   </div>
-                  <div class="set-scan-run-actions">
+                  <div class="set-scan-run-actions hidden">
                     <button id="set-scan-bad-retry" type="button" class="review-captions-btn set-scan-primary hidden">Retry flagged</button>
                     <button id="set-scan-rescan-btn" type="button" class="review-captions-btn hidden">Resume Set Intelligence</button>
                     <button id="set-scan-stop-btn" type="button" class="review-captions-btn hidden">Stop</button>
@@ -3800,7 +3800,7 @@
           <h4>Vocabulary &amp; Tags</h4>
           <p id="set-dashboard-tags-status" class="set-dashboard-section-copy"></p>
           <div id="set-dashboard-tags-progress" class="set-dashboard-progress hidden">
-            <div class="set-dashboard-progress-label"><span>Annotation review · current view</span><strong id="set-dashboard-tags-progress-value"></strong></div>
+            <div class="set-dashboard-progress-label"><span>Annotation review</span><strong id="set-dashboard-tags-progress-value"></strong></div>
             <div class="set-dashboard-progress-track"><div id="set-dashboard-tags-progress-fill" class="set-dashboard-progress-fill"></div></div>
           </div>
           <div class="set-dashboard-section-actions set-dashboard-vocabulary-actions">
@@ -3829,17 +3829,13 @@
             <h4>Distribution &amp; Balance</h4>
             <div class="set-dashboard-section-heading"><h5>Set Variables</h5><button type="button" id="set-dashboard-configure-variables" class="set-dashboard-quiet">Configure variables</button></div>
             <div id="set-dashboard-variables" aria-label="Set variable coverage"></div>
-            <div id="set-dashboard-variable-empty" class="set-dashboard-distribution-note">Select important distinctions from existing groups and terms.</div>
+            <div id="set-dashboard-variable-empty" class="set-dashboard-distribution-note">No variables configured.</div>
             <section id="set-dashboard-variable-editor" class="set-dashboard-variable-editor hidden" aria-label="Configure Set Variables"><div id="set-dashboard-variable-groups"></div><div class="set-dashboard-section-actions"><button type="button" class="set-dashboard-primary" id="set-dashboard-variable-apply">Apply</button><button type="button" class="set-dashboard-quiet" id="set-dashboard-variable-cancel">Cancel</button></div></section>
           <div id="set-dashboard-balance" class="set-dashboard-guidance-edit"><div class="section-label-inline"><label for="stats-phrases-add-input">Balance Phrases</label><button id="stats-balance-info-btn" type="button" class="mini-info-btn" title="Balance phrases help" aria-label="Balance phrases help">i</button></div><div class="checklist-input-row term-input-row"><input id="stats-phrases-add-input" type="text" class="form-control" placeholder="Add balance phrase..."><button id="stats-phrases-add-btn" type="button" title="Add balance phrase" aria-label="Add balance phrase">+</button><div id="stats-phrases-add-results" class="caption-term-results hidden"></div></div><div id="set-dashboard-distribution" aria-label="Live balance distribution"></div><details><summary>Caption vs. tag counts</summary><div id="set-dashboard-distribution-sources" class="set-dashboard-distribution-note"></div></details><details><summary>Manage balance phrases</summary><div id="stats-phrases-items"></div></details><textarea id="stats-phrases" rows="4" class="hidden" placeholder="face down&#10;face up&#10;front view&#10;back view"></textarea></div>
 
-            <div class="set-dashboard-distribution-note">Counts match captions or tags in the active selection. Phrases can overlap.</div>
+
           </section>
-          <section class="set-dashboard-work-panel" aria-label="Training Selection">
-            <h4>Training Selection</h4>
-            <p>Choose a smaller training subset when useful.</p>
-            <button type="button" id="set-dashboard-curate" class="set-dashboard-primary">Curate Training Set</button>
-          </section>
+
         </div>
       </div>
       <div id="set-dashboard-review" class="set-dashboard-review hidden">
@@ -3857,10 +3853,10 @@
         </section>
       </div>
     </section>
-    <div class="set-dashboard-overview" id="set-dashboard-overview" aria-label="Set progress">
-      <div class="set-dashboard-metric"><span>Saved Sight</span><strong id="set-dashboard-sight-count">—</strong><small>Any model · entire Set</small></div>
-      <div class="set-dashboard-metric"><span>Annotation Review</span><strong id="set-dashboard-tags-count">—</strong><small>Current filtered view</small></div>
-      <div class="set-dashboard-metric"><span>Captions present</span><strong id="set-dashboard-captions-count">—</strong><small>Entire Set</small></div>
+    <div class="set-dashboard-overview" id="set-dashboard-overview" aria-label="Active selection progress">
+      <div class="set-dashboard-metric"><span>Saved Sight</span><strong id="set-dashboard-sight-count">—</strong><small>Any model</small></div>
+      <div class="set-dashboard-metric"><span>Annotation Review</span><strong id="set-dashboard-tags-count">—</strong></div>
+      <div class="set-dashboard-metric"><span>Captions present</span><strong id="set-dashboard-captions-count">—</strong></div>
     </div>
 
   </div>

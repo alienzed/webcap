@@ -300,6 +300,16 @@
     });
   }
 
+  function qaCurationIntent() {
+    return { variables: normalizeSetVariables(state.setVariables), phrases: getBalanceWheelPhrases() };
+  }
+
+  function qaCurationSignature(items, intent) {
+    var signature = qaBuildDeepScanSignature(items);
+    return intent.variables.length || intent.phrases.length
+      ? JSON.stringify([signature, intent]) : signature;
+  }
+
   function qaDeepScanFindingPayload(items) {
     var wanted = {};
     (items || []).forEach(function (item) {
@@ -2341,7 +2351,7 @@
             ? 'Resume the saved check without repeating successful item assessments.'
             : 'Existing checks have no outstanding actionable findings; this does not certify the Set.';
     copy.appendChild(h2);
-    copy.appendChild(intro);
+    if (!qaDashboardHost || active || resume) copy.appendChild(intro);
     hero.appendChild(copy);
 
     var heroActions = document.createElement('div');
@@ -2367,7 +2377,7 @@
     reviewButton.textContent = 'Review & Fix ' + qaFileCountText(ready);
     reviewButton.classList.toggle('hidden', !ready);
     heroActions.insertBefore(reviewButton, heroActions.firstChild);
-    heroActions.appendChild(qaCreateButton('Curate Training Set', '', 'qa-curate-start'));
+    if (!qaDashboardHost) heroActions.appendChild(qaCreateButton('Curate Training Set', '', 'qa-curate-start'));
     hero.appendChild(heroActions);
     container.appendChild(hero);
     var deepWrap = document.createElement('div');
@@ -2470,7 +2480,8 @@
       var description = document.createElement('span');
       description.textContent = QA_CATEGORY_DESCRIPTIONS[category];
       cardCopy.appendChild(title);
-      cardCopy.appendChild(description);
+      if (qaDashboardHost) card.title = description.textContent;
+      else cardCopy.appendChild(description);
       card.appendChild(count);
       card.appendChild(cardCopy);
       grid.appendChild(card);
@@ -2508,8 +2519,32 @@
     var healthNote = document.createElement('div');
     healthNote.className = 'qa-health-note';
     healthNote.textContent = 'Useful status, intentionally quieter than training-impact recommendations.';
-    healthSection.appendChild(healthNote);
+    if (!qaDashboardHost) healthSection.appendChild(healthNote);
     container.appendChild(healthSection);
+
+    if (state.setVariables && state.setVariables.length) {
+      var variableWarnings = window.getSetVariableWarnings(state.setVariables, items);
+      if (variableWarnings.length) {
+        var variablesSection = document.createElement('section');
+        variablesSection.className = 'qa-section';
+        var variablesTitle = document.createElement('h2');
+        variablesTitle.className = 'qa-section-title';
+        variablesTitle.textContent = 'Set variable coverage';
+        variablesSection.appendChild(variablesTitle);
+        var variableActions = document.createElement('div');
+        variableActions.className = 'qa-health-row';
+        variableWarnings.forEach(function (warning) {
+          var action = qaCreateButton(warning.group + ' · ' + warning.files.length + ' ' + warning.label.toLowerCase(),
+            'qa-health-chip', 'inspect-variable', JSON.stringify([warning.group, warning.kind]));
+          action.title = 'Inspect media (advisory; absence may be legitimate)';
+          variableActions.appendChild(action);
+        });
+        variablesSection.appendChild(variableActions);
+        container.appendChild(variablesSection);
+      }
+    }
+
+    if (qaDashboardHost) return;
 
     var utilitySection = document.createElement('section');
     utilitySection.className = 'qa-section';
@@ -2952,6 +2987,8 @@
       if (folderChanged) qaWorkbenchState.conceptQuery = '';
     }
     if (folderChanged) {
+      qaReturnToDashboard = false;
+      curateDashboardOrigin = '';
       qaWorkbenchState.parentFocusSet = undefined;
       qaWorkbenchState.returnTrainingFiles = null;
       qaWorkbenchState.returnFindingId = '';
@@ -3968,7 +4005,7 @@
     // Prune/Duplicate utilities run only when explicitly opened; QA reads ready results.
     var data = qaRefreshComputedState(!!force);
     if (qaWorkbenchState.view === 'curate') {
-      renderQaCuration(root, qaBuildDeepScanSignature(data.items));
+      renderQaCuration(root, qaCurationSignature(data.items, qaCurationIntent()));
     } else if (qaWorkbenchState.view === 'corrections') {
       qaRenderCorrections(root, data.items);
     } else if (qaWorkbenchState.view === 'browse') {
@@ -4206,6 +4243,14 @@
   }
 
   function qaHandleAction(action, value) {
+    if (action === 'inspect-variable') {
+      var target = JSON.parse(value);
+      var warning = window.getSetVariableWarnings(state.setVariables || [], qaGetTrainingItems()).find(function (row) {
+        return row.group === target[0] && row.kind === target[1];
+      });
+      if (warning) qaSelectFiles(warning.files, warning.group + ' · ' + warning.label, '');
+      return;
+    }
     if (action === 'qa-curate-start') {
       if (qaDashboardHost) {
         curateDashboardOrigin = 'review';
@@ -4214,8 +4259,10 @@
         setReviewDetailTab('qa');
       }
       try {
-        startQaCuration(qaBuildCurateItems(qaGetTrainingItems()),
-          qaWorkbenchState.trainingFocus, qaBuildDeepScanSignature(qaGetTrainingItems()));
+        var items = qaGetTrainingItems();
+        var intent = qaCurationIntent();
+        startQaCuration(qaBuildCurateItems(items),
+          qaWorkbenchState.trainingFocus, qaCurationSignature(items, intent), {intent: intent});
       } catch (err) {
         window.reportConsoleError('QA Curation', err);
         qaWorkbenchState.statusMessage = String(err.message || err);
@@ -4489,16 +4536,21 @@
     return qaBuildCurateItems(items);
   };
   window.qaCurrentCurationSignature = function () {
-    return qaBuildDeepScanSignature(qaGetTrainingItems());
+    return qaCurationSignature(qaGetTrainingItems(), qaCurationIntent());
   };
   window.qaReanalyzeCuration = function () {
     var items = qaGetTrainingItems();
+    var intent = qaCurationIntent();
     startQaCuration(qaBuildCurateItems(items), qaWorkbenchState.trainingFocus,
-      qaBuildDeepScanSignature(items), {reanalyze: true});
+      qaCurationSignature(items, intent), {reanalyze: true, intent: intent});
   };
   window.qaInspectCurationItem = qaInspectCurationItem;
   window.qaUseCuratedSelectionForTraining = qaUseCuratedSelectionForTraining;
   window.qaShowCuration = function () { qaWorkbenchState.view = 'curate'; renderQaWorkbench(); };
+  window.qaCurationSurfaceActive = function () {
+    return !qaDashboardHost && qaWorkbenchState.view === 'curate' &&
+      normalizeWorkspaceSurface(workspaceState.surface) === 'reviewOutput' && reviewWorkspaceState.detailTab === 'qa';
+  };
   window.qaShowOverviewFromCuration = function () {
     qaWorkbenchState.view = 'overview';
     if (curateDashboardOrigin) {

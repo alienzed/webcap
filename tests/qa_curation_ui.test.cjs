@@ -56,6 +56,7 @@ function harness(savedDraft = null) {
   dom.window.qaUseCuratedSelectionForTraining = ctx.qaUseCuratedSelectionForTraining;
   dom.window.qaShowCuration = () => {};
   dom.window.qaShowOverviewFromCuration = () => {};
+  dom.window.qaCurationSurfaceActive = () => true;
   dom.window.reportConsoleError = (name, error) => calls.errors.push(String(error.message || error));
   vm.createContext(ctx);
   vm.runInContext(source, ctx);

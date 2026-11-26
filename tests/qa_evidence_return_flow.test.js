@@ -52,6 +52,7 @@ const returnState = {
   view: 'overview'
 };
 const returnContext = {
+  qaReturnToDashboard: false,
   qaWorkbenchState: returnState,
   state: { focusSet: currentFocus },
   qaCloneFocusSet: focus => focus ? { ...focus, keys: focus.keys.slice() } : null,

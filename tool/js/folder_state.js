@@ -52,8 +52,9 @@ function normalizeSetVariables(rows) {
 }
 
 function scheduleSetDefinitionSave() {
-  var captured = captureCurrentFolderStateSave();
-  debouncedSaveFolderState(function () { writeCapturedFolderState(captured); });
+  // Explicit Set definition changes should not share the debounce slot with
+  // a different folder's subsequent edit.
+  return saveFolderStateForCurrentRoot();
 }
 
 function sanitizeFolderState(data) {

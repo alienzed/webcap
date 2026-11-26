@@ -16,13 +16,13 @@
     var items = (state && Array.isArray(state.items)) ? state.items : [];
     var phrase = String(el('stats-required-phrase').value || '').trim();
     var balances = String(el('stats-phrases').value || '').split(/\r?\n/).map(function (p) { return p.trim(); }).filter(Boolean);
-    var sight = items.filter(function (item) {
+    // The footer summarizes the same active scope as annotation and captioning.
+    var visibleItems = getFilteredMediaItems(false).filter(function (item) { return !!(item && item.key); });
+    var sight = visibleItems.filter(function (item) {
       var s = item && item.metadata && item.metadata.vision_sight;
       return s && s.description && s.inventory;
     }).length;
-    var captions = items.filter(function (item) { return !!(item && (item.hasCaption || String(item.caption || '').trim())); }).length;
-    // Focused Caption and Focused Annotation act on the visible scope, not every Set item.
-    var visibleItems = getFilteredMediaItems(false).filter(function (item) { return !!(item && item.key); });
+    // Focused Caption and Focused Annotation act on the visible scope.
     var visibleCaptions = visibleItems.filter(function (item) {
       return !!(item.hasCaption || String(item.caption || '').trim());
     }).length;
@@ -39,7 +39,7 @@
     var pending = totalGroups > reviewedGroups;
     return {
       items: items, visibleItems: visibleItems, total: items.length, phrase: phrase, balances: balances,
-      sight: sight, captions: captions, configuredGroups: groups.length,
+      sight: sight, configuredGroups: groups.length,
       visibleTotal: visibleItems.length, visibleCaptions: visibleCaptions,
       reviewedGroups: reviewedGroups, totalGroups: totalGroups,
       pending: pending
@@ -49,6 +49,7 @@
   function setHidden(node, hidden) { node.classList.toggle('hidden', !!hidden); }
 
   function run(destination) {
+    var origin = selected;
     closeDashboard();
     if (destination === 'prepare') return openDashboard('analyze');
     if (destination === 'annotation') return startFocusedAnnotation();
@@ -61,11 +62,17 @@
       });
       return startFocusedCaption(missing ? missing.key : '');
     }
-    if (destination === 'qa' || destination === 'curate' || ['report', 'captions', 'metadata', 'prune', 'duplicates'].indexOf(destination) !== -1) {
+    if (destination === 'review-captions') {
+      var captionedKeys = getFilteredMediaItems(false).filter(function (item) {
+        return item && item.key && (item.hasCaption || String(item.caption || '').trim());
+      }).map(function (item) { return item.key; });
+      return startFocusedCaption(captionedKeys[0], 'caption', {itemKeys: captionedKeys});
+    }
+    if (destination === 'curate' || ['report', 'captions', 'metadata', 'prune', 'duplicates'].indexOf(destination) !== -1) {
       setWorkspaceSurface('reviewOutput');
       if (destination === 'curate') {
         setReviewDetailTab('qa');
-        return window.qaStartCurationFromDashboard('analyze');
+        return window.qaStartCurationFromDashboard(origin);
       }
       return setReviewDetailTab(destination);
     }
@@ -74,12 +81,17 @@
 
   function inspectDistribution(files, label) {
     if (!files.length) return;
-    distributionParent = { folder: openedFolder, focusSet: state.focusSet ? {
-      keys: state.focusSet.keys.slice(), source: state.focusSet.source, reportType: state.focusSet.reportType
-    } : null };
+    // Keep the original return context when inspecting another count from a temporary subset.
+    if (!state.focusSet || state.focusSet.reportType !== 'dashboardDistribution' ||
+        !distributionParent || distributionParent.folder !== openedFolder) {
+      distributionParent = { folder: openedFolder, focusSet: state.focusSet ? {
+        keys: state.focusSet.keys.slice(), source: state.focusSet.source, reportType: state.focusSet.reportType
+      } : null };
+    }
     closeDashboard();
     activateFocusSet(files, 'Distribution · ' + label, 'dashboardDistribution');
     setWorkspaceSurface('default');
+    openMediaGridSurface();
   }
 
   function returnFromDistribution() {
@@ -127,7 +139,7 @@
       }
       existing.delete(phrase);
       var button = row.lastElementChild;
-      button.textContent = files.length + ' / ' + s.visibleTotal;
+      button.textContent = files.length + ' / ' + s.visibleTotal + ' →';
       button.title = captionCount + ' captions · ' + tagCount + ' tags · ' + files.length + ' either';
       sources.push(phrase + ': ' + button.title);
       button.setAttribute('aria-label', phrase + ': ' + button.title + '. Inspect matching media');
@@ -142,76 +154,142 @@
   }
 
   function variableCoverage(variable, items) {
-    var rows = variable.terms.map(function (term) { return { label: term, files: [] }; });
+    var terms = variable.terms.map(function (term, index) {
+      return { key: 'term:' + index, label: term, files: [], only: [], color: index };
+    });
     var neither = [], multiple = [];
     items.forEach(function (item) {
       var assigned = new Set(getChecklistAssignedTagsForMediaKey(item.key, variable.group).map(function (term) {
-        return String(term).trim().toLowerCase();
+        return normalizeChecklistTerm(term).toLowerCase();
       }));
-      var matches = 0;
-      rows.forEach(function (row) {
-        if (assigned.has(row.label.toLowerCase())) { row.files.push(item.fileName); matches++; }
-      });
-      if (!matches) neither.push(item.fileName);
-      if (matches > 1) multiple.push(item.fileName);
+      var matches = terms.filter(function (row) { return assigned.has(normalizeChecklistTerm(row.label).toLowerCase()); });
+      matches.forEach(function (row) { row.files.push(item.fileName); });
+      if (!matches.length) neither.push(item.fileName);
+      else if (matches.length === 1) matches[0].only.push(item.fileName);
+      else multiple.push(item.fileName);
     });
-    if (variable.exclusive) rows.push({ label: 'Multiple exclusive terms', files: multiple });
-    rows.push({ label: 'None of the selected terms', files: neither });
-    return { rows: rows, neither: neither.length, multiple: multiple.length };
+    // Exclusive bars partition the population exactly once. Multi-label bars
+    // retain independent membership counts; their sum can exceed the scope.
+    var rows = terms.map(function (row) {
+      return { key: row.key, label: row.label + (variable.exclusive && multiple.length ? ' only' : ''),
+        files: variable.exclusive ? row.only : row.files, color: row.color };
+    });
+    if (variable.exclusive) rows.push({ key: 'multiple', label: 'Multiple', files: multiple, color: 'warning' });
+    rows.push({ key: 'neither', label: 'Neither', files: neither,
+      color: variable.expected && items.length && neither.length / items.length > .25 ? 'warning' : 'neutral' });
+    return { rows: rows, neither: neither.length, multiple: multiple.length,
+      missingFiles: neither, multipleFiles: multiple };
   }
 
-  function variableRow(host, label, files, total, group) {
-    var row = document.createElement('div');
-    row.className = 'set-dashboard-dist-row';
-    var title = document.createElement('span');
-    title.textContent = label;
-    var bar = document.createElement('span');
-    bar.className = 'set-dashboard-progress-track';
-    var fill = document.createElement('span');
-    fill.className = 'set-dashboard-progress-fill';
-    fill.style.width = (total ? files.length * 100 / total : 0) + '%';
-    bar.appendChild(fill);
-    var count = document.createElement('button');
-    count.type = 'button';
-    count.className = 'set-dashboard-dist-count';
-    count.textContent = files.length + ' / ' + total;
-    count.disabled = !files.length;
-    count.setAttribute('aria-label', group + ' · ' + label + ': inspect ' + files.length + ' media');
-    count.onclick = function () { inspectDistribution(files, group + ' · ' + label); };
-    row.append(title, bar, count);
-    host.appendChild(row);
+  function variableWarnings(variables, items) {
+    var warnings = [];
+    variables.forEach(function (variable) {
+      var result = variableCoverage(variable, items);
+      if (variable.exclusive && result.multiple) warnings.push({
+        group: variable.group, kind: 'multiple', label: 'Multiple exclusive terms', files: result.multipleFiles
+      });
+      if (variable.expected && items.length && result.neither / items.length > .25) warnings.push({
+        group: variable.group, kind: 'missing', label: 'Missing coverage', files: result.missingFiles
+      });
+    });
+    return warnings;
+  }
+
+  function distributionColor(color) {
+    if (color === 'warning') return 'var(--dashboard-distribution-warning)';
+    if (color === 'neutral') return 'var(--muted)';
+    return 'var(--dashboard-distribution-' + (color % 5) + ')';
+  }
+
+  function renderVariableCard(section, variable, result, total) {
+    var title = section.querySelector('h5');
+    title.textContent = variable.group;
+    section.querySelector('.set-dashboard-variable-kind').textContent =
+      (variable.exclusive ? 'Exclusive' : 'May coexist') + (variable.expected ? ' · Expected' : '');
+    var stack = section.querySelector('.set-dashboard-variable-stack');
+    setHidden(stack, !variable.exclusive || !total);
+    var legend = section.querySelector('.set-dashboard-variable-rows');
+    legend.classList.toggle('is-exclusive', variable.exclusive);
+    var oldRows = new Map(Array.from(legend.children).map(function (row) { return [row.dataset.key, row]; }));
+    var oldSegments = new Map(Array.from(stack.children).map(function (row) { return [row.dataset.key, row]; }));
+    result.rows.forEach(function (row, index) {
+      var share = total ? 100 * row.files.length / total : 0;
+      var color = distributionColor(row.color);
+      var entry = oldRows.get(row.key);
+      if (!entry) {
+        entry = document.createElement('button');
+        entry.type = 'button'; entry.className = 'set-dashboard-variable-row'; entry.dataset.key = row.key;
+        var label = document.createElement('span'); label.className = 'set-dashboard-variable-label';
+        var swatch = document.createElement('i'); swatch.className = 'set-dashboard-variable-swatch';
+        var name = document.createElement('span');
+        label.append(swatch, name);
+        var count = document.createElement('strong');
+        var bar = document.createElement('span'); bar.className = 'set-dashboard-variable-track';
+        var fill = document.createElement('span'); bar.appendChild(fill);
+        entry.append(label, count, bar);
+        legend.appendChild(entry);
+      }
+      oldRows.delete(row.key);
+      var labelNode = entry.children[0];
+      labelNode.children[0].style.backgroundColor = color;
+      labelNode.children[1].textContent = row.label;
+      entry.children[1].textContent = row.files.length + ' / ' + total;
+      entry.children[2].firstElementChild.style.width = share + '%';
+      entry.children[2].firstElementChild.style.backgroundColor = color;
+      entry.disabled = !row.files.length;
+      entry.title = row.label + ' · ' + Math.round(share) + '% · Inspect matching media';
+      entry.setAttribute('aria-label', variable.group + ' · ' + row.label + ': inspect ' + row.files.length + ' media');
+      entry.onclick = function () { inspectDistribution(row.files, variable.group + ' · ' + row.label); };
+      if (legend.children[index] !== entry) legend.insertBefore(entry, legend.children[index] || null);
+
+      var segment = oldSegments.get(row.key);
+      if (variable.exclusive) {
+        if (!segment) {
+          segment = document.createElement('span');
+          segment.dataset.key = row.key;
+          stack.appendChild(segment);
+        }
+        oldSegments.delete(row.key);
+        segment.style.width = share + '%';
+        segment.style.backgroundColor = color;
+        segment.title = row.label + ': ' + row.files.length;
+        if (stack.children[index] !== segment) stack.insertBefore(segment, stack.children[index] || null);
+      }
+    });
+    oldRows.forEach(function (node) { node.remove(); });
+    oldSegments.forEach(function (node) { node.remove(); });
+    var warnings = [];
+    if (variable.expected && total && result.neither / total > .25) warnings.push(Math.round(100 * result.neither / total) + '% missing');
+    if (variable.exclusive && result.multiple) warnings.push(result.multiple + ' with multiple terms');
+    var notice = section.querySelector('.set-dashboard-variable-notice');
+    notice.textContent = warnings.join(' · ');
+    setHidden(notice, !warnings.length);
   }
 
   function renderVariables(s) {
     var host = el('set-dashboard-variables');
     var variables = state.setVariables || [];
     setHidden(el('set-dashboard-variable-empty'), !!variables.length);
-    // This view has no editable controls; keep the configuration form separate.
-    host.replaceChildren();
-    variables.forEach(function (variable) {
-      var section = document.createElement('section');
-      section.className = 'set-dashboard-variable-card';
-      var title = document.createElement('h5');
-      title.textContent = variable.group;
-      section.appendChild(title);
-      var kind = document.createElement('div');
-      kind.className = 'set-dashboard-distribution-note';
-      kind.textContent = (variable.exclusive ? 'Mutually exclusive' : 'May coexist') + (variable.expected ? ' · Expected on most media' : '');
-      section.appendChild(kind);
-      var result = variableCoverage(variable, s.visibleItems);
-      result.rows.forEach(function (row) { variableRow(section, row.label, row.files, s.visibleTotal, variable.group); });
-      var warnings = [];
-      // Advisory heuristic from the approved prototype; individual absence is valid.
-      if (variable.expected && s.visibleTotal && result.neither / s.visibleTotal > .25) warnings.push(Math.round(result.neither * 100 / s.visibleTotal) + '% without selected terms');
-      if (variable.exclusive && result.multiple) warnings.push(result.multiple + ' media with multiple exclusive terms');
-      if (warnings.length) {
-        var notice = document.createElement('div');
-        notice.className = 'set-dashboard-warning';
-        notice.textContent = warnings.join(' · ');
-        section.appendChild(notice);
+    var oldCards = new Map(Array.from(host.children).map(function (card) { return [card.dataset.group, card]; }));
+    variables.forEach(function (variable, index) {
+      var section = oldCards.get(variable.group);
+      if (!section) {
+        section = document.createElement('section');
+        section.className = 'set-dashboard-variable-card'; section.dataset.group = variable.group;
+        var title = document.createElement('h5');
+        var kind = document.createElement('div'); kind.className = 'set-dashboard-variable-kind';
+        var stack = document.createElement('div'); stack.className = 'set-dashboard-variable-stack';
+        stack.setAttribute('aria-hidden', 'true');
+        var legend = document.createElement('div'); legend.className = 'set-dashboard-variable-rows';
+        var notice = document.createElement('div'); notice.className = 'set-dashboard-variable-notice';
+        section.append(title, kind, stack, legend, notice);
+        host.appendChild(section);
       }
-      host.appendChild(section);
+      oldCards.delete(variable.group);
+      renderVariableCard(section, variable, variableCoverage(variable, s.visibleItems), s.visibleTotal);
+      if (host.children[index] !== section) host.insertBefore(section, host.children[index] || null);
     });
+    oldCards.forEach(function (card) { card.remove(); });
   }
 
   function makeVariableCheckbox(label, checked, type, value) {
@@ -294,16 +372,18 @@
     });
     stages.forEach(function (tab) { setHidden(el('set-dashboard-' + tab), selected !== tab); });
     el('set-dashboard-scope').textContent = s.visibleTotal + ' of ' + s.total + ' media' + (state.focusSet ? ' · Focus Set' : '');
-    el('set-dashboard-sight-count').textContent = s.sight + ' / ' + s.total;
+    el('set-dashboard-sight-count').textContent = s.sight + ' / ' + s.visibleTotal;
     var annotationPercent = s.totalGroups ? Math.floor(s.reviewedGroups * 100 / s.totalGroups) : null;
     el('set-dashboard-tags-count').textContent = annotationPercent === null ? '—' : annotationPercent + '%';
-    el('set-dashboard-captions-count').textContent = s.captions + ' / ' + s.total;
+    el('set-dashboard-captions-count').textContent = s.visibleCaptions + ' / ' + s.visibleTotal;
+    el('set-dashboard-curate').disabled = !s.visibleTotal;
     if (selected !== 'analyze') return;
     renderDefinition(s);
     el('set-dashboard-template-preview').textContent = String(statsGetPrimerOptionsFromDom().template || '');
     if (!window.isSetIntelligenceOpen()) window.openSetIntelligence();
     var tagsStatus = el('set-dashboard-tags-status');
-    setHidden(el('set-dashboard-tags-progress'), annotationPercent === null);
+    // The persistent footer owns annotation/caption coverage. Let actions show the remaining work.
+    setHidden(el('set-dashboard-tags-progress'), true);
     if (annotationPercent !== null) {
       el('set-dashboard-tags-progress-value').textContent = annotationPercent + '%';
       el('set-dashboard-tags-progress-fill').style.width = annotationPercent + '%';
@@ -312,14 +392,14 @@
     setHidden(tagsStatus, !tagsStatus.textContent);
     setHidden(el('set-dashboard-tags-primary'), !s.configuredGroups || !s.visibleTotal);
     var missing = s.visibleTotal - s.visibleCaptions;
-    setHidden(el('set-dashboard-progress'), !s.visibleTotal);
+    setHidden(el('set-dashboard-progress'), true);
+    el('set-dashboard-primary').textContent = missing ? 'Caption Assist · ' + missing + ' uncaptioned' : 'Caption Assist';
     el('set-dashboard-progress-text').textContent = 'Captioned media in current view';
     el('set-dashboard-progress-value').textContent = s.visibleCaptions + ' / ' + s.visibleTotal;
     var percent = s.visibleTotal ? Math.round(100 * s.visibleCaptions / s.visibleTotal) : 0;
     el('set-dashboard-progress-fill').style.width = percent + '%';
     el('set-dashboard-progress-bar').setAttribute('aria-valuenow', String(percent));
     el('set-dashboard-primary').disabled = !s.visibleTotal;
-    el('set-dashboard-curate').disabled = !s.visibleTotal;
     el('set-dashboard-secondary').disabled = !s.visibleCaptions;
     renderDistribution(s);
     renderVariables(s);
@@ -327,7 +407,10 @@
 
   function openDashboard(preferredStage) {
     if (!isSetFolderPath(state.folder) || !Array.isArray(state.items) || !state.items.length) return;
-    if (openedFolder !== String(state.folder || '')) focusMigrationStatus = '';
+    if (openedFolder !== String(state.folder || '')) {
+      focusMigrationStatus = '';
+      focusMigrationFolder = '';
+    }
     openedFolder = String(state.folder || '');
     returnFocus = document.activeElement;
     selected = stages.indexOf(preferredStage) !== -1 ? preferredStage : 'analyze';
@@ -347,7 +430,8 @@
       }).catch(function (err) {
         reportConsoleError('Set Definition · training focus', err);
         if (String(state.folder || '') !== folder) return;
-        focusMigrationStatus = 'Previous training focus could not be checked. You can still set it here.';
+        focusMigrationFolder = '';
+        focusMigrationStatus = 'Previous training focus could not be checked.';
         if (open) renderStage();
       });
     }
@@ -376,6 +460,7 @@
     launcher.addEventListener('click', openDashboard);
     el('set-dashboard-training-focus').addEventListener('input', function () { if (open) renderDefinition(snapshot()); });
     el('set-dashboard-training-focus').addEventListener('change', function () {
+      if (String(state.folder || '') !== openedFolder) return;
       window.setQaTrainingFocus(el('set-dashboard-training-focus').value);
       focusMigrationStatus = '';
       renderStage();
@@ -386,7 +471,7 @@
     var destinations = {
       'set-dashboard-tags-primary': 'annotation', 'set-dashboard-tags-groups': 'groups',
       'set-dashboard-tags-guided': 'guided', 'set-dashboard-primary': 'caption',
-      'set-dashboard-secondary': 'captions',
+      'set-dashboard-secondary': 'review-captions',
       'set-dashboard-curate': 'curate', 'set-dashboard-review-captions': 'captions',
       'set-dashboard-review-report': 'report', 'set-dashboard-review-metadata': 'metadata',
       'set-dashboard-review-prune': 'prune', 'set-dashboard-review-duplicates': 'duplicates'
@@ -452,6 +537,7 @@
     el('stats-phrases').addEventListener('input', function () { if (open) renderStage(); });
   }
 
+  window.getSetVariableWarnings = variableWarnings;
   window.returnToSetDashboardDistribution = returnFromDistribution;
   window.openSetDashboard = openDashboard;
   window.closeSetDashboard = closeDashboard;

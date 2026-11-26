@@ -70,7 +70,7 @@ function dashboard(options = {}) {
     }),
     getInferenceQueueSnapshot: () => ({ jobs: [] }),
     isSetFolderPath: () => true,
-    getFilteredMediaItems: () => state.items,
+    getFilteredMediaItems: () => options.visibleItems || state.items,
     openSetIntelligence: () => actions.push('prepare'),
     openVisionSchemaAssist: () => actions.push('vocabulary'),
     openChecklistKeywordsModal: () => actions.push('groups'),
@@ -129,4 +129,37 @@ test('partial annotation cannot round to complete', () => {
   const items = Array.from({ length: 201 }, (_, i) => ({ key: String(i), fileName: i + '.png' }));
   const app = dashboard({ groups: ['Shape'], items, checked: key => key !== '200' });
   assert.equal(app.elements['set-dashboard-tags-count'].textContent, '99%');
+});
+
+test('footer uses the same active selection for all coverage', () => {
+  const a = {key:'a', fileName:'a.png', hasCaption:true, caption:'subject', metadata:{vision_sight:{description:'observed', inventory:{}}}};
+  const b = {key:'b', fileName:'b.png', hasCaption:false, caption:'', metadata:{}};
+  const app = dashboard({items:[a,b], visibleItems:[b], groups:['Shape'], checked:true});
+  assert.equal(app.elements['set-dashboard-scope'].textContent, '1 of 2 media');
+  assert.equal(app.elements['set-dashboard-sight-count'].textContent, '0 / 1');
+  assert.equal(app.elements['set-dashboard-captions-count'].textContent, '0 / 1');
+  assert.equal(app.elements['set-dashboard-tags-count'].textContent, '100%');
+});
+test('exclusive coverage partitions overlap; independent terms keep full membership', () => {
+  const start = source.indexOf('  function variableCoverage(');
+  const end = source.indexOf('  function distributionColor(', start);
+  const assigned = {a:['Kneeling'], b:['squatting'], c:['kneeling','squatting'], d:[]};
+  const sandbox = {
+    getChecklistAssignedTagsForMediaKey: key => assigned[key],
+    normalizeChecklistTerm: term => String(term).trim()
+  };
+  vm.runInNewContext(source.slice(start,end) + '\nthis.coverage = variableCoverage; this.warnings = variableWarnings;',sandbox);
+  const items = Object.keys(assigned).map(key=>({key,fileName:key+'.jpg'}));
+  const variable = {group:'Position',terms:['kneeling','squatting'],exclusive:true,expected:true};
+  const count = r => Array.from(r.rows, row=>row.files.length);
+  assert.deepEqual(count(sandbox.coverage(variable,items)), [1,1,1,1]);
+  assert.deepEqual(count(sandbox.coverage({...variable,exclusive:false},items)), [2,2,1]);
+  assert.deepEqual(Array.from(sandbox.warnings([variable],items),row=>row.kind), ['multiple']);
+  const missing = items.filter(item=>item.key!=='a');
+  assert.deepEqual(Array.from(sandbox.warnings([variable],missing),row=>row.kind), ['multiple','missing']);
+});
+test('Curate stays visible outside the preparation content, and Grid has an explicit return action', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../tool/tool.html'), 'utf8');
+  assert.ok(html.indexOf('id="set-dashboard-curate"') < html.indexOf('id="set-dashboard-stage"'));
+  assert.match(html, /id="media-grid-return-to-analysis-btn"/);
 });

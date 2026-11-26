@@ -3719,15 +3719,15 @@
                       </div>
                       <div id="set-scan-quality-summary" class="set-scan-quality-summary" aria-live="polite"></div>
                     </div>
-                    <div class="set-scan-progress-track" role="progressbar" aria-label="Sight scan progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                    <div class="set-scan-progress-track hidden" role="progressbar" aria-label="Sight scan progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
                       <span id="set-scan-progress-fill"></span>
                     </div>
                     <div id="set-scan-timing" class="set-scan-timing" aria-live="off" hidden></div>
-                    <div class="set-scan-summary">
+                    <div class="set-scan-summary hidden">
                       <strong id="set-scan-stage">Checking Set</strong>
                       <span id="set-scan-status" aria-live="polite"></span>
                     </div>
-                    <div id="set-scan-open-detail" class="set-scan-evidence-detail">Checking saved coverage…</div>
+                    <div id="set-scan-open-detail" class="set-scan-evidence-detail hidden">Checking saved coverage…</div>
                   </section>
                   <div class="set-scan-scope-row">
                     <div class="set-scan-scope-caption">
@@ -3737,7 +3737,7 @@
                     <label><input id="set-scan-entire-set" type="checkbox" aria-label="Scan entire Set, ignoring filters"> Entire Set</label>
                     
                   </div>
-                  <div class="set-scan-run-actions">
+                  <div class="set-scan-run-actions hidden">
                     <button id="set-scan-bad-retry" type="button" class="review-captions-btn set-scan-primary hidden">Retry flagged</button>
                     <button id="set-scan-rescan-btn" type="button" class="review-captions-btn hidden">Resume Set Intelligence</button>
                     <button id="set-scan-stop-btn" type="button" class="review-captions-btn hidden">Stop</button>

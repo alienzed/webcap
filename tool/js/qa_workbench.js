@@ -3530,7 +3530,8 @@
 
   function qaCorrectionItems() {
     return qaDeepScanScopeItems().map(function (item) {
-      return { item:item, findings:qaFocusReviewCandidateFindings(item, true) };
+      var draft = qaCorrectionCursor.drafts[item.key];
+      return { item:item, findings:draft && draft.retry ? draft.findings : qaFocusReviewCandidateFindings(item, true) };
     }).filter(function (entry) { return entry.findings.length > 0; });
   }
 
@@ -3580,7 +3581,8 @@
     if (qaCorrectionCursor.busy) return;
     var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
     if (!item) throw new Error('The QA correction target is no longer in the current Set.');
-    var findings = qaFocusReviewCandidateFindings(item, true).filter(function (finding) {
+    var draft = qaCorrectionCursor.drafts[mediaKey];
+    var findings = (draft && draft.retry ? draft.findings : qaFocusReviewCandidateFindings(item, true)).filter(function (finding) {
       return !findingId || finding.id === findingId;
     });
     var signature = qaCurrentItemSignatureMap([item])[item.fileName];
@@ -3592,10 +3594,17 @@
     });
     qaCorrectionCursor.busy = true;
     return qaSaveReview(true).then(function () {
-      if (!findingId && String(state.folder || '') === folder) delete qaCorrectionCursor.drafts[mediaKey];
+      if (String(state.folder || '') === folder) {
+        if (!findingId) delete qaCorrectionCursor.drafts[mediaKey];
+        else if (draft && draft.retry) {
+          draft.findings = draft.findings.filter(function (finding) { return finding.id !== findingId; });
+          if (!draft.findings.length) delete qaCorrectionCursor.drafts[mediaKey];
+        }
+      }
       qaSyncFocusReview();
       setStatus(appliedWithoutChanges ? 'QA review completed. Annotations unchanged.' :
-        'Rejected QA recommendation' + (findings.length === 1 ? '' : 's') + '. Annotations unchanged.');
+        'Rejected QA recommendation' + (findings.length === 1 ? '' : 's') + '. Annotations unchanged.' +
+        (findingId && draft ? ' Edited caption retained.' : ''));
       return true;
     }).catch(function (err) {
       if (String(state.folder || '') === folder) Object.keys(previous).forEach(function (key) {
@@ -3758,7 +3767,10 @@
         var reset = qaCreateButton('Reset to proposed caption');
         reset.classList.add('qa-correction-edit');
         reset.addEventListener('click', function () {
-          delete qaCorrectionCursor.drafts[item.key];
+          if (draft.retry) {
+            draft.before = plan.captionBefore;
+            draft.text = plan.captionAfter;
+          } else delete qaCorrectionCursor.drafts[item.key];
           card.dataset.fingerprint = '';
           renderQaWorkbench();
         });
@@ -3823,28 +3835,37 @@
     if (qaCorrectionCursor.busy) return Promise.resolve(false);
     var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
     if (!item) throw new Error('The QA correction target is no longer in the current Set.');
-    var plan = qaCorrectionPlan(item, qaFocusReviewCandidateFindings(item, true));
     var draft = qaCorrectionCursor.drafts[mediaKey];
+    var findings = draft && draft.retry ? draft.findings : qaFocusReviewCandidateFindings(item, true);
+    var plan = qaCorrectionPlan(item, findings);
     if (draft && draft.before !== plan.captionBefore) {
       setStatus('The saved caption changed. Reset the draft before applying.');
       return Promise.resolve(false);
     }
     var captionAfter = draft ? draft.text : plan.captionAfter;
-    if (draft && captionAfter === plan.captionBefore && !plan.tagActions.length) {
+    if (draft && !draft.retry && captionAfter === plan.captionBefore && !plan.tagActions.length) {
       return qaDismissCorrection(mediaKey, undefined, true);
     }
-    if (!plan.hasChanges && captionAfter === plan.captionBefore) {
+    if (!plan.hasChanges && captionAfter === plan.captionBefore && !(draft && draft.retry)) {
       setStatus('No current applicable corrections remain for ' + item.fileName + '.');
       renderQaWorkbench(true);
       return Promise.resolve(false);
     }
     var folder = String(state.folder || ''), key = item.key;
     qaCorrectionCursor.busy = true;
+    // The existing QA evidence becomes stale when annotations change. Keep the
+    // explicitly accepted work available for retry until persistence succeeds.
+    var pending = draft || {before:plan.captionBefore, text:captionAfter};
+    pending.findings = findings;
+    qaCorrectionCursor.drafts[key] = pending;
+    cancelEditorAutosaveForCaption(folder, item.fileName);
     renderQaWorkbench();
     var operations = Promise.resolve();
     if (captionAfter !== plan.captionBefore) {
       operations = operations.then(function () {
-        return saveCaptionDirect(folder, item.fileName, captionAfter, key, {skipRenderFileList:true});
+        return saveCaptionDirect(folder, item.fileName, captionAfter, key, {skipRenderFileList:true}).then(function () {
+          pending.before = captionAfter;
+        });
       });
     }
     plan.tagActions.forEach(function (action) {
@@ -3862,6 +3883,13 @@
       if (folder !== String(state.folder || '') || !state.items.some(function (row) { return row.key === key; })) {
         throw new Error('The Set changed while QA corrections were being applied.');
       }
+      return saveMediaAnnotationState(key).then(function (ok) {
+        if (!ok) throw new Error('Could not persist QA correction annotations.');
+      });
+    }).then(function () {
+      if (folder !== String(state.folder || '') || !state.items.some(function (row) { return row.key === key; })) {
+        throw new Error('The Set changed while QA corrections were being applied.');
+      }
       delete qaCorrectionCursor.drafts[key];
       qaRefreshComputedState(true);
       qaWorkbenchState.statusMessage = 'Applied QA corrections to ' + item.fileName + '.';
@@ -3869,6 +3897,7 @@
       setStatus(qaWorkbenchState.statusMessage);
       return true;
     }).catch(function (err) {
+      if (folder === String(state.folder || '')) pending.retry = true;
       reportConsoleError('QA Corrections · Apply', err);
       qaWorkbenchState.statusMessage = 'Could not complete QA corrections for ' + item.fileName + ': ' +
         String(err && err.message || err);

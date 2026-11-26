@@ -712,6 +712,45 @@ def test_quality_scan_keeps_technical_metadata_and_curated_fields(tmp_path, monk
     assert job["failed"] == 0
 
 
+def test_quality_failure_preserves_technical_metadata_and_continues(tmp_path, monkeypatch):
+    root = tmp_path / "quality-partial"
+    _file(root / "a.mp4")
+    _file(root / "b.mp4")
+    (root / "media_metadata.json").write_text(json.dumps({
+        "a.mp4": {"rating": 4, "tags": ["Keep"]}
+    }))
+    snapshot = _finished_snapshot(root)
+    monkeypatch.setattr(external_media, "_technical_probe", _probe)
+
+    def analyze(path, details, *, cancel):
+        if path.name == "a.mp4":
+            raise RuntimeError("detail decode failed")
+        return {"version": 1, "method": "multiscale-detail", "sampleCount": 1,
+                "detailSignal": 20.0}
+
+    monkeypatch.setattr(external_media, "analyze_media_quality", analyze)
+    job = _job(snapshot, ["a.mp4", "b.mp4"])
+    job["mode"] = "quality"
+    external_media._metadata_worker(snapshot, job)
+    assert job["failed"] == 1 and job["completed"] == 2
+    assert "detail decode failed" in job["lastError"]
+    persisted = json.loads((root / "media_metadata.json").read_text())
+    assert persisted["a.mp4"]["resolution"] == "1920x1080"
+    assert persisted["a.mp4"]["rating"] == 4
+    assert persisted["a.mp4"]["tags"] == ["Keep"]
+    assert "quality" not in persisted["a.mp4"]
+    assert snapshot["by_path"]["a.mp4"]["metadataCached"]
+    assert persisted["b.mp4"]["quality"]["detailSignal"] == 20.0
+
+    # Retry the failed detail pass using the already persisted technical data.
+    monkeypatch.setattr(external_media, "_technical_probe",
+                        lambda path: pytest.fail("unexpected technical re-probe"))
+    retry = _job(snapshot, ["a.mp4", "b.mp4"])
+    retry["mode"] = "quality"
+    external_media._metadata_worker(snapshot, retry)
+    assert retry["failed"] == 1 and retry["completed"] == 2
+
+
 def test_quality_sort_unknown_last_in_both_directions(tmp_path):
     root = tmp_path / "detail-sort"
     _file(root / "a.mp4")
@@ -761,3 +800,6 @@ def test_quality_scan_cancellation_skips_remaining_items(tmp_path, monkeypatch):
     external_media._metadata_worker(snapshot, job)
     assert seen == ["one.mp4"]
     assert job["canceled"] and job["completed"] == 1 and job["failed"] == 0
+    assert snapshot["by_path"]["one.mp4"]["metadataCached"]
+    assert snapshot["by_path"]["one.mp4"]["metadata"]["resolution"] == "1920x1080"
+    assert not snapshot["by_path"]["two.mp4"].get("metadataCached")

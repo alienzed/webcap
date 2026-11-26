@@ -526,14 +526,20 @@ def _metadata_worker(snapshot, job):
                     raise ValueError("External media no longer indexed: " + relative)
                 cached = item.get("metadata") or {}
                 fresh = _fresh(item, cached)
+                quality_error = None
+                source_stat = None
                 if job.get("mode") == "quality":
                     if fresh and current_quality(cached):
                         continue
                     details = dict(cached) if fresh else _technical_probe(path)
                     source_stat = path.stat()
-                    details["quality"] = analyze_media_quality(
-                        path, details, cancel=job["cancel"])
-                    details["quality"]["sourceMtimeNs"] = source_stat.st_mtime_ns
+                    try:
+                        details["quality"] = analyze_media_quality(
+                            path, details, cancel=job["cancel"])
+                        details["quality"]["sourceMtimeNs"] = source_stat.st_mtime_ns
+                    except Exception as exc:
+                        # A failed or stopped detail pass must not discard valid technical metadata.
+                        quality_error = exc
                 else:
                     if item.get("metadataCached") and fresh:
                         continue
@@ -541,8 +547,8 @@ def _metadata_worker(snapshot, job):
                 # Source may have changed between indexing and probing.
                 stat = path.stat()
                 if (details["size"] != stat.st_size or details["mtime"] != int(stat.st_mtime)
-                        or (job.get("mode") == "quality" and
-                            details["quality"]["sourceMtimeNs"] != stat.st_mtime_ns)):
+                        or (source_stat is not None and
+                            source_stat.st_mtime_ns != stat.st_mtime_ns)):
                     raise RuntimeError("Source changed; refresh the external folder: " + relative)
                 with _LOCK:
                     if not item.get("metadata"):
@@ -555,6 +561,8 @@ def _metadata_worker(snapshot, job):
                 batch[path.name] = details
                 if len(batch) >= 256:
                     flush()
+                if quality_error is not None:
+                    raise quality_error
             except InterruptedError:
                 with _LOCK:
                     job["cancel"].set()

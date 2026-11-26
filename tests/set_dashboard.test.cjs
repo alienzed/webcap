@@ -11,7 +11,7 @@ function dashboard(options = {}) {
   const listeners = {};
   function element(id) {
     if (elements[id]) return elements[id];
-    const classes = new Set(id.startsWith('set-dashboard-') ? ['hidden'] : []);
+    const classes = new Set(id.startsWith('set-dashboard-') && !['set-dashboard-tags-guided', 'set-dashboard-tags-groups'].includes(id) ? ['hidden'] : []);
     return elements[id] = {
       id, textContent: '', value: '', isConnected: true, open: false, style: {},
       removeAttribute(name) { delete elements[id + ':' + name]; },
@@ -56,7 +56,7 @@ function dashboard(options = {}) {
     },
     checklistItems: options.groups || [],
     getChecklistKeywordTermsForRequirement: () => ['tag'],
-    isChecklistRequirementCheckedForMediaKey: () => !!options.checked,
+    isChecklistRequirementCheckedForMediaKey: (key, name) => typeof options.checked === 'function' ? options.checked(key, name) : !!options.checked,
     getTrainingRunnerActiveJob: () => options.training ? { status: 'running' } : null,
     shellWorkloadState: { trainingActive: !!options.training },
     getShellWorkloadStatus: () => ({
@@ -163,6 +163,7 @@ test('markup retains single authoritative guidance controls and original templat
 test('shared GPU activity does not prevent launching Guided Tagging', () => {
   const app = dashboard({ phrase: 'subject', balances: 'front', shellLane: 'inference' });
   assert.equal(app.selected(), 'analyze');
+  assert.equal(app.elements['set-dashboard-tags-guided'].classList.contains('hidden'), false);
   app.elements['set-dashboard-tags-guided'].onclick();
   assert.deepEqual(app.actions, ['prepare', 'hide-prepare', 'guided']);
 });
@@ -257,4 +258,11 @@ test('annotation coverage is a percentage, with quiet manual shortcuts and a sin
   assert.match(tags, /id="set-dashboard-tags-primary" class="set-dashboard-secondary"/);
   assert.match(tags, /id="set-dashboard-tags-groups" class="set-dashboard-secondary"/);
   assert.doesNotMatch(html, /id="set-dashboard-tags-note"/);
+});
+
+test('partial annotation cannot round to complete', () => {
+  const items = Array.from({ length: 201 }, (_, i) => ({ key: String(i), fileName: i + '.png' }));
+  const app = dashboard({ phrase: 'subject', balances: 'front', groups: ['Shape'], items, checked: key => key !== '200' });
+  assert.equal(app.elements['set-dashboard-tags-count'].textContent, '99%');
+  assert.equal(app.elements['set-dashboard-tags-progress-value'].textContent, '99%');
 });

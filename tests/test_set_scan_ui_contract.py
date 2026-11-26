@@ -177,3 +177,14 @@ def test_understand_progressive_disclosure_retains_original_scan_capabilities():
     assert "if (inspection.open) updateSightPreviewMedia(" in scan
     assert ".set-scan-inspection-disclosure" in css
     assert 'id="set-intelligence-next"' not in html
+
+
+def test_compact_sight_header_and_single_vocabulary_destination():
+    html = _read("tool/tool.html")
+    heading = html.split('class="set-dashboard-sight-heading"', 1)[1].split('id="set-scan-modal"', 1)[0]
+    tags = html.split('class="set-dashboard-tags-panel"', 1)[1].split('id="set-dashboard-caption"', 1)[0]
+    assert 'id="set-scan-vision-model"' in heading
+    assert html.count('id="set-scan-vision-model"') == 1
+    assert 'id="set-intelligence-primary-btn"' in tags
+    assert html.count('id="set-intelligence-primary-btn"') == 1
+    assert 'id="set-dashboard-tags-vocabulary"' not in html

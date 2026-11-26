@@ -7,6 +7,10 @@ on:
       - 'tool/css/lora_library.css'
       - 'tests/lora_library_ui.test.cjs'
       - 'tool/js/set_scan.js'
+      - 'tool/js/set_dashboard.js'
+      - 'tool/css/set_dashboard.css'
+      - 'tests/set_dashboard.test.cjs'
+      - 'tests/set_scan_action_hierarchy.test.cjs'
       - 'tool/js/caption_vision.js'
       - 'tool/js/media_context_actions.js'
       - 'tests/test_vl_workspace_unified.py'
@@ -160,7 +164,8 @@ jobs:
       - name: Prepare Set Sight live preview
         run: |
           node --check tool/js/set_scan.js
-          node --test tests/set_scan_live_preview.test.cjs
+          node --check tool/js/set_dashboard.js
+          node --test tests/set_scan_live_preview.test.cjs tests/set_scan_action_hierarchy.test.cjs tests/set_dashboard.test.cjs
       - name: Caption Assist acceptance and Single Item Tag Assist
         run: |
           node --check tool/js/primer_settings.js

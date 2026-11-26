@@ -41,7 +41,11 @@ def test_qa_group_inspection_enters_existing_grid_and_preserves_return():
 
 def test_set_intelligence_allows_partial_cached_evidence_without_automatic_scan():
     scan = read("tool/js/set_scan.js")
-    assert "setScanState.coverage.openCurrent > 0" in scan
+    schema = read("tool/js/vision_schema_assist.js")
+    evidence = schema.split("function prepareDiscoveryEvidence()", 1)[1].split("function completeDiscovery(", 1)[0]
+    assert "!!item.structured" in evidence
+    assert "if (!structured)" in evidence
+    assert "runSetIntelligence" not in evidence
     assert "rescanBtn.onclick = function () { runSetIntelligence(); };" in scan
 
 

@@ -73,3 +73,22 @@ test('running scan hides launch actions; Stop is rendered separately', () => {
   assert.equal(s.force.disabled, true);
   assert.equal(s.actions.classes.has('hidden'), false);
 });
+
+test('successful completion hides redundant status while errors and live status stay visible', () => {
+  const from = source.indexOf('  function setSetIntelligenceStatus(');
+  const to = source.indexOf('  function showRawResponse(', from);
+  assert.ok(from >= 0 && to > from);
+  const summary = button(), stage = { parentElement: summary }, status = {};
+  const context = {
+    el: id => id === 'set-scan-stage' ? stage : status,
+    renderSetIntelligence() {}, publishSetIntelligenceActivity() {}
+  };
+  const update = vm.runInNewContext(source.slice(from, to) + '\\nsetSetIntelligenceStatus', context);
+  update('Set understood', 'Cached Sight is available.', true);
+  assert.equal(summary.classes.has('hidden'), true);
+  update('Sight', 'Checking item 1');
+  assert.equal(summary.classes.has('hidden'), false);
+  update('Set Intelligence refresh failed', 'Previous report preserved.');
+  assert.equal(summary.classes.has('hidden'), false);
+  assert.equal(status.textContent, 'Previous report preserved.');
+});

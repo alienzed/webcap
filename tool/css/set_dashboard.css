@@ -554,3 +554,49 @@
   margin: 0;
   font-size: 16px;
 }
+
+/* Compact Analyze & Tag: keep the model, scope and actions with their owners. */
+#set-dashboard-analyze .set-dashboard-sight-heading { gap: 12px; }
+#set-dashboard-analyze .set-dashboard-sight-heading select {
+  min-width: 0;
+  flex: 1 1 auto;
+  max-width: 100%;
+  min-height: 38px;
+  font-size: 16px;
+}
+#set-dashboard-analyze #set-scan-open-badge.is-current {
+  border: 0;
+  background: transparent;
+  font-size: 20px;
+  padding: 0;
+  color: var(--text);
+}
+#set-dashboard-analyze .set-scan-content .set-scan-scope-row {
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-top: 12px;
+  padding: 12px 0;
+}
+#set-dashboard-analyze .set-scan-scope-caption { flex: 0 1 auto; gap: 8px; }
+#set-dashboard-analyze .set-scan-scope-row label { white-space: nowrap; gap: 6px; }
+#set-dashboard-analyze .set-scan-scope-row input { width: auto; flex: 0 0 auto; margin: 0; }
+#set-dashboard-analyze .set-scan-content .set-scan-run-actions { padding: 8px 0 12px; }
+#set-dashboard-analyze .set-dashboard-annotation-shortcuts {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-soft);
+  gap: 16px;
+}
+#set-dashboard-analyze .set-dashboard-annotation-shortcuts button {
+  min-height: 36px;
+  padding: 4px 0;
+  font-size: 16px;
+  text-decoration: none;
+  color: var(--muted);
+}
+#set-dashboard-analyze .set-dashboard-annotation-shortcuts button:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+#set-dashboard-analyze .set-dashboard-vocabulary-actions { margin-top: 12px; }

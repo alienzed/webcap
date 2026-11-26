@@ -27,7 +27,7 @@ def test_set_intelligence_is_the_single_set_tools_entry_point():
     assert 'src="/static/js/set_scan.js"' in html
     assert "openVisionSchemaAssist();" in scan
     assert "window.closeSetDashboard();" in scan
-    assert "window.openSetDashboard('understand');" in scan
+    assert "window.openSetDashboard('analyze');" in scan
     assert "intelligenceBtn.classList.toggle('hidden'" in review
 
 
@@ -110,7 +110,7 @@ def test_set_intelligence_uses_visible_training_scope_with_explicit_full_set_ove
     assert "if (!files.length) {\n      setCoverage(0, 0);" in scan
     assert 'entireSetToggle.onchange = openSetIntelligence;' in scan
     assert 'openVisionSchemaAssist();' in scan
-    assert "window.openSetDashboard('understand');" in scan
+    assert "window.openSetDashboard('analyze');" in scan
     assert 'schemaState.scopeFiles = getCurrentSetMediaFileNames();' in schema
     assert "if (opts.source === 'set') {\n      return getCurrentSetMediaFileNames();" in schema
 

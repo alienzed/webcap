@@ -26,14 +26,14 @@ Training stays in its existing workspace. Neither the Dashboard nor switching ta
 - The only authoritative phrase and balance controls remain `stats-required-phrase`, `stats-phrases`, and their existing list/editor handlers. The single actual caption primer remains `primer-template`. The dashboard offers an explicit Edit Template link instead of cloning its field.
 - Group definitions and assignments continue to be owned by checklist and focused annotation. The Dashboard's review metric measures checked assignments, **not annotation correctness or QA certification**.
 - Caption Assist, Focused Caption, Focused Annotation, Guided Tagging, QA, reports and Set Intelligence retain their own operation semantics. This Dashboard does not rewrite their models, persistence, cancellation, error reporting, or queue behavior.
-- Respect active GPU work by withholding optional Guided Tagging and Vocabulary launch controls while GPU lanes are busy. Manual group management and annotation remain possible.
+- Use the existing specialist workflows and their queue behavior; the Dashboard does not hide vocabulary or tagging actions based on global GPU activity.
 - Present honest empty selections, missing captions and disabled report options; preserve focused keyboard navigation, Escape, overlay dismissal and Set-switch isolation.
 
 ## Focused acceptance
 
 - Fresh Set with missing guidance opens Caption. Both phrase and balance fields are visible/editable, and no inferencing starts.
 - Set with guidance but no Sight opens Analyze & Tag, with Sight embedded rather than overlaid; any scan still requires explicit action.
-- Analyze & Tag offers Manage Groups on an unconfigured Set, Focused Annotation on configured groups, and optional vocabulary/tagging only with saved Sight and an available GPU.
+- Analyze & Tag offers Manage Groups on an unconfigured Set, Focused Annotation on configured groups, and direct vocabulary and guided tagging actions using their existing evidence and queue checks.
 - Mature Set opens Review; QA, caption inspection and report destinations work independently without a new Dashboard-side QA process.
 - A filtered selection distinguishes current-view assignment/caption coverage from whole-Set coverage. The saved Sight metric is clearly labeled as any-model evidence and is not a completion certificate.
 - Changing tabs doesn't shift the header, resize the dashboard, replace live Sight progress, or start a second scan. Returning to Analyze & Tag reconnects the existing UI.
@@ -46,3 +46,10 @@ Training stays in its existing workspace. Neither the Dashboard nor switching ta
 - New QA finding summaries, inferred readiness scores, freshness certification or new server endpoints.
 - Training workflow redesign or GPU/queue scheduling changes.
 - Deleting legacy feature entry points or changing unrelated navigation.
+
+## Analyze & Tag refinement
+
+- Sight owns its single model selector, scoped coverage, active scan progress, retry and inspection controls. Compact the header and scope row, and omit the success message when all scoped evidence is current and unflagged. Preserve active, incomplete, stopped and failed status.
+- Vocabulary & Tags owns the visible Discover Vocabulary and Guided Tagging entries; the specialist workflows retain their existing model/evidence validation and GPU scheduling. Focused Annotation and Manage Groups are quieter shortcuts.
+- Annotation Review is the percentage of checked configured group assignments for the current filtered view, rounded down so incomplete work cannot display 100%. No configured assignments or empty scope has no percentage.
+- Caption, Review, Focus Set navigation and backend state are unchanged.

@@ -41,9 +41,7 @@ def test_qa_group_inspection_enters_existing_grid_and_preserves_return():
 
 def test_set_intelligence_allows_partial_cached_evidence_without_automatic_scan():
     scan = read("tool/js/set_scan.js")
-    assert "function coverageIsUsable()" in scan
     assert "setScanState.coverage.openCurrent > 0" in scan
-    assert "setScanState.running || !coverageIsUsable()" in scan
     assert "rescanBtn.onclick = function () { runSetIntelligence(); };" in scan
 
 

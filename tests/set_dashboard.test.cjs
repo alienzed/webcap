@@ -108,14 +108,14 @@ test('unprepared Set opens Analyze with embedded Sight, without inference', () =
   const app = dashboard({ phrase: 'subject', balances: 'front' });
   assert.equal(app.selected(), 'analyze');
   assert.deepEqual(app.actions, ['prepare']);
-  assert.equal(app.elements['set-dashboard-tags-primary'].textContent, 'Manage Groups');
+  assert.equal(app.elements['set-dashboard-tags-primary'].classList.contains('hidden'), true);
 });
 
-test('Training blocks scan recommendation, favors manual group work', () => {
+test('Training does not hide or gate annotation tools in Dashboard', () => {
   const app = dashboard({ phrase: 'subject', balances: 'front', training: true });
   assert.equal(app.selected(), 'analyze');
-  assert.equal(app.elements['set-dashboard-tags-primary'].textContent, 'Manage Groups');
-  app.elements['set-dashboard-tags-primary'].onclick();
+  assert.equal(app.elements['set-dashboard-tags-primary'].classList.contains('hidden'), true);
+  app.elements['set-dashboard-tags-groups'].onclick();
   assert.deepEqual(app.actions, ['prepare', 'hide-prepare', 'groups']);
 });
 
@@ -160,11 +160,11 @@ test('markup retains single authoritative guidance controls and original templat
   assert.match(html, /static\/css\/set_dashboard\.css/);
 });
 
-test('shared GPU activity leaves manual actions available', () => {
+test('shared GPU activity does not prevent launching Guided Tagging', () => {
   const app = dashboard({ phrase: 'subject', balances: 'front', shellLane: 'inference' });
   assert.equal(app.selected(), 'analyze');
-  assert.equal(app.elements['set-dashboard-tags-primary'].textContent, 'Manage Groups');
-  assert.equal(app.elements['set-dashboard-tags-vocabulary'].classList.contains('hidden'), true);
+  app.elements['set-dashboard-tags-guided'].onclick();
+  assert.deepEqual(app.actions, ['prepare', 'hide-prepare', 'guided']);
 });
 
 test('outstanding annotation reviews take precedence even if captions exist', () => {
@@ -215,7 +215,7 @@ test('three navigation tabs and progress strip use separate scope labels', () =>
   assert.equal(app.elements['set-dashboard-captions-count'].textContent, '0 / 1');
   assert.equal(app.elements['set-dashboard-tags-count'].textContent, '—');
   const html = fs.readFileSync(path.join(__dirname, '../tool/tool.html'), 'utf8');
-  assert.match(html, /Group assignments reviewed/);
+  assert.match(html, /Annotation Review/);
   assert.match(html, /Current filtered view/);
   assert.match(html, /id="set-dashboard-template-open"/);
   assert.equal((html.match(/id="stats-required-phrase"/g) || []).length, 1);
@@ -244,4 +244,17 @@ test('fixed dashboard shell and tab content scroll independently', () => {
   assert.match(css, /\.set-dashboard-modal\s*\{\s*align-items: flex-start;/);
   assert.match(css, /#set-dashboard-stage\s*\{[^}]*overflow-y: auto;/);
   assert.match(css, /\.set-dashboard-dialog\s*\{[^}]*display: flex;/);
+});
+
+test('annotation coverage is a percentage, with quiet manual shortcuts and a single vocabulary entry', () => {
+  const app = dashboard({ phrase: 'subject', balances: 'front', groups: ['Shape'], checked: true });
+  assert.equal(app.elements['set-dashboard-tags-count'].textContent, '100%');
+  const html = fs.readFileSync(path.join(__dirname, '../tool/tool.html'), 'utf8');
+  const tags = html.slice(html.indexOf('class="set-dashboard-tags-panel"'), html.indexOf('id="set-dashboard-caption"'));
+  assert.equal((html.match(/id="set-intelligence-primary-btn"/g) || []).length, 1);
+  assert.match(tags, /id="set-intelligence-primary-btn"/);
+  assert.doesNotMatch(html, /id="set-dashboard-tags-vocabulary"/);
+  assert.match(tags, /id="set-dashboard-tags-primary" class="set-dashboard-secondary"/);
+  assert.match(tags, /id="set-dashboard-tags-groups" class="set-dashboard-secondary"/);
+  assert.doesNotMatch(html, /id="set-dashboard-tags-note"/);
 });

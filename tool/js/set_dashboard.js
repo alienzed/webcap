@@ -34,22 +34,12 @@
     });
     var totalGroups = visibleItems.length * groups.length;
     var pending = totalGroups > reviewedGroups;
-    var trainingJob = getTrainingRunnerActiveJob();
-    var shell = getShellWorkloadStatus();
-    var queue = getInferenceQueueSnapshot();
-    var trainingActive = !!trainingJob || !!shellWorkloadState.trainingActive ||
-      (shell.key === 'active' && shell.lane === 'training');
-    var gpuBusy = trainingActive || (shell.key === 'active' &&
-      ['training', 'inference', 'llm'].indexOf(shell.lane) !== -1) ||
-      (queue && Array.isArray(queue.jobs) && queue.jobs.some(function (job) {
-        return ['starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1;
-      }));
     return {
       items: items, total: items.length, phrase: phrase, balances: balances,
       sight: sight, captions: captions, configuredGroups: groups.length,
       visibleTotal: visibleItems.length, visibleCaptions: visibleCaptions,
       reviewedGroups: reviewedGroups, totalGroups: totalGroups,
-      pending: pending, training: !!trainingActive, gpuBusy: !!gpuBusy
+      pending: pending
     };
   }
 
@@ -67,7 +57,6 @@
   function run(destination) {
     closeDashboard();
     if (destination === 'prepare') return openDashboard('analyze');
-    if (destination === 'vocabulary') return openVisionSchemaAssist();
     if (destination === 'annotation') return startFocusedAnnotation();
     if (destination === 'groups') return openChecklistKeywordsModal();
     if (destination === 'guided') return openGuidedTagPass({ source: 'set' });
@@ -110,7 +99,8 @@
 
     // Real evidence, with distinct denominators and scope labels. No readiness score.
     el('set-dashboard-sight-count').textContent = s.sight + ' / ' + s.total;
-    el('set-dashboard-tags-count').textContent = s.totalGroups ? s.reviewedGroups + ' / ' + s.totalGroups : '—';
+    var annotationPercent = s.totalGroups ? Math.floor(s.reviewedGroups * 100 / s.totalGroups) : null;
+    el('set-dashboard-tags-count').textContent = annotationPercent === null ? '—' : annotationPercent + '%';
     el('set-dashboard-captions-count').textContent = s.captions + ' / ' + s.total;
     var title = el('set-dashboard-action-title');
     var status = el('set-dashboard-action-status');
@@ -122,37 +112,23 @@
     if (selected === 'analyze') {
       title.textContent = 'See what is present, then annotate it';
       if (!window.isSetIntelligenceOpen()) window.openSetIntelligence();
-      var remaining = s.totalGroups - s.reviewedGroups;
       var tagsStatus = el('set-dashboard-tags-status');
       var tagsProgress = el('set-dashboard-tags-progress');
       var tagPrimary = el('set-dashboard-tags-primary');
       var guided = el('set-dashboard-tags-guided');
-      var vocabulary = el('set-dashboard-tags-vocabulary');
       var groups = el('set-dashboard-tags-groups');
-      var note = el('set-dashboard-tags-note');
-      setHidden(note, !s.gpuBusy);
-      if (s.gpuBusy) note.textContent = 'GPU work is active. Manual group and annotation work remains available.';
-      setHidden(tagsProgress, !s.totalGroups);
-      if (s.totalGroups) {
-        el('set-dashboard-tags-progress-value').textContent = s.reviewedGroups + ' of ' + s.totalGroups;
-        el('set-dashboard-tags-progress-fill').style.width = Math.round(s.reviewedGroups * 100 / s.totalGroups) + '%';
+      setHidden(tagsProgress, annotationPercent === null);
+      if (annotationPercent !== null) {
+        el('set-dashboard-tags-progress-value').textContent = annotationPercent + '%';
+        el('set-dashboard-tags-progress-fill').style.width = annotationPercent + '%';
       }
-      tagsStatus.textContent = !s.configuredGroups
-        ? 'No configured groups with vocabulary terms yet.'
-        : !s.visibleTotal
-          ? 'No media matches the current filters. Group configuration remains available.'
-          : remaining
-            ? remaining + ' of ' + s.totalGroups + ' group assignments remain to be reviewed in the current view.'
-            : 'All configured group assignments in the current view have been reviewed.';
-      tagPrimary.textContent = s.configuredGroups && s.visibleTotal ? 'Focused Annotation' : 'Manage Groups';
-      tagPrimary.onclick = function () { run(s.configuredGroups && s.visibleTotal ? 'annotation' : 'groups'); };
-      // Discover Vocabulary and Guided Tagging are existing LLM/GPU workflows.
-      // Do not advertise their launch as ready while a competing GPU task is running.
-      setHidden(guided, !s.sight || s.gpuBusy);
+      tagsStatus.textContent = !s.configuredGroups ? 'No groups configured' :
+        !s.visibleTotal ? 'No media in the current view' : '';
+      setHidden(tagsStatus, !tagsStatus.textContent);
+      tagPrimary.textContent = 'Focused Annotation';
+      tagPrimary.onclick = function () { run('annotation'); };
+      setHidden(tagPrimary, !s.configuredGroups || !s.visibleTotal);
       guided.onclick = function () { run('guided'); };
-      setHidden(vocabulary, !s.sight || s.gpuBusy);
-      vocabulary.onclick = function () { run('vocabulary'); };
-      setHidden(groups, !s.configuredGroups);
       groups.onclick = function () { run('groups'); };
       return;
     }

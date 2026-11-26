@@ -27,7 +27,7 @@ def test_set_intelligence_is_the_single_set_tools_entry_point():
     assert 'src="/static/js/set_scan.js"' in html
     assert "openVisionSchemaAssist();" in scan
     assert "window.closeSetDashboard();" in scan
-    assert "window.openSetDashboard('understand');" in scan
+    assert "window.openSetDashboard('analyze');" in scan
     assert "intelligenceBtn.classList.toggle('hidden'" in review
 
 
@@ -110,7 +110,7 @@ def test_set_intelligence_uses_visible_training_scope_with_explicit_full_set_ove
     assert "if (!files.length) {\n      setCoverage(0, 0);" in scan
     assert 'entireSetToggle.onchange = openSetIntelligence;' in scan
     assert 'openVisionSchemaAssist();' in scan
-    assert "window.openSetDashboard('understand');" in scan
+    assert "window.openSetDashboard('analyze');" in scan
     assert 'schemaState.scopeFiles = getCurrentSetMediaFileNames();' in schema
     assert "if (opts.source === 'set') {\n      return getCurrentSetMediaFileNames();" in schema
 
@@ -177,3 +177,14 @@ def test_understand_progressive_disclosure_retains_original_scan_capabilities():
     assert "if (inspection.open) updateSightPreviewMedia(" in scan
     assert ".set-scan-inspection-disclosure" in css
     assert 'id="set-intelligence-next"' not in html
+
+
+def test_compact_sight_header_and_single_vocabulary_destination():
+    html = _read("tool/tool.html")
+    heading = html.split('class="set-dashboard-sight-heading"', 1)[1].split('id="set-scan-modal"', 1)[0]
+    tags = html.split('class="set-dashboard-tags-panel"', 1)[1].split('id="set-dashboard-caption"', 1)[0]
+    assert 'id="set-scan-vision-model"' in heading
+    assert html.count('id="set-scan-vision-model"') == 1
+    assert 'id="set-intelligence-primary-btn"' in tags
+    assert html.count('id="set-intelligence-primary-btn"') == 1
+    assert 'id="set-dashboard-tags-vocabulary"' not in html

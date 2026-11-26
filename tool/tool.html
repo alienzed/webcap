@@ -3687,7 +3687,7 @@
     </div>
     <div class="set-dashboard-overview" id="set-dashboard-overview" aria-label="Set progress">
       <div class="set-dashboard-metric"><span>Saved Sight</span><strong id="set-dashboard-sight-count">—</strong><small>Any model · entire Set</small></div>
-      <div class="set-dashboard-metric"><span>Group assignments reviewed</span><strong id="set-dashboard-tags-count">—</strong><small>Current filtered view</small></div>
+      <div class="set-dashboard-metric"><span>Annotation Review</span><strong id="set-dashboard-tags-count">—</strong><small>Current filtered view</small></div>
       <div class="set-dashboard-metric"><span>Captions present</span><strong id="set-dashboard-captions-count">—</strong><small>Entire Set</small></div>
     </div>
     <section id="set-dashboard-stage" role="tabpanel" aria-live="polite">
@@ -3697,6 +3697,7 @@
         <div class="set-dashboard-sight-panel">
           <div class="set-dashboard-sight-heading">
             <h4>Sight</h4>
+            <select id="set-scan-vision-model" aria-label="Sight Vision model"></select>
             <span id="set-scan-open-badge" class="set-scan-evidence-badge">Checking</span>
           </div>
           <div id="set-scan-modal" class="set-scan-modal hidden" role="region" aria-label="Set Intelligence">
@@ -3733,14 +3734,13 @@
                       <strong>Scope</strong>
                       <span id="set-scan-scope-summary">Current training selection</span>
                     </div>
-                    <label><input id="set-scan-entire-set" type="checkbox"> Scan entire Set (ignore filters)</label>
-                    <label class="set-scan-model-picker">Vision model <select id="set-scan-vision-model" aria-label="Vision model for Prepare Set"></select></label>
+                    <label><input id="set-scan-entire-set" type="checkbox" aria-label="Scan entire Set, ignoring filters"> Entire Set</label>
+                    
                   </div>
                   <div class="set-scan-run-actions">
                     <button id="set-scan-bad-retry" type="button" class="review-captions-btn set-scan-primary hidden">Retry flagged</button>
                     <button id="set-scan-rescan-btn" type="button" class="review-captions-btn hidden">Resume Set Intelligence</button>
                     <button id="set-scan-stop-btn" type="button" class="review-captions-btn hidden">Stop</button>
-                    <button id="set-intelligence-primary-btn" type="button" class="review-captions-btn set-scan-primary hidden">Discover Vocabulary</button>
                   </div>
                   <details class="set-scan-inspection-disclosure" id="set-scan-inspection-disclosure">
                     <summary>Inspect &amp; troubleshoot <span id="set-scan-inspection-context"></span></summary>
@@ -3793,16 +3793,17 @@
           <h4>Vocabulary &amp; Tags</h4>
           <p id="set-dashboard-tags-status" class="set-dashboard-section-copy"></p>
           <div id="set-dashboard-tags-progress" class="set-dashboard-progress hidden">
-            <div class="set-dashboard-progress-label"><span>Reviewed assignments in current view</span><strong id="set-dashboard-tags-progress-value"></strong></div>
+            <div class="set-dashboard-progress-label"><span>Annotation review · current view</span><strong id="set-dashboard-tags-progress-value"></strong></div>
             <div class="set-dashboard-progress-track"><div id="set-dashboard-tags-progress-fill" class="set-dashboard-progress-fill"></div></div>
           </div>
-          <div class="set-dashboard-section-actions">
-            <button type="button" id="set-dashboard-tags-primary" class="set-dashboard-primary"></button>
-            <button type="button" id="set-dashboard-tags-guided" class="set-dashboard-quiet hidden">Guided Tagging</button>
-            <button type="button" id="set-dashboard-tags-vocabulary" class="set-dashboard-quiet hidden">Discover Vocabulary</button>
-            <button type="button" id="set-dashboard-tags-groups" class="set-dashboard-quiet hidden">Manage Groups</button>
+          <div class="set-dashboard-section-actions set-dashboard-vocabulary-actions">
+            <button type="button" id="set-intelligence-primary-btn" class="set-dashboard-quiet">Discover Vocabulary</button>
+            <button type="button" id="set-dashboard-tags-guided" class="set-dashboard-quiet">Guided Tagging</button>
           </div>
-          <p id="set-dashboard-tags-note" class="set-dashboard-section-copy hidden"></p>
+          <div class="set-dashboard-section-actions set-dashboard-annotation-shortcuts">
+            <button type="button" id="set-dashboard-tags-primary" class="set-dashboard-secondary">Focused Annotation</button>
+            <button type="button" id="set-dashboard-tags-groups" class="set-dashboard-secondary">Manage Groups</button>
+          </div>
         </aside>
       </div>
       <div id="set-dashboard-caption" class="set-dashboard-split hidden">

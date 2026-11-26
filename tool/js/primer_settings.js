@@ -108,7 +108,6 @@ function statsGetPrimerOptionsFromDom() {
   };
 }
 
-var debouncedSaveFolderState = debounceCreate(600);
 var primerResetUndoState = null; // { mediaKey, text }
 var captionAssistPendingJobId = '';
 var captionAssistApplyPending = false;
@@ -334,10 +333,7 @@ function wireStatsPrimerAutoSave() {
           state.folderHasSavedPrimerTemplate = true;
         }
         refreshPrimerPreviewForCurrentItem();
-        var capturedSave = captureCurrentFolderStateSave();
-        debouncedSaveFolderState(function () {
-          writeCapturedFolderState(capturedSave);
-        });
+        scheduleFolderStateSnapshotSave();
         if (typeof updatePrimerCaptionResetUi === 'function') {
           updatePrimerCaptionResetUi();
         }

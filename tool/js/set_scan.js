@@ -199,7 +199,8 @@
     var issueCountTotal = itemsCountNeedingAttention(setScanState.sightItems);
     // Sight actions stay here; vocabulary has its own entry in the annotation panel.
     var shouldRetry = !setScanState.running && !!issueCountTotal;
-    var shouldScan = !setScanState.running && !shouldRetry && (!coverage.known || !!openMissing);
+    var shouldScan = !setScanState.running && setScanState.phase !== 'checking-cache' &&
+      !shouldRetry && (!coverage.known || !!openMissing);
     rescanBtn.classList.toggle('hidden', !shouldScan);
     rescanBtn.disabled = !scopeCount;
     rescanBtn.textContent = actionLabel || 'Run Set Intelligence';
@@ -254,7 +255,8 @@
     updateSetSightTiming();
 
     if (!coverage.known) {
-      setEvidenceCard(openCard, openBadge, openCount, openDetail, 'checking', 'Checking', '—', 'Looking for saved Sight…');
+      var checking = setScanState.phase === 'checking-cache' || setScanState.running;
+      setEvidenceCard(openCard, openBadge, openCount, openDetail, 'checking', checking ? 'Checking' : 'Not checked', '—', 'Looking for saved Sight…');
     } else {
       var openState = totalCoverage > 0 && coverage.openCurrent >= totalCoverage && !flaggedTotal
         ? 'current'
@@ -873,20 +875,20 @@
     var requestToken = ++setScanState.scopeRequestToken;
     setScanState.files = files.slice();
     setScanState.hasRun = false;
-    setScanState.phase = 'idle';
+    setScanState.phase = 'checking-cache';
     setScanState.coverage.known = false;
     setScanState.rawResponses = [];
     setScanState.rawResponseIndex = -1;
     setScanState.currentRawResponse = null;
     setScanState.sightItems = [];
     setScanState.previewFileName = files[0] || '';
-    renderSetIntelligence();
     if (!files.length) {
       setCoverage(0, 0);
+      setScanState.phase = 'idle';
       setSetIntelligenceStatus('Empty selection', 'No media match the current filters. Adjust filters or scan the entire Set.');
       return;
     }
-    setSetIntelligenceStatus('Checking selection', 'Checking saved Sight for ' + String(files.length) + ' selected media…');
+    setSetIntelligenceStatus('Checking selection', 'Checking saved Sight for ' + String(files.length) + ' selected media…', true);
     restoreCachedIntelligence(folder, files, requestToken).then(function (restored) {
       if (!setScanState.open || requestToken !== setScanState.scopeRequestToken || restored === null || restored) return;
       setScanState.hasRun = false;

@@ -192,7 +192,16 @@
     }
   }
 
-  function buildInventory(items) {
+  function explicitPriority(concept, intent) {
+    var group = normalize(concept.group).toLowerCase();
+    var term = normalize(concept.term).toLowerCase();
+    return intent.variables.some(function (variable) {
+      return normalize(variable.group).toLowerCase() === group &&
+        variable.terms.some(function (value) { return normalize(value).toLowerCase() === term; });
+    }) || intent.phrases.some(function (phrase) { return normalize(phrase).toLowerCase() === term; });
+  }
+
+  function buildInventory(items, intent) {
     var lookup = new Map();
     var rows = (items || []).map(function (raw) {
       var row = {
@@ -220,6 +229,7 @@
     // Reserve space for rare approved constructions before common tags
     // exhaust the existing Director concept budget.
     var approved = all.filter(function (feature) { return feature.source === 'tag'; });
+    if (intent) approved.filter(function (feature) { return explicitPriority(feature, intent); }).forEach(append);
     approved.slice(0, 72).forEach(append);
     approved.filter(function (feature) { return feature.files.size <= 3; })
       .sort(function (a, b) { return a.files.size - b.files.size || a.key.localeCompare(b.key); })
@@ -1407,7 +1417,7 @@
     if (!host) throw new Error('QA curation requires the QA workbench root.');
     clearNode(host);
     var header = element('div', 'qa-curation-header');
-    header.appendChild(button('← Quality Assurance', function () {
+    header.appendChild(button('← ' + window.qaCurationReturnLabel(), function () {
       if (session.phase === 'analyzing') stopQaCuration();
       window.qaShowOverviewFromCuration();
     }));
@@ -1447,7 +1457,7 @@
         host.appendChild(loading);
         host.appendChild(button('Stop analysis', stopQaCuration));
       } else if (session.phase === 'failed') {
-        host.appendChild(button('Try again', function () { startQaCuration(session.input, session.focus, session.signature); }));
+        host.appendChild(button('Try again', function () { startQaCuration(session.input, session.focus, session.signature, {intent: session.intent}); }));
       }
       return;
     }
@@ -1456,7 +1466,7 @@
 
   function renderCurrent() {
     var host = document.getElementById('qa-workbench');
-    if (host) renderQaCuration(host, qaCurrentCurationSignature());
+    if (host && window.qaCurationSurfaceActive()) renderQaCuration(host, qaCurrentCurationSignature());
   }
 
   function request(url, payload) {
@@ -1568,7 +1578,8 @@
 
   function startQaCuration(items, focus, signature, options) {
     var reanalyze = !!(options && options.reanalyze);
-    if (!reanalyze && session.phase === 'ready' && session.folder === String(state.folder || '')) {
+    if (!reanalyze && (session.phase === 'ready' || session.phase === 'analyzing') &&
+        session.folder === String(state.folder || '')) {
       window.qaShowCuration();
       renderCurrent();
       return;
@@ -1579,7 +1590,10 @@
       ? new Set(session.choices) : null;
     var priorPreset = reanalyze ? session.preset : '';
     var token = ++session.token;
-    var inventory = buildInventory(items);
+    // Capture the explicit Set intent once, with the analysis inputs.
+    var intent = options && options.intent || {variables: [], phrases: []};
+    var inventory = buildInventory(items, intent);
+    session.intent = intent;
     var model = String(getDirectorModelPreference() || '').trim();
     session.input = items;
     session.focus = String(focus || '');
@@ -1685,6 +1699,27 @@
       }).map(function (c) { return c.group; }));
       session.overriddenGroups = new Set();
       session.conceptRoles = new Map();
+      // Use existing per-concept roles rather than a second scoring policy.
+      // Non-selected terms in explicitly prioritized groups remain supporting
+      // instead of becoming balance targets merely because their group is checked.
+      var declared = session.concepts.filter(function (concept) { return explicitPriority(concept, intent); });
+      var declaredGroups = new Set(declared.map(function (concept) { return concept.group; }));
+      var initialGroups = new Set(session.balanceGroups);
+      var variableGroups = new Set(intent.variables.map(function (variable) {
+        return normalize(variable.group).toLowerCase();
+      }));
+      declaredGroups.forEach(function (group) { session.balanceGroups.add(group); });
+      var declaredIds = new Set(declared.map(function (concept) { return concept.id; }));
+      session.concepts.forEach(function (concept) {
+        if (declaredIds.has(concept.id)) session.conceptRoles.set(concept.id, 'core');
+        else if (declaredGroups.has(concept.group) &&
+          (variableGroups.has(normalize(concept.group).toLowerCase()) || !initialGroups.has(concept.group)) &&
+          (result.coreIds.includes(concept.id) || result.supportingIds.includes(concept.id))) {
+          // A declared variable narrows its group's balance terms. A standalone
+          // phrase adds a priority without demoting an already balanced group.
+          session.conceptRoles.set(concept.id, 'supporting');
+        }
+      });
       session.preset = ['lean', 'balanced', 'broad'].includes(priorPreset)
         ? priorPreset : 'balanced';
       applyBalancePriorities();

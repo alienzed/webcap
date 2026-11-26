@@ -51,14 +51,14 @@
   color: var(--text);
 }
 
-.app.shell-revamp .qa-workbench {
+:is(.app.shell-revamp, #set-dashboard-modal) .qa-workbench {
   width: min(1180px, 100%);
   margin: 0 auto;
   font-size: 17px;
   line-height: 1.5;
 }
 
-.app.shell-revamp .qa-workbench button {
+:is(.app.shell-revamp, #set-dashboard-modal) .qa-workbench button {
   min-height: 42px;
   padding: 9px 14px;
   border: 1px solid var(--border);
@@ -69,21 +69,21 @@
   font-weight: 650;
 }
 
-.app.shell-revamp .qa-workbench button:hover,
-.app.shell-revamp .qa-workbench button:focus-visible {
+:is(.app.shell-revamp, #set-dashboard-modal) .qa-workbench button:hover,
+:is(.app.shell-revamp, #set-dashboard-modal) .qa-workbench button:focus-visible {
   border-color: var(--accent);
   background: var(--hover);
 }
 
-.app.shell-revamp .qa-workbench button.qa-primary {
+:is(.app.shell-revamp, #set-dashboard-modal) .qa-workbench button.qa-primary {
   border-color: var(--accent);
   background: var(--accent);
   color: #1f2937;
   font-weight: 800;
 }
 
-.app.shell-revamp .qa-workbench button.qa-primary:hover,
-.app.shell-revamp .qa-workbench button.qa-primary:focus-visible {
+:is(.app.shell-revamp, #set-dashboard-modal) .qa-workbench button.qa-primary:hover,
+:is(.app.shell-revamp, #set-dashboard-modal) .qa-workbench button.qa-primary:focus-visible {
   background: var(--accent-dark);
 }
 
@@ -986,7 +986,7 @@
 
 
 /* Focused QA corrections use the available workspace and readable decisions. */
-.app.shell-revamp .qa-workbench:has(.qa-correction-card) { width:100%; }
+:is(.app.shell-revamp, #set-dashboard-modal) .qa-workbench:has(.qa-correction-card) { width:100%; }
 .qa-correction-card { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1.2fr); gap:clamp(20px,3vw,40px); align-items:start; padding:24px 0; }
 .qa-correction-media { position:sticky; top:0; min-width:0; background:var(--panel-soft); border-radius:10px; overflow:hidden; }
 .qa-correction-media img,.qa-correction-media video { display:block; width:100%; max-height:75vh; object-fit:contain; }

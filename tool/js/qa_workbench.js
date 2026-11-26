@@ -16,6 +16,20 @@
     captioning: 'Vocabulary or caption patterns likely to matter in training.'
   };
 
+  var qaDashboardHost = false;
+  var qaReturnToDashboard = false;
+  var curateDashboardOrigin = '';
+
+  function qaActiveRoot() {
+    return document.getElementById(qaDashboardHost ? 'set-dashboard-qa-workbench' : 'qa-workbench');
+  }
+
+  function qaLeaveDashboardForInspection() {
+    if (!qaDashboardHost) return;
+    qaReturnToDashboard = true;
+    window.closeSetDashboard();
+  }
+
   var qaInteractiveRefreshCount = 0;
   var qaInteractiveRefreshWaiters = [];
 
@@ -286,6 +300,16 @@
     });
   }
 
+  function qaCurationIntent() {
+    return { variables: normalizeSetVariables(state.setVariables), phrases: getBalanceWheelPhrases() };
+  }
+
+  function qaCurationSignature(items, intent) {
+    var signature = qaBuildDeepScanSignature(items);
+    return intent.variables.length || intent.phrases.length
+      ? JSON.stringify([signature, intent]) : signature;
+  }
+
   function qaDeepScanFindingPayload(items) {
     var wanted = {};
     (items || []).forEach(function (item) {
@@ -434,7 +458,7 @@
       if (!saved) return;
       // Restore the Set's saved intent on first entry, but never override a focus
       // deliberately chosen in this session (including an intentionally empty one).
-      if (!qaWorkbenchState.focusExplicitlyEdited && !focus && saved.trainingFocus) {
+      if (state.setTrainingFocus == null && !qaWorkbenchState.focusExplicitlyEdited && !focus && saved.trainingFocus) {
         qaWorkbenchState.trainingFocus = String(saved.trainingFocus);
       }
       var focusMatches = saved.trainingFocus === qaWorkbenchState.trainingFocus;
@@ -1359,7 +1383,7 @@
       qaWorkbenchState.conceptStatus = 'Concept check · ' + session.index + '/' + session.items.length + ' examined';
       qaPublishConceptActivity(session, 'Reviewing batch');
       // Polling must not replace the recommendation browser while the user is reading it.
-      var progress = document.querySelector('#qa-workbench .qa-recommendation-status, #qa-workbench .qa-deep-scan-note');
+      var progress = qaActiveRoot().querySelector('.qa-recommendation-status, .qa-deep-scan-note');
       if (progress) progress.textContent = qaWorkbenchState.conceptStatus;
       return qaRequestJson('/fs/qa/concept-check', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1570,8 +1594,8 @@
     // The progressive run owns its own item chain. An annotation edit never
     // starts a second concurrent scan or silently changes its captured inputs.
     if (
-      normalizeWorkspaceSurface(workspaceState.surface) === 'reviewOutput' &&
-      reviewWorkspaceState.detailTab === 'qa'
+      qaDashboardHost || (normalizeWorkspaceSurface(workspaceState.surface) === 'reviewOutput' &&
+      reviewWorkspaceState.detailTab === 'qa')
     ) {
       renderQaWorkbench();
     }
@@ -2204,6 +2228,10 @@
   }
 
   function qaOpenUtility(tab) {
+    if (qaDashboardHost) {
+      window.closeSetDashboard();
+      setWorkspaceSurface('reviewOutput');
+    }
     setReviewDetailTab(tab);
   }
 
@@ -2285,7 +2313,7 @@
 
   function qaRenderOverview(container, items, health) {
     qaRenderHeader(container, 'Quality Assurance', qaFileCountText(items.length) + ' in current training selection', 'overview');
-    qaRenderTrainingFocus(container);
+    if (!qaDashboardHost) qaRenderTrainingFocus(container);
 
     var recommendations = qaGetRecommendations();
     var undisposed = recommendations.filter(function (finding) { return !qaWorkbenchState.dispositions[finding.id]; });
@@ -2323,7 +2351,7 @@
             ? 'Resume the saved check without repeating successful item assessments.'
             : 'Existing checks have no outstanding actionable findings; this does not certify the Set.';
     copy.appendChild(h2);
-    copy.appendChild(intro);
+    if (!qaDashboardHost || active || resume) copy.appendChild(intro);
     hero.appendChild(copy);
 
     var heroActions = document.createElement('div');
@@ -2349,7 +2377,7 @@
     reviewButton.textContent = 'Review & Fix ' + qaFileCountText(ready);
     reviewButton.classList.toggle('hidden', !ready);
     heroActions.insertBefore(reviewButton, heroActions.firstChild);
-    heroActions.appendChild(qaCreateButton('Curate Training Set', '', 'qa-curate-start'));
+    if (!qaDashboardHost) heroActions.appendChild(qaCreateButton('Curate Training Set', '', 'qa-curate-start'));
     hero.appendChild(heroActions);
     container.appendChild(hero);
     var deepWrap = document.createElement('div');
@@ -2452,7 +2480,8 @@
       var description = document.createElement('span');
       description.textContent = QA_CATEGORY_DESCRIPTIONS[category];
       cardCopy.appendChild(title);
-      cardCopy.appendChild(description);
+      if (qaDashboardHost) card.title = description.textContent;
+      else cardCopy.appendChild(description);
       card.appendChild(count);
       card.appendChild(cardCopy);
       grid.appendChild(card);
@@ -2490,8 +2519,32 @@
     var healthNote = document.createElement('div');
     healthNote.className = 'qa-health-note';
     healthNote.textContent = 'Useful status, intentionally quieter than training-impact recommendations.';
-    healthSection.appendChild(healthNote);
+    if (!qaDashboardHost) healthSection.appendChild(healthNote);
     container.appendChild(healthSection);
+
+    if (state.setVariables && state.setVariables.length) {
+      var variableWarnings = window.getSetVariableWarnings(state.setVariables, items);
+      if (variableWarnings.length) {
+        var variablesSection = document.createElement('section');
+        variablesSection.className = 'qa-section';
+        var variablesTitle = document.createElement('h2');
+        variablesTitle.className = 'qa-section-title';
+        variablesTitle.textContent = 'Set variable coverage';
+        variablesSection.appendChild(variablesTitle);
+        var variableActions = document.createElement('div');
+        variableActions.className = 'qa-health-row';
+        variableWarnings.forEach(function (warning) {
+          var action = qaCreateButton(warning.group + ' · ' + warning.files.length + ' ' + warning.label.toLowerCase(),
+            'qa-health-chip', 'inspect-variable', JSON.stringify([warning.group, warning.kind]));
+          action.title = 'Inspect media (advisory; absence may be legitimate)';
+          variableActions.appendChild(action);
+        });
+        variablesSection.appendChild(variableActions);
+        container.appendChild(variablesSection);
+      }
+    }
+
+    if (qaDashboardHost) return;
 
     var utilitySection = document.createElement('section');
     utilitySection.className = 'qa-section';
@@ -2912,6 +2965,13 @@
     var scopeKey = qaBuildScopeKey(items);
     var folderChanged = !!qaWorkbenchState.folderKey && qaWorkbenchState.folderKey !== folderKey;
     var scopeChanged = !!qaWorkbenchState.scopeKey && qaWorkbenchState.scopeKey !== scopeKey;
+    if (state.setTrainingFocus != null) {
+      qaWorkbenchState.trainingFocus = state.setTrainingFocus;
+      qaWorkbenchState.focusExplicitlyEdited = true;
+    } else if (folderChanged) {
+      qaWorkbenchState.trainingFocus = '';
+      qaWorkbenchState.focusExplicitlyEdited = false;
+    }
     var inputSignature = qaBuildDeepScanSignature(items);
     var inputsChanged = !!qaWorkbenchState.deepScanInputSignature
       && qaWorkbenchState.deepScanInputSignature !== inputSignature;
@@ -2927,8 +2987,8 @@
       if (folderChanged) qaWorkbenchState.conceptQuery = '';
     }
     if (folderChanged) {
-      qaWorkbenchState.trainingFocus = '';
-      qaWorkbenchState.focusExplicitlyEdited = false;
+      qaReturnToDashboard = false;
+      curateDashboardOrigin = '';
       qaWorkbenchState.parentFocusSet = undefined;
       qaWorkbenchState.returnTrainingFiles = null;
       qaWorkbenchState.returnFindingId = '';
@@ -3573,7 +3633,7 @@
     qaCorrectionCursor.index = (Math.max(0, index) + offset + entries.length) % entries.length;
     qaCorrectionCursor.key = entries[qaCorrectionCursor.index].item.key;
     renderQaWorkbench();
-    var card = document.querySelector('#qa-workbench .qa-correction-card');
+    var card = qaActiveRoot().querySelector('.qa-correction-card');
     if (card) card.focus({preventScroll:true});
   }
 
@@ -3938,15 +3998,14 @@
   }
 
   function renderQaWorkbench(force) {
-    if (normalizeWorkspaceSurface(workspaceState.surface) !== 'reviewOutput') return;
-    if (reviewWorkspaceState.detailTab !== 'qa') return;
-    var root = document.getElementById('qa-workbench');
+    if (!qaDashboardHost && (normalizeWorkspaceSurface(workspaceState.surface) !== 'reviewOutput' || reviewWorkspaceState.detailTab !== 'qa')) return;
+    var root = qaActiveRoot();
     if (!root) throw new Error('QA workbench root is missing.');
     var currentItems = qaGetTrainingItems();
     // Prune/Duplicate utilities run only when explicitly opened; QA reads ready results.
     var data = qaRefreshComputedState(!!force);
     if (qaWorkbenchState.view === 'curate') {
-      renderQaCuration(root, qaBuildDeepScanSignature(data.items));
+      renderQaCuration(root, qaCurationSignature(data.items, qaCurationIntent()));
     } else if (qaWorkbenchState.view === 'corrections') {
       qaRenderCorrections(root, data.items);
     } else if (qaWorkbenchState.view === 'browse') {
@@ -4016,6 +4075,7 @@
     qaWorkbenchState.parentFocusSet = qaCloneFocusSet(state.focusSet);
     qaWorkbenchState.returnFindingId = String(findingId || '');
     qaWorkbenchState.statusMessage = '';
+    qaLeaveDashboardForInspection();
     selectByFileName(clean[0], clean, source || 'Quality Assurance', 'qa', { preserveMediaFilters: true });
   }
 
@@ -4048,6 +4108,7 @@
     }
     // Other QA findings are not full caption responses; those still use
     // Caption Assist's normal per-item Sight/Director path.
+    qaLeaveDashboardForInspection();
     activateFocusSet(clean, source || 'Quality Assurance', 'qa');
     selectPathMedia(target).then(function () {
       startFocusedReview(target.key);
@@ -4066,6 +4127,7 @@
       if (item && item.fileName) byName[item.fileName] = item;
     });
     var evidence = qaBuildDeepScanItems(selected.map(function (name) { return byName[name]; }).filter(Boolean));
+    if (qaDashboardHost) window.closeSetDashboard();
     window.openQaFindingAssistant({
       folder: String(state.folder || ''),
       trainingFocus: qaWorkbenchState.trainingFocus,
@@ -4134,6 +4196,7 @@
     qaWorkbenchState.parentFocusSet = qaCloneFocusSet(state.focusSet);
     qaWorkbenchState.returnFindingId = finding.id;
     qaWorkbenchState.statusMessage = '';
+    qaLeaveDashboardForInspection();
     activateFocusSet(finding.files, 'QA · ' + finding.title, 'qa');
     openMediaGridSurface();
   }
@@ -4167,16 +4230,39 @@
     renderFileList(ui.filterEl.value);
     pruneCandidatesScopeChanged();
     duplicateCandidatesScopeChanged();
+    if (qaReturnToDashboard && !returnToCurate) {
+      qaReturnToDashboard = false;
+      setWorkspaceSurface('default');
+      window.openSetDashboard('review');
+      return;
+    }
+    qaReturnToDashboard = false;
     setWorkspaceWorkflowMode('review');
     setWorkspaceSurface('reviewOutput');
     renderQaWorkbench(true);
   }
 
   function qaHandleAction(action, value) {
+    if (action === 'inspect-variable') {
+      var target = JSON.parse(value);
+      var warning = window.getSetVariableWarnings(state.setVariables || [], qaGetTrainingItems()).find(function (row) {
+        return row.group === target[0] && row.kind === target[1];
+      });
+      if (warning) qaSelectFiles(warning.files, warning.group + ' · ' + warning.label, '');
+      return;
+    }
     if (action === 'qa-curate-start') {
+      if (qaDashboardHost) {
+        curateDashboardOrigin = 'review';
+        window.closeSetDashboard();
+        setWorkspaceSurface('reviewOutput');
+        setReviewDetailTab('qa');
+      }
       try {
-        startQaCuration(qaBuildCurateItems(qaGetTrainingItems()),
-          qaWorkbenchState.trainingFocus, qaBuildDeepScanSignature(qaGetTrainingItems()));
+        var items = qaGetTrainingItems();
+        var intent = qaCurationIntent();
+        startQaCuration(qaBuildCurateItems(items),
+          qaWorkbenchState.trainingFocus, qaCurationSignature(items, intent), {intent: intent});
       } catch (err) {
         window.reportConsoleError('QA Curation', err);
         qaWorkbenchState.statusMessage = String(err.message || err);
@@ -4345,19 +4431,15 @@
     if (action === 'save-focus') {
       var focusInput = document.getElementById('qa-training-focus-input');
       if (!focusInput) throw new Error('QA training focus input is missing.');
-      var nextFocus = qaNormalizeLabel(focusInput.value).slice(0, 240);
-      if (nextFocus !== qaWorkbenchState.trainingFocus && qaWorkbenchState.deepScanSessionActive) {
-        qaInvalidateDeepScanSession('Deep QA stopped because the training focus changed.');
-      }
-      qaWorkbenchState.trainingFocus = nextFocus;
-      qaWorkbenchState.focusExplicitlyEdited = true;
+      setQaTrainingFocus(focusInput.value);
       renderQaWorkbench();
     }
   }
 
   function wireQaWorkbench() {
-    var root = document.getElementById('qa-workbench');
-    if (!root) throw new Error('QA workbench root is missing.');
+    ['qa-workbench', 'set-dashboard-qa-workbench'].forEach(function (id) {
+    var root = document.getElementById(id);
+    if (!root) throw new Error('QA workbench root is missing: ' + id);
     root.addEventListener('click', function (event) {
       var button = event.target.closest('[data-qa-action]');
       if (!button || !root.contains(button)) return;
@@ -4385,10 +4467,36 @@
         qaHandleAction('save-focus', '');
       }
     });
+    });
+  }
+
+  function setQaTrainingFocus(value) {
+    var nextFocus = qaNormalizeLabel(value).slice(0, 240);
+    if (nextFocus !== qaWorkbenchState.trainingFocus && qaWorkbenchState.deepScanSessionActive) {
+      qaInvalidateDeepScanSession('Deep QA stopped because the training focus changed.');
+    }
+    state.setTrainingFocus = nextFocus;
+    qaWorkbenchState.trainingFocus = nextFocus;
+    qaWorkbenchState.focusExplicitlyEdited = true;
+    scheduleSetDefinitionSave();
+    return nextFocus;
   }
 
   function getQaTrainingFocus() {
-    return qaWorkbenchState.trainingFocus;
+    if (state.setTrainingFocus != null) return state.setTrainingFocus;
+    return qaWorkbenchState.folderKey === String(state.folder || '') ? qaWorkbenchState.trainingFocus : '';
+  }
+
+  function loadLegacySetTrainingFocus() {
+    var folder = String(state.folder || '');
+    if (state.setTrainingFocus != null) return Promise.resolve([]);
+    return qaRequestJson('/fs/qa/review?definition=1&folder=' + encodeURIComponent(folder)).then(function (payload) {
+      if (String(state.folder || '') !== folder || state.setTrainingFocus != null) return [];
+      var candidates = payload.trainingFocusCandidates;
+      if (!Array.isArray(candidates)) throw new Error('Set training focus migration response is invalid.');
+      if (candidates.length === 1) setQaTrainingFocus(candidates[0]);
+      return candidates;
+    });
   }
 
   function getQaTrainingItemsForAssistant() {
@@ -4399,11 +4507,27 @@
     var detail = event && event.detail ? event.detail : {};
     if (String(detail.folder || '') !== String(state.folder || '')) return;
     qaWorkbenchState.externalAnalysisAttemptKey = '';
-    if (normalizeWorkspaceSurface(workspaceState.surface) !== 'reviewOutput') return;
-    if (reviewWorkspaceState.detailTab !== 'qa') return;
+    if (!qaDashboardHost && (normalizeWorkspaceSurface(workspaceState.surface) !== 'reviewOutput' || reviewWorkspaceState.detailTab !== 'qa')) return;
     renderQaWorkbench(true);
   });
 
+  window.showQaInSetDashboard = function () {
+    if (qaDashboardHost) return;
+    document.getElementById('qa-workbench').replaceChildren();
+    qaDashboardHost = true;
+    if (qaWorkbenchState.view === 'curate') qaWorkbenchState.view = 'overview';
+    renderQaWorkbench(true);
+  };
+  window.hideQaInSetDashboard = function () {
+    if (!qaDashboardHost) return;
+    qaDashboardHost = false;
+    document.getElementById('set-dashboard-qa-workbench').replaceChildren();
+    renderQaWorkbench();
+  };
+  window.qaStartCurationFromDashboard = function (origin) {
+    curateDashboardOrigin = origin;
+    qaHandleAction('qa-curate-start', '');
+  };
   window.qaCurrentCurationEvidence = function(fileNames) {
     var wanted = new Set(fileNames || []);
     var items = (state.items || []).filter(function(item) {
@@ -4412,22 +4536,45 @@
     return qaBuildCurateItems(items);
   };
   window.qaCurrentCurationSignature = function () {
-    return qaBuildDeepScanSignature(qaGetTrainingItems());
+    return qaCurationSignature(qaGetTrainingItems(), qaCurationIntent());
   };
   window.qaReanalyzeCuration = function () {
     var items = qaGetTrainingItems();
+    var intent = qaCurationIntent();
     startQaCuration(qaBuildCurateItems(items), qaWorkbenchState.trainingFocus,
-      qaBuildDeepScanSignature(items), {reanalyze: true});
+      qaCurationSignature(items, intent), {reanalyze: true, intent: intent});
   };
   window.qaInspectCurationItem = qaInspectCurationItem;
   window.qaUseCuratedSelectionForTraining = qaUseCuratedSelectionForTraining;
   window.qaShowCuration = function () { qaWorkbenchState.view = 'curate'; renderQaWorkbench(); };
-  window.qaShowOverviewFromCuration = function () { qaWorkbenchState.view = 'overview'; renderQaWorkbench(); };
+  window.qaCurationReturnLabel = function () {
+    return curateDashboardOrigin ? 'Set Dashboard' : 'Quality Assurance';
+  };
+  window.qaFocusReturnLabel = function () {
+    return qaWorkbenchState.returnToCurate ? 'Curate' : 'Quality Assurance';
+  };
+  window.qaCurationSurfaceActive = function () {
+    return !qaDashboardHost && qaWorkbenchState.view === 'curate' &&
+      normalizeWorkspaceSurface(workspaceState.surface) === 'reviewOutput' && reviewWorkspaceState.detailTab === 'qa';
+  };
+  window.qaShowOverviewFromCuration = function () {
+    qaWorkbenchState.view = 'overview';
+    if (curateDashboardOrigin) {
+      var origin = curateDashboardOrigin;
+      curateDashboardOrigin = '';
+      setWorkspaceSurface('default');
+      window.openSetDashboard(origin);
+      return;
+    }
+    renderQaWorkbench();
+  };
   window.renderQaWorkbench = renderQaWorkbench;
   window.refreshQaWorkbench = function () { renderQaWorkbench(true); };
   window.wireQaWorkbench = wireQaWorkbench;
   window.returnToQaWorkbenchFromFocusSet = returnToQaWorkbenchFromFocusSet;
   window.getQaTrainingFocus = getQaTrainingFocus;
+  window.setQaTrainingFocus = setQaTrainingFocus;
+  window.loadLegacySetTrainingFocus = loadLegacySetTrainingFocus;
   window.getQaTrainingItemsForAssistant = getQaTrainingItemsForAssistant;
   window.qaInputsUpdated = qaInputsUpdated;
   window.qaStartFocusReview = qaStartFocusReview;

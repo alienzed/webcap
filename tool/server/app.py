@@ -1782,6 +1782,18 @@ def qa_review_route():
             with review_path.open("r", encoding="utf-8") as stream:
                 saved = json.load(stream)
 
+        if request.method == "GET" and data.get("definition") == "1":
+            # Only unambiguous historic intent may seed the new Set-owned field.
+            candidates = []
+            if isinstance(saved, dict) and saved.get("version") == 1:
+                candidates = [saved]
+            elif isinstance(saved, dict) and saved.get("version") == 2:
+                candidates = [entry.get("review") for entry in (saved.get("reviews") or {}).values()
+                              if isinstance(entry, dict)]
+            focuses = sorted({str(row.get("trainingFocus") or "").strip()
+                              for row in candidates if isinstance(row, dict)
+                              and str(row.get("trainingFocus") or "").strip()})
+            return jsonify({"ok": True, "trainingFocusCandidates": focuses})
         if not scope_key:
             # Preserve legacy clients while requiring a scope for the new multi-review format.
             if request.method == "GET":

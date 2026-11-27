@@ -90,30 +90,7 @@
   }
 
   function variableCoverage(variable, items) {
-    var terms = variable.terms.map(function (term, index) {
-      return { key: 'term:' + index, label: term, files: [], only: [], color: index };
-    });
-    var neither = [], multiple = [];
-    items.forEach(function (item) {
-      var assigned = setVariableAssignedTerms(item, variable.group);
-      var matches = terms.filter(function (row) {
-        return assigned.has(normalizeChecklistTerm(row.label).toLowerCase());
-      });
-      matches.forEach(function (row) { row.files.push(item.fileName); });
-      if (!matches.length) neither.push(item.fileName);
-      else if (matches.length === 1) matches[0].only.push(item.fileName);
-      else multiple.push(item.fileName);
-    });
-    // Exclusive bars partition the population exactly once. Multi-label bars
-    // retain independent membership counts; their sum can exceed the scope.
-    var rows = terms.map(function (row) {
-      return { key: row.key, label: row.label + (variable.exclusive && multiple.length ? ' only' : ''),
-        files: variable.exclusive ? row.only : row.files, color: row.color };
-    });
-    if (variable.exclusive) rows.push({ key: 'multiple', label: 'Multiple', files: multiple, color: 'warning' });
-    rows.push({ key: 'neither', label: 'Neither', files: neither,
-      color: 'neutral' });
-    return { rows: rows, multiple: multiple.length, multipleFiles: multiple };
+    return setVariableCoverage(variable, items);
   }
 
   function variableWarnings(variables, items) {

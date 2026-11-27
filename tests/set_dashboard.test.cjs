@@ -13,7 +13,7 @@ function dashboard(options = {}) {
     if (elements[id]) return elements[id];
     const classes = new Set(id.startsWith('set-dashboard-') && !['set-dashboard-tags-guided', 'set-dashboard-tags-groups'].includes(id) ? ['hidden'] : []);
     return elements[id] = {
-      id, textContent: '', value: '', isConnected: true, open: false, style: {}, children: [], replaceChildren() { this.children = []; },
+      id, textContent: '', value: '', isConnected: true, open: false, style: {}, children: [], replaceChildren() { this.children = []; }, appendChild(node) { this.children.push(node); },
       removeAttribute(name) { delete elements[id + ':' + name]; },
       classList: {
         toggle(name, enabled) { if (enabled) classes.add(name); else classes.delete(name); },
@@ -35,6 +35,7 @@ function dashboard(options = {}) {
   const document = {
     readyState: 'complete',
     activeElement: element('previous-focus'),
+    createElement: () => ({className:'', textContent:''}),
     getElementById: element,
     querySelectorAll(selector) { return selector === '[data-set-dashboard-tab]' ? tabs : []; },
     querySelector(selector) { return tabs.find(tab => selector.includes(tab.getAttribute('data-set-dashboard-tab'))); },
@@ -62,7 +63,6 @@ function dashboard(options = {}) {
     checklistItems: options.groups || [],
     renderChecklistGroupRows(target, options) { assert.equal(target.id, 'set-dashboard-group-list'); assert.equal(options.definition, true); },
     isChecklistRequirementHidden: () => false,
-    openChecklistKeywordsModal() {},
     getChecklistKeywordTermsForRequirement: () => ['tag'],
     isChecklistRequirementCheckedForMediaKey: (key, name) => typeof options.checked === 'function' ? options.checked(key, name) : !!options.checked,
     getTrainingRunnerActiveJob: () => options.training ? { status: 'running' } : null,
@@ -279,4 +279,44 @@ test('Set Definition reuses Manage Groups rows in a bounded two-column layout', 
   assert.match(manager,/renderChecklistGroupRows\(itemsDiv, \{mediaKey:state.currentItem.key\}\)/);
   assert.match(css,/grid-template-columns:minmax\(0,1fr\) minmax\(300px, min\(40%,560px\)\)/);
   assert.doesNotMatch(css,/#set-dashboard-group-list[^\n]*max-height/);
+});
+
+test('shared Manage Groups renderer expands vocabulary and targets the clicked row menu', () => {
+  function node() {
+    return {
+      children:[], className:'', textContent:'', open:false,
+      classList:{add(){},toggle(){},remove(){}},
+      setAttribute(){}, addEventListener(){},
+      appendChild(child){this.children.push(child);},
+      set innerHTML(value){this.children=[];}
+    };
+  }
+  const host=node(), edits=[], moves=[], hidden=[], expanded=new Set();
+  const context={
+    document:{createElement:node, querySelectorAll:()=>[]}, window:{addEventListener(){}},
+    checklistItems:['Viewpoint','Position'],
+    getChecklistKeywordTermsForRequirement: group=>group==='Viewpoint'?['front','rear']:['standing'],
+    isChecklistRequirementHidden:()=>false, setChecklistRequirementHidden:(group,value)=>{hidden.push([group,value]);return true;},
+    openChecklistGroupTermsModal:group=>edits.push(group),
+    moveChecklistItemByOffset:(index,offset)=>{moves.push([index,offset]);return true;},
+    setStatus(){}, renderChecklistPanel(){}, deleteChecklistGroupByIndex(){},
+  };
+  const manager=fs.readFileSync(path.join(__dirname,'../tool/js/checklist_panel.js'),'utf8');
+  vm.runInNewContext(manager,context);
+  context.renderChecklistPanel=()=>{};
+  context.renderChecklistGroupRows(host,{definition:true,expanded});
+  const toggle=host.children[0].children[0].children[0].children[0];
+  toggle.onclick();
+  assert.equal(host.children[0].children[1].textContent,'front · rear');
+  assert.equal(host.children[1].children.length,1);
+  const first=host.children[0].children[0].children[1].children[1];
+  const second=host.children[1].children[0].children[1].children[1];
+  first.open=true;second.open=true;
+  first.children[1].children[0].onclick();
+  assert.deepEqual(edits,['Viewpoint']);
+  assert.equal(first.open,false);assert.equal(second.open,true);
+  second.children[1].children[1].onclick();
+  assert.deepEqual(moves,[[1,-1]]);
+  host.children[1].children[0].children[1].children[0].onclick();
+  assert.deepEqual(hidden,[['Position',true]]);
 });

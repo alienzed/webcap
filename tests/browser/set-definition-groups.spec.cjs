@@ -48,17 +48,62 @@ test('Set Definition renders group-only intent and persists a scoped change in t
   const saved=JSON.parse(fs.readFileSync(path.join(root,'.webcap_state.json'),'utf8'));
   expect(saved.set_variables).toEqual([shape,{group:'Viewpoint',terms:['front','rear'],exclusive:true,expected:true}]);
   expect(saved.stats).not.toHaveProperty('phrases');
-  for(const width of [1440,1100]) {
+  const intelligence=page.getByRole('region',{name:'Set Intelligence',exact:true});
+  const intelligencePanel=page.locator('.set-dashboard-intelligence-panel');
+  const groupsPanel=page.locator('#set-dashboard-groups-panel');
+  const template=page.locator('#set-dashboard-template-draft');
+  await expect(template).toBeVisible();
+  const savedTemplate=await template.inputValue();
+  await template.fill('subject, {viewpoint}, ');
+  await template.evaluate(node=>node.setSelectionRange(node.value.length,node.value.length));
+  const placeholders=page.locator('#set-dashboard-template-placeholders');
+  await expect(placeholders.getByRole('button',{name:'Viewpoint',exact:true})).toHaveCount(0);
+  await placeholders.getByRole('button',{name:'Lighting',exact:true}).click();
+  await expect(template).toHaveValue('subject, {viewpoint}, {lighting}');
+  await expect(placeholders.getByRole('button',{name:'Lighting',exact:true})).toHaveCount(0);
+  await expect(intelligencePanel.locator('#set-intelligence-primary-btn')).toBeVisible();
+  await expect(intelligencePanel.locator('#set-dashboard-tags-guided')).toBeVisible();
+  await expect(intelligencePanel.locator('#set-dashboard-tags-primary')).toBeVisible();
+  await definition.locator(':scope > summary').click();
+  await expect(groupsPanel).toBeHidden();
+  await expect(intelligence).toBeVisible();
+  await definition.locator(':scope > summary').click();
+  await expect(groupsPanel).toBeVisible();
+  await expect(template).toHaveValue('subject, {viewpoint}, {lighting}');
+  await page.locator('#set-dashboard-template-reset').click();
+  await expect(template).toHaveValue(savedTemplate);
+  for(const width of [1920,1440,1100]) {
     await page.setViewportSize({width,height:1000});
     await expect(list).toBeVisible();
-    const geometry=await definition.evaluate(node=>{
-      const grid=node.querySelector('.set-dashboard-definition-grid');
-      const list=node.querySelector('#set-dashboard-group-list');
-      return {overflow:grid.scrollWidth-grid.clientWidth,listOverflow:list.scrollWidth-list.clientWidth,listHeight:getComputedStyle(list).maxHeight};
+    const geometry=await page.locator('#set-dashboard-analyze').evaluate(grid=>{
+      const def=grid.querySelector('#set-dashboard-definition').getBoundingClientRect();
+      const groups=grid.querySelector('#set-dashboard-groups-panel').getBoundingClientRect();
+      const intel=grid.querySelector('.set-dashboard-intelligence-panel').getBoundingClientRect();
+      const balance=grid.querySelector('#set-dashboard-balance-section').getBoundingClientRect();
+      const list=grid.querySelector('#set-dashboard-group-list');
+      const rect=grid.getBoundingClientRect();
+      return {width:rect.width,overflow:grid.scrollWidth-grid.clientWidth,listOverflow:list.scrollWidth-list.clientWidth,listHeight:getComputedStyle(list).maxHeight,
+        defX:def.x,defY:def.y,defRight:def.right,defBottom:def.bottom,defWidth:def.width,
+        groupX:groups.x,groupY:groups.y,groupBottom:groups.bottom,groupWidth:groups.width,
+        intelX:intel.x,intelY:intel.y,intelBottom:intel.bottom,intelWidth:intel.width,
+        balanceX:balance.x,balanceY:balance.y,balanceWidth:balance.width};
     });
     expect(geometry.overflow).toBeLessThanOrEqual(2);
     expect(geometry.listOverflow).toBeLessThanOrEqual(2);
     expect(geometry.listHeight).toBe('none');
+    expect(Math.abs(geometry.intelX-geometry.defX)).toBeLessThanOrEqual(2);
+    expect(geometry.intelY).toBeGreaterThanOrEqual(geometry.defBottom);
+    expect(Math.abs(geometry.balanceWidth-geometry.width)).toBeLessThanOrEqual(2);
+    expect(geometry.balanceY).toBeGreaterThanOrEqual(Math.max(geometry.groupBottom,geometry.intelBottom));
+    if(width>=1440 || geometry.width>=860) {
+      expect(geometry.groupX).toBeGreaterThan(geometry.defRight);
+      expect(Math.abs(geometry.groupY-geometry.defY)).toBeLessThanOrEqual(2);
+      expect(Math.abs(geometry.groupWidth-geometry.defWidth)).toBeLessThanOrEqual(2);
+    } else {
+      expect(Math.abs(geometry.groupX-geometry.defX)).toBeLessThanOrEqual(2);
+      expect(geometry.groupY).toBeGreaterThanOrEqual(geometry.intelBottom);
+    }
+    await page.locator('#set-dashboard-modal').evaluate(node=>{node.scrollTop=0;});
     await page.screenshot({path:testInfo.outputPath('set-definition-'+width+'.png'),fullPage:true});
   }
   await page.reload();

@@ -1115,7 +1115,7 @@ function deleteChecklistGroupByIndex(index) {
   if (!requirement) return false;
   if (!confirm(
     'Delete group "' + requirementLabel + '"?\n\n' +
-    'This removes its terms and reviewed state from all items.\n\n' +
+    'This removes its terms, Set Variable configuration and reviewed state from all items.\n\n' +
     'You can restore everything immediately with Ctrl+Z.'
   )) return false;
 
@@ -1137,10 +1137,12 @@ function deleteChecklistGroupByIndex(index) {
       ? checklistPrimerSeparatorsByGroup[requirement]
       : '',
     primerPrecedence: JSON.parse(JSON.stringify(checklistPrimerPrecedenceByGroup[requirement] || {})),
-    reviewedByMedia: reviewedByMedia
+    reviewedByMedia: reviewedByMedia,
+    setVariable: normalizeSetVariables(state.setVariables).find(function (row) { return row.group === requirement; }) || null
   });
 
   checklistItems.splice(idx, 1);
+  state.setVariables = replaceSetGroupVariable(state.setVariables, requirement, {terms:[]});
   delete checklistKeywordsByItem[requirement];
   delete checklistPrimerSeparatorsByGroup[requirement];
   delete checklistPrimerPrecedenceByGroup[requirement];
@@ -1164,6 +1166,7 @@ function restoreDeletedChecklistGroup(operation) {
   if (!requirement || !Array.isArray(checklistItems) || checklistItems.indexOf(requirementLabel) !== -1) return false;
   var index = Math.max(0, Math.min(checklistItems.length, Number(op.index) || 0));
   checklistItems.splice(index, 0, requirementLabel);
+  if (op.setVariable) state.setVariables = replaceSetGroupVariable(state.setVariables, requirement, op.setVariable);
   if (op.hasLocalTerms) checklistKeywordsByItem[requirement] = String(op.localTerms || '');
   else delete checklistKeywordsByItem[requirement];
   if (op.hasPrimerSeparator) {

@@ -294,7 +294,7 @@
     return rows.length ? JSON.stringify(rows) : '';
   }
 
-  function qaBuildDeepScanSignature(items) {
+  function qaBuildDeepScanSignature(items, variableSignature) {
     var context = {
       folder: String(state.folder || ''),
       trainingFocus: qaWorkbenchState.trainingFocus,
@@ -304,7 +304,7 @@
       primer: String(statsGetPrimerOptionsFromDom().template || ''),
       items: qaBuildDeepScanItems(items)
     };
-    var variables = qaSetVariableSignature();
+    var variables = variableSignature === undefined ? qaSetVariableSignature() : variableSignature;
     if (variables) context.setVariables = variables;
     return JSON.stringify(context);
   }
@@ -314,7 +314,8 @@
   }
 
   function qaCurationSignature(items, intent) {
-    var signature = qaBuildDeepScanSignature(items);
+    // Keep the existing Curate signature encoding; the QA base is variable-free here.
+    var signature = qaBuildDeepScanSignature(items, '');
     if (!intent.variables.length) return signature;
     // Preserve saved grouped-only draft identities from the previous format.
     // The empty array is signature encoding only, not a second intent source.
@@ -527,7 +528,7 @@
       qaWorkbenchState.aiSummary = deepReviewCurrent ? String(saved.aiSummary || '') : '';
       qaWorkbenchState.aiModel = deepReviewCurrent ? String(saved.aiModel || '') : '';
       qaWorkbenchState.aiScopeSignature = deepReviewCurrent ? (legacyReview ? signature : saved.aiScopeSignature) : '';
-      qaWorkbenchState.aiItemSignatures = deepReviewCurrent ? Object.assign({}, before) : {};
+      qaWorkbenchState.aiItemSignatures = variablesMatch ? Object.assign({}, before) : {};
       qaWorkbenchState.deepScanScopeFiles = deepReviewCurrent && saved.qaReviewMode === 'progressive-v1' && Array.isArray(saved.deepScanScopeFiles)
         ? saved.deepScanScopeFiles.slice() : [];
       qaWorkbenchState.deepScanTrainingFocus = deepReviewCurrent ? String(saved.deepScanTrainingFocus || saved.trainingFocus || '') : '';
@@ -537,7 +538,7 @@
       qaWorkbenchState.deepScanStage = deepReviewCurrent ? String(saved.deepScanStage || '') : '';
       qaWorkbenchState.deepScanSkipped = deepReviewCurrent && saved.deepScanSkipped && typeof saved.deepScanSkipped === 'object'
         ? Object.assign({}, saved.deepScanSkipped) : {};
-      qaWorkbenchState.aiCoverageValid = deepReviewCurrent ? validCount : 0;
+      qaWorkbenchState.aiCoverageValid = variablesMatch ? validCount : 0;
       qaWorkbenchState.aiCoverageTotal = Object.keys(current).length;
       qaWorkbenchState.dispositions = saved.dispositions && typeof saved.dispositions === 'object'
         ? saved.dispositions : {};

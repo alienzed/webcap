@@ -346,7 +346,7 @@ test('shared Manage Groups renderer expands vocabulary and targets the clicked r
   assert.deepEqual(hidden,[['Position',true]]);
 });
 
-test('expanded group editor applies only its own selection and preserves other groups', () => {
+test('group checkboxes save each scoped selection immediately and preserve other groups', () => {
   const c=canonicalVariables();
   function node(tag) {
     return {tag,children:[],textContent:'',checked:false,disabled:false,classList:{toggle(){}},
@@ -364,16 +364,24 @@ test('expanded group editor applies only its own selection and preserves other g
     renderStage:()=>refreshes++,openChecklistGroupTermsModal(){}};
   const start=source.indexOf('  function variableForGroup('),end=source.indexOf('  function renderVocabulary(',start);
   vm.runInNewContext(source.slice(start,end),context);
-  const host=node('div');
-  context.renderGroupVariableEditor('View',host);
-  const terms=host.children[1],options=host.children[2],actions=host.children[3];
-  const rear=terms.children[1].children[0],expected=options.children[1].children[0],apply=actions.children[0],reset=actions.children[1];
-  assert.equal(apply.disabled,true);
-  rear.checked=true;rear.onchange();
-  assert.equal(apply.disabled,false);
-  reset.onclick();assert.equal(rear.checked,false);assert.equal(saves,0);
-  rear.checked=true;rear.onchange();expected.checked=true;expected.onchange();
-  apply.onclick();
+  function editor() {
+    const host=node('div');
+    context.renderGroupVariableEditor('View',host);
+    const [title,terms,options,actions]=host.children;
+    assert.deepEqual(actions.children.map(button=>button.textContent),['Edit terms']);
+    return {front:terms.children[0].children[0],rear:terms.children[1].children[0],
+      exclusive:options.children[0].children[0],expected:options.children[1].children[0]};
+  }
+  function change(input,value) { input.checked=value; input.onchange(); }
+  change(editor().rear,true);
+  assert.deepEqual(JSON.parse(JSON.stringify(state.setVariables)),[{group:'View',terms:['front','rear'],exclusive:true,expected:false},other]);
+  assert.equal(saves,1);
+  change(editor().expected,true);
   assert.deepEqual(JSON.parse(JSON.stringify(state.setVariables)),[{group:'View',terms:['front','rear'],exclusive:true,expected:true},other]);
-  assert.equal(saves,1);assert.equal(refreshes,1);
+  change(editor().front,false);
+  change(editor().rear,false);
+  assert.deepEqual(JSON.parse(JSON.stringify(state.setVariables)),[other]);
+  assert.equal(editor().exclusive.disabled,true);
+  assert.equal(editor().expected.disabled,true);
+  assert.equal(saves,4);assert.equal(refreshes,4);
 });

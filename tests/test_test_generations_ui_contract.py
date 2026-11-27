@@ -901,7 +901,9 @@ def test_test_generations_can_generate_and_edit_wildcard_prompt_in_modal():
     assert 'id="test-generations-wildcard-model"' not in html
     assert 'id="test-generations-wildcard-refresh"' not in html
     assert 'id="test-generations-wildcard-modal"' in html
-    assert 'role="dialog" aria-modal="true" aria-labelledby="test-generations-wildcard-title"' in html
+    assert '<dialog id="task-conversation-modal"' in html
+    assert 'id="test-generations-wildcard-result"' in html
+    assert "id:'wildcard-builder', label:'Wildcard Builder', taskModal:true" in script
     assert 'id="test-generations-wildcard-focus"' in html
     assert 'id="test-generations-wildcard-analysis"' in html
     assert 'id="test-generations-wildcard-output"' in html
@@ -916,10 +918,10 @@ def test_test_generations_can_generate_and_edit_wildcard_prompt_in_modal():
     assert "function parseWildcardGroups(value)" in script
     assert "function renderWildcardDimensions()" in script
     assert "function shuffleWildcardPreview(index)" in script
-    assert "focus: focus" in script
+    assert "focus: String(el('test-generations-wildcard-focus').value" in script
     assert "prompt.value = value;" in script
     assert "saveTestWorkspacePrompt(value);" in script
-    assert "requestFolder" in script
+    assert "wildcardDirector.contextKey !== scopeKey" in script
 
 
 
@@ -1174,8 +1176,10 @@ def test_primer_template_assistant_uses_existing_template_editor():
     script = (ROOT / "tool" / "js" / "primer_settings.js").read_text(encoding="utf-8")
 
     assert 'id="primer-template-wand-btn"' in html
-    assert 'id="primer-template-candidate"' in html
-    assert 'id="primer-template-candidate-use"' in html
+    assert 'id="primer-task-result"' in html
+    assert 'id="primer-task-write"' in html
+    assert 'id="set-dashboard-template-design"' in html
+    assert 'id="primer-template-candidate"' not in html
     assert "function buildPrimerTemplateAssistRequest()" in script
     assert "getChecklistKeywordTermsForRequirement(label)" in script
     assert "getChecklistGroupTermAffixes(label, term, '')" in script
@@ -1183,7 +1187,8 @@ def test_primer_template_assistant_uses_existing_template_editor():
     assert "getPrimerMappingsRows()" in script
     assert "validatePrimerTemplateCandidate" in script
     assert "Template Assist invented an unavailable placeholder" in script
-    assert "templateEl.dispatchEvent(new Event('input', { bubbles: true }))" in script
+    assert "setPrimerTemplateFromDashboard(primerTemplateTaskEl('draft').value,task.references)" in script
+    assert "field.dispatchEvent(new Event('input', {bubbles: true}))" in script
     assert "fetch(url, options || {})" in script
     assert "'/caption/template-assist'" in script
 
@@ -1279,10 +1284,10 @@ def test_staged_candidates_show_recorded_h3_variant_without_guessing():
 
 def test_wildcard_request_includes_active_set_group_vocabulary():
     script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
-    generator = script.split("function generateWildcardFromSet()", 1)[1].split("function pane()", 1)[0]
-    assert "var requestFolder = owningSetFolder(" in generator
-    assert "folder: requestFolder" in generator
-    assert "vocabulary: testPlanningVocabulary()" in generator
+    generator = script.split("function wildcardScope()", 1)[1].split("function pane()", 1)[0]
+    assert "folder: owningSetFolder(" in generator
+    assert "action:'context', vocabulary:testPlanningVocabulary()" in generator
+    assert "snapshot:snapshot.snapshot" in generator
     assert "function testPlanningVocabulary()" in script
     assert "getRequirementGroupAlias" in script
     assert "getChecklistKeywordTermsForRequirement" in script

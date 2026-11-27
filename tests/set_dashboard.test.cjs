@@ -437,3 +437,72 @@ test('preview wheel retains aggregate coverage and expands into honest group dis
   assert.match(css,/\.balance-distribution-wheel:focus-visible \.balance-wheel-groups/);
   assert.doesNotMatch(wheelSource,/onclick|addEventListener\(['"]click/);
 });
+
+
+test('Dashboard separates classified distribution from overall scope, including overlap and zero matches', () => {
+  function node(tag) {
+    const classes = new Set();
+    const n = {tag, children:[], dataset:{}, style:{}, textContent:'',
+      classList:{toggle(k,v){if(v)classes.add(k);else classes.delete(k);},contains(k){return classes.has(k);}},
+      setAttribute(){},
+      appendChild(child){ if(child.parent)child.remove(); this.children.push(child); child.parent=this; },
+      append(...children){children.forEach(c=>this.appendChild(c));},
+      insertBefore(child,before){if(child===before)return; if(child.parent)child.remove(); const i=this.children.indexOf(before); this.children.splice(i<0?this.children.length:i,0,child); child.parent=this;},
+      remove(){if(this.parent){this.parent.children.splice(this.parent.children.indexOf(this),1);this.parent=null;}},
+      querySelector(selector){return this.children.find(c=>selector[0]==='.'?c.className===selector.slice(1):c.tag===selector) || this.children.map(c=>c.querySelector(selector)).find(Boolean);},
+      get firstElementChild(){return this.children[0];}
+    };
+    return n;
+  }
+  const host=node('div'), empty=node('div'), inspected=[];
+  const assignments={a:['chain-link'],b:['rings'],c:['chain-link','rings'],d:[],e:[]};
+  const items=Object.keys(assignments).map(key=>({key,fileName:key+'.jpg'}));
+  const variable={group:'Shape',terms:['chain-link','rings'],exclusive:true};
+  const context={
+    document:{createElement:node}, state:{setVariables:[variable]},
+    el:id=>id==='set-dashboard-variables'?host:empty,
+    setHidden:(n,v)=>n.classList.toggle('hidden',v),
+    setVariableAssignedTerms:item=>new Set(assignments[item.key]),
+    normalizeChecklistTerm:t=>t, setVariableKey:v=>v.group,
+    inspectDistribution:(files,label)=>inspected.push({files:Array.from(files),label})
+  };
+  const start=source.indexOf('  function variableCoverage(');
+  const end=source.indexOf('  // One group, one scoped edit.',start);
+  vm.runInNewContext(coverageSource+source.slice(start,end)+'\nthis.render=renderVariables;',context);
+  const render=scope=>context.render({visibleItems:scope,visibleTotal:scope.length});
+  const get=cls=>host.children[0].querySelector('.'+cls);
+  render(items);
+  const legend=get('set-dashboard-variable-rows'), first=legend.children[0];
+  const stack=get('set-dashboard-variable-stack'), missing=get('set-dashboard-coverage-unmatched');
+  assert.deepEqual(legend.children.map(n=>n.dataset.key),['term:0','term:1','multiple']);
+  assert.equal(first.children[1].textContent,'1 / 3 · 33%');
+  assert.equal(stack.children.length,3);
+  assert.ok(Math.abs(stack.children.reduce((sum,n)=>sum+parseFloat(n.style.width),0)-100)<1e-6);
+  assert.equal(get('set-dashboard-coverage-classified').textContent,'3 / 5 classified');
+  assert.equal(get('set-dashboard-coverage-fill').style.width,'60%');
+  assert.equal(missing.textContent,'2 without matching terms');
+  missing.onclick(); assert.deepEqual(inspected[0],{files:['d.jpg','e.jpg'],label:'Shape · Without matching terms'});
+  first.onclick(); assert.deepEqual(inspected[1].files,['a.jpg']);
+  assert.equal(get('set-dashboard-variable-notice').textContent,'1 with multiple terms');
+  render([items[0],items[3]]);
+  assert.equal(legend.children[0],first);
+  assert.equal(get('set-dashboard-coverage-unmatched'),missing);
+  assert.equal(first.children[1].textContent,'1 / 1 · 100%');
+  assert.equal(get('set-dashboard-coverage-classified').textContent,'1 / 2 classified');
+  render([items[3]]);
+  assert.equal(first.children[1].textContent,'0');
+  assert.ok(stack.classList.contains('hidden'));
+  assert.equal(get('set-dashboard-coverage-fill').style.width,'0%');
+  assert.equal(missing.disabled,false);
+  render([]);
+  assert.equal(missing.disabled,true);
+  assert.equal(get('set-dashboard-coverage-classified').textContent,'0 / 0 classified');
+  variable.exclusive=false;
+  render(items);
+  assert.equal(first.children[1].textContent,'2 / 3 · 67%');
+  assert.equal(legend.children.length,2);
+  assert.equal(get('set-dashboard-coverage-classified').textContent,'3 / 5 classified');
+  assert.equal(first.children[2].firstElementChild.style.width, (100*2/3)+'%');
+  assert.ok(stack.classList.contains('hidden'));
+  assert.ok(get('set-dashboard-variable-notice').classList.contains('hidden'));
+});

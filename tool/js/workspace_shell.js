@@ -1255,7 +1255,10 @@ function exitWorkspaceSurface(surfaceOverride) {
   if (targetSurface === 'grid' || targetSurface === 'focus') {
     targetSurface = 'default';
   }
-  setWorkspaceSurface(targetSurface || 'default', { skipRemember: true });
+  if (targetSurface === 'dashboard' && isSetFolderContext(state.folder, state.items)) {
+    return window.openSetDashboard();
+  }
+  setWorkspaceSurface(targetSurface === 'dashboard' ? 'default' : (targetSurface || 'default'), { skipRemember: true });
 }
 
 function openTrainingSurface(mode, target) {

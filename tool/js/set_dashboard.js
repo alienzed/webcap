@@ -47,13 +47,12 @@
 
   function run(destination) {
     var origin = el('set-dashboard-review').open ? 'review' : 'analyze';
-    if (destination === 'train') { closeDashboard(); return openTrainingSurface('set'); }
+    if (destination === 'train') return openTrainingSurface('set');
     // Group configuration is a modal over the current workspace.
     if (destination === 'groups') return openChecklistKeywordsModal();
-    closeDashboard();
     if (destination === 'prepare') return openDashboard('analyze');
-    if (destination === 'annotation') return startFocusedAnnotation();
-    if (destination === 'guided') return openGuidedTagPass({ source: 'set' });
+    if (destination === 'annotation') { closeDashboard(); return startFocusedAnnotation(); }
+    if (destination === 'guided') { closeDashboard(); return openGuidedTagPass({ source: 'set' }); }
     if (destination === 'curate' || ['report', 'captions', 'metadata', 'prune', 'duplicates'].indexOf(destination) !== -1) {
       setWorkspaceSurface('reviewOutput');
       if (destination === 'curate') {
@@ -358,7 +357,7 @@
     if (el('set-dashboard-definition').open && !window.isSetIntelligenceOpen()) window.openSetIntelligence();
     else if (el('set-dashboard-definition').open) window.refreshSetIntelligenceScope();
     var missingSight = s.visibleTotal - s.sight;
-    if (missingSight) el('set-dashboard-definition-summary').textContent += ' · ' + missingSight + ' without saved Sight';
+    if (missingSight) el('set-dashboard-definition-summary').textContent += ' · ' + missingSight + ' without saved Sight (any model)';
     var missingCaptions = s.visibleTotal - s.visibleCaptions;
     if (!qaOpen) el('set-dashboard-qa-summary').textContent = missingCaptions ? missingCaptions + ' without captions' : 'Inspect findings';
     var tagsStatus = el('set-dashboard-tags-status');

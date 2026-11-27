@@ -195,14 +195,16 @@
         actionLabel = 'Sight current';
       }
     }
-    forceBtn.disabled = setScanState.running || !scopeCount || !getCaptionVisionModelId();
+    var modelAvailable = !!getCaptionVisionModelId();
+    forceBtn.disabled = setScanState.running || !scopeCount || !modelAvailable;
     var issueCountTotal = itemsCountNeedingAttention(setScanState.sightItems);
     // Sight actions stay here; vocabulary has its own entry in the annotation panel.
     var shouldRetry = !setScanState.running && !!issueCountTotal;
     var shouldScan = !setScanState.running && setScanState.phase !== 'checking-cache' &&
       !shouldRetry && (!coverage.known || !!openMissing);
     rescanBtn.classList.toggle('hidden', !shouldScan);
-    rescanBtn.disabled = !scopeCount || !getCaptionVisionModelId();
+    rescanBtn.disabled = !scopeCount || !modelAvailable;
+    badRetry.disabled = !modelAvailable;
     rescanBtn.textContent = actionLabel || 'Run Set Intelligence';
     badRetry.classList.toggle('hidden', !shouldRetry);
     badRetry.textContent = 'Retry ' + String(issueCountTotal) + ' needing attention';
@@ -236,8 +238,8 @@
     else if (flagged.length) itemSelect.value = flagged[0].file;
     itemSelect.disabled = setScanState.running;
     itemView.disabled = !items.length;
-    itemRetry.disabled = setScanState.running || !items.length;
-    badRetry.disabled = setScanState.running || !flagged.length;
+    itemRetry.disabled = setScanState.running || !items.length || !modelAvailable;
+    badRetry.disabled = setScanState.running || !flagged.length || !modelAvailable;
     inspectionContext.textContent = setScanState.running ? 'Live' : '';
 
 
@@ -855,6 +857,10 @@
       window.setStatus('Open a Set before using Set Intelligence.');
       return;
     }
+    if (setScanState.running && setScanState.folder !== folder) {
+      window.setStatus('Sight scan is still finishing for ' + setScanState.folder + '.');
+      return;
+    }
     if (setScanState.folder && setScanState.folder !== folder) {
       setScanState.hasRun = false;
       setScanState.phase = 'idle';
@@ -910,6 +916,7 @@
   }
 
   function closeSetIntelligence() {
+    setScanState.scopeRequestToken += 1;
     setScanState.open = false;
     renderSetIntelligence();
   }

@@ -78,7 +78,11 @@ function dashboard(options = {}) {
     startFocusedAnnotation: () => actions.push('annotation'),
     openGuidedTagPass: () => actions.push('guided'),
     startFocusedCaption: () => actions.push('caption'),
-    setWorkspaceSurface: () => actions.push('workspace'),
+    setWorkspaceSurface: surface => {
+      if (context.surface === 'dashboard' && surface !== 'dashboard') context.window.closeSetDashboard({keepSurface:true});
+      context.surface = surface;
+      actions.push('workspace');
+    },
     setReviewDetailTab: () => actions.push('qa')
   };
   vm.runInNewContext(source, context);
@@ -108,7 +112,7 @@ test('QA is opened explicitly and reports retain direct handoffs', () => {
   app.listeners['set-dashboard-review:toggle']();
   assert.deepEqual(app.actions, ['workspace', 'prepare', 'embedded-qa']);
   app.elements['set-dashboard-review-report'].onclick();
-  assert.deepEqual(app.actions, ['workspace', 'prepare', 'embedded-qa', 'hide-prepare', 'workspace', 'workspace', 'qa']);
+  assert.deepEqual(app.actions, ['workspace', 'prepare', 'embedded-qa', 'hide-prepare', 'workspace', 'qa']);
 });
 test('authoritative fields and Sight remain unique; Dashboard lives in Prep', () => {
   const html = fs.readFileSync(path.join(__dirname, '../tool/tool.html'), 'utf8');
@@ -178,4 +182,27 @@ test('folder snapshots cannot overwrite later explicit Set edits or cancel anoth
   await sandbox.saveFolderStateForCurrentRoot();
   for(const fn of [...timers.values()])fn();
   assert.deepEqual(writes,[{folderPath:'Set A',snapshot:{focus:'new'}},{folderPath:'Set B',snapshot:{focus:'B'}}]);
+});
+
+test('generic Back reopens the Dashboard instead of selecting an empty surface', () => {
+  const shell = fs.readFileSync(path.join(__dirname,'../tool/js/workspace_shell.js'),'utf8');
+  const start = shell.indexOf('function exitWorkspaceSurface(');
+  const end = shell.indexOf('function openTrainingSurface(', start);
+  assert.ok(start >= 0 && end > start);
+  const actions = [];
+  let isSet = true;
+  const context = {
+    state:{folder:'Sets/Test',items:[{}]},
+    workspaceState:{previousSurface:'dashboard'},
+    normalizeWorkspaceSurface: value => value,
+    isSetFolderContext: () => isSet,
+    window:{openSetDashboard: () => actions.push('open-dashboard')},
+    setWorkspaceSurface: surface => actions.push(surface)
+  };
+  vm.runInNewContext(shell.slice(start,end)+'\nthis.back = exitWorkspaceSurface;',context);
+  context.back();
+  assert.deepEqual(actions,['open-dashboard']);
+  isSet = false;
+  context.back();
+  assert.deepEqual(actions,['open-dashboard','default']);
 });

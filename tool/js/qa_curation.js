@@ -1646,8 +1646,13 @@
         return;
       }
       try { beginDirector(); } catch (err) {
-        session.phase = 'failed';
-        session.error = String(err.message || err);
+        if (previousDraft) {
+          restoreDraft(previousDraft);
+          session.status = String(err.message || err) + ' Your saved curation is unchanged.';
+        } else {
+          session.phase = 'failed';
+          session.error = String(err.message || err);
+        }
         window.reportConsoleError('QA Curate analysis', err);
         renderCurrent();
       }

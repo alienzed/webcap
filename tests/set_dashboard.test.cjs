@@ -57,7 +57,8 @@ function dashboard(options = {}) {
       setQaTrainingFocus: value => { state.setTrainingFocus = value; },
       isSetIntelligenceOpen: () => sightOpen,
       openSetIntelligence: () => { sightOpen = true; actions.push('prepare'); },
-      closeSetIntelligence: () => { sightOpen = false; actions.push('hide-prepare'); }
+      closeSetIntelligence: () => { sightOpen = false; actions.push('hide-prepare'); },
+      refreshSetIntelligenceScope: () => {}
     },
     checklistItems: options.groups || [],
     getChecklistKeywordTermsForRequirement: () => ['tag'],
@@ -77,10 +78,15 @@ function dashboard(options = {}) {
     startFocusedAnnotation: () => actions.push('annotation'),
     openGuidedTagPass: () => actions.push('guided'),
     startFocusedCaption: () => actions.push('caption'),
-    setWorkspaceSurface: () => actions.push('workspace'),
+    setWorkspaceSurface: surface => {
+      if (context.surface === 'dashboard' && surface !== 'dashboard') context.window.closeSetDashboard({keepSurface:true});
+      context.surface = surface;
+      actions.push('workspace');
+    },
     setReviewDetailTab: () => actions.push('qa')
   };
   vm.runInNewContext(source, context);
+  element('set-dashboard-definition').open = true;
   context.window.openSetDashboard();
   return {
     state, actions, elements, listeners, tabs, context,
@@ -92,53 +98,43 @@ function dashboard(options = {}) {
 }
 
 
-test('preparation is the default and preserves direct specialist handoffs', () => {
+test('Dashboard is a native workspace; grouped work is independently accessible', () => {
   const app = dashboard({ phrase: 'subject', groups: ['Shape'], checked: true });
-  assert.equal(app.selected(), 'analyze');
-  assert.equal(app.elements['set-dashboard-tags-count'].textContent, '100%');
-  assert.equal(app.elements['set-dashboard-primary'].disabled, false);
-  assert.deepEqual(app.actions, ['prepare']);
-  app.elements['set-dashboard-tags-guided'].onclick();
-  assert.deepEqual(app.actions, ['prepare', 'hide-prepare', 'guided']);
-});
-test('missing guidance warns without blocking captioning or curation', () => {
-  const app = dashboard();
-  assert.equal(app.elements['set-dashboard-definition-status'].textContent, 'Training focus and Required key phrase missing');
-  assert.equal(app.elements['set-dashboard-primary'].disabled, false);
+  assert.equal(app.elements['set-dashboard-definition-status'].textContent, 'Training focus missing');
   assert.equal(app.elements['set-dashboard-curate'].disabled, false);
+  assert.deepEqual(app.actions, ['workspace', 'prepare']);
+  app.elements['set-dashboard-tags-guided'].onclick();
+  assert.deepEqual(app.actions, ['workspace', 'prepare', 'hide-prepare', 'workspace', 'guided']);
 });
-test('QA and reports tabs do not launch inference', () => {
+test('QA is opened explicitly and reports retain direct handoffs', () => {
   const app = dashboard();
-  app.listeners['tab-review:click']();
-  assert.equal(app.selected(), 'review');
-  assert.deepEqual(app.actions, ['prepare', 'hide-prepare', 'embedded-qa']);
-  app.listeners['tab-reports:click']();
-  assert.equal(app.selected(), 'reports');
+  app.elements['set-dashboard-review'].open = true;
+  app.listeners['set-dashboard-review:toggle']();
+  assert.deepEqual(app.actions, ['workspace', 'prepare', 'embedded-qa']);
   app.elements['set-dashboard-review-report'].onclick();
-  assert.deepEqual(app.actions, ['prepare', 'hide-prepare', 'embedded-qa', 'workspace', 'qa']);
+  assert.deepEqual(app.actions, ['workspace', 'prepare', 'embedded-qa', 'hide-prepare', 'workspace', 'qa']);
 });
-test('authoritative fields and Sight remain unique and footer follows scrolling content', () => {
+test('authoritative fields and Sight remain unique; Dashboard lives in Prep', () => {
   const html = fs.readFileSync(path.join(__dirname, '../tool/tool.html'), 'utf8');
   for (const id of ['set-dashboard-modal','stats-required-phrase','stats-phrases','stats-phrases-items','primer-template','set-scan-modal','set-intelligence-primary-btn']) {
     assert.equal((html.match(new RegExp('id="' + id + '"','g')) || []).length,1,id);
   }
-  assert.ok(html.indexOf('id="set-dashboard-overview"') > html.indexOf('id="set-dashboard-stage"'));
-  assert.match(html, /data-set-dashboard-tab="analyze"[^>]*>Set Preparation/);
+  assert.ok(html.indexOf('id="prep-workspace-root"') < html.indexOf('id="set-dashboard-modal"'));
+  assert.ok(html.indexOf('id="set-dashboard-modal"') < html.indexOf('id="test-generations-workspace"'));
+  assert.doesNotMatch(html, /id="set-dashboard-overview"/);
+  assert.doesNotMatch(html, /id="set-dashboard-caption"/);
+  assert.match(html, /id="set-dashboard-review" class="set-dashboard-section/);
 });
-test('partial annotation cannot round to complete', () => {
+test('annotation work counts actual incomplete group assignments', () => {
   const items = Array.from({ length: 201 }, (_, i) => ({ key: String(i), fileName: i + '.png' }));
   const app = dashboard({ groups: ['Shape'], items, checked: key => key !== '200' });
-  assert.equal(app.elements['set-dashboard-tags-count'].textContent, '99%');
+  assert.equal(app.elements['set-dashboard-tags-status'].textContent, '1 group assignment left to review');
 });
-
-test('footer uses the same active selection for all coverage', () => {
-  const a = {key:'a', fileName:'a.png', hasCaption:true, caption:'subject', metadata:{vision_sight:{description:'observed', inventory:{}}}};
-  const b = {key:'b', fileName:'b.png', hasCaption:false, caption:'', metadata:{}};
+test('scope is the current visible selection', () => {
+  const a = {key:'a', fileName:'a.png', hasCaption:true};
+  const b = {key:'b', fileName:'b.png', hasCaption:false};
   const app = dashboard({items:[a,b], visibleItems:[b], groups:['Shape'], checked:true});
   assert.equal(app.elements['set-dashboard-scope'].textContent, '1 of 2 media');
-  assert.equal(app.elements['set-dashboard-sight-count'].textContent, '0 / 1');
-  assert.equal(app.elements['set-dashboard-captions-count'].textContent, '0 / 1');
-  assert.equal(app.elements['set-dashboard-tags-count'].textContent, '100%');
 });
 test('exclusive coverage partitions overlap; independent terms keep full membership', () => {
   const start = source.indexOf('  function variableCoverage(');
@@ -186,4 +182,27 @@ test('folder snapshots cannot overwrite later explicit Set edits or cancel anoth
   await sandbox.saveFolderStateForCurrentRoot();
   for(const fn of [...timers.values()])fn();
   assert.deepEqual(writes,[{folderPath:'Set A',snapshot:{focus:'new'}},{folderPath:'Set B',snapshot:{focus:'B'}}]);
+});
+
+test('generic Back reopens the Dashboard instead of selecting an empty surface', () => {
+  const shell = fs.readFileSync(path.join(__dirname,'../tool/js/workspace_shell.js'),'utf8');
+  const start = shell.indexOf('function exitWorkspaceSurface(');
+  const end = shell.indexOf('function openTrainingSurface(', start);
+  assert.ok(start >= 0 && end > start);
+  const actions = [];
+  let isSet = true;
+  const context = {
+    state:{folder:'Sets/Test',items:[{}]},
+    workspaceState:{previousSurface:'dashboard'},
+    normalizeWorkspaceSurface: value => value,
+    isSetFolderContext: () => isSet,
+    window:{openSetDashboard: () => actions.push('open-dashboard')},
+    setWorkspaceSurface: surface => actions.push(surface)
+  };
+  vm.runInNewContext(shell.slice(start,end)+'\nthis.back = exitWorkspaceSurface;',context);
+  context.back();
+  assert.deepEqual(actions,['open-dashboard']);
+  isSet = false;
+  context.back();
+  assert.deepEqual(actions,['open-dashboard','default']);
 });

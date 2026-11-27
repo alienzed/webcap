@@ -426,6 +426,7 @@ function saveChecklistKeywordsModalAndClose() {
   }
   closeChecklistKeywordsModal();
   checklistKeywordsModalTemp = null;
+  window.refreshSetDashboard();
 }
 
 function renderChecklistKeywordsModal() {

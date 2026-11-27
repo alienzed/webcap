@@ -1447,6 +1447,14 @@
       host.appendChild(button('Reanalyze for updated recommendations', function() { window.qaReanalyzeCuration(); }));
       return;
     }
+    if (session.phase === 'waiting' || session.phase === 'loading-draft') {
+      host.appendChild(element('h2', 'qa-curation-heading', session.phase === 'waiting' ? 'Curate this Set' : 'Checking saved curation'));
+      if (session.phase === 'waiting') {
+        host.appendChild(element('p', 'qa-curation-status', session.status));
+        host.appendChild(button('Analyze Set', function () { window.qaReanalyzeCuration(); }, 'qa-curation-primary'));
+      }
+      return;
+    }
     if (session.phase !== 'ready') {
       host.appendChild(element('h2', 'qa-curation-heading',
         session.phase === 'failed' ? 'Curation failed' : 'Finding the useful variation'));
@@ -1578,7 +1586,7 @@
 
   function startQaCuration(items, focus, signature, options) {
     var reanalyze = !!(options && options.reanalyze);
-    if (!reanalyze && (session.phase === 'ready' || session.phase === 'analyzing') &&
+    if (!reanalyze && (session.phase === 'ready' || session.phase === 'analyzing' || session.phase === 'loading-draft') &&
         session.folder === String(state.folder || '')) {
       window.qaShowCuration();
       renderCurrent();
@@ -1599,7 +1607,7 @@
     session.focus = String(focus || '');
     session.folder = String(state.folder || '');
     session.signature = signature;
-    session.phase = 'analyzing';
+    session.phase = reanalyze || !(options && options.openOnly) ? 'analyzing' : 'loading-draft';
     session.rows = inventory.rows;
     session.concepts = inventory.concepts;
     session.captionConcepts = [];
@@ -1637,7 +1645,17 @@
         renderCurrent();
         return;
       }
-      beginDirector();
+      try { beginDirector(); } catch (err) {
+        if (previousDraft) {
+          restoreDraft(previousDraft);
+          session.status = String(err.message || err) + ' Your saved curation is unchanged.';
+        } else {
+          session.phase = 'failed';
+          session.error = String(err.message || err);
+        }
+        window.reportConsoleError('QA Curate analysis', err);
+        renderCurrent();
+      }
       return;
     }
     draftWrite.catch(function() {}).then(function() {
@@ -1650,6 +1668,12 @@
     }).then(function(draft) {
       if (token !== session.token) return null;
       if (restoreDraft(draft)) { renderCurrent(); return null; }
+      if (options && options.openOnly) {
+        session.phase = 'waiting';
+        session.status = items.length + ' media in the current selection';
+        renderCurrent();
+        return null;
+      }
       if (!model) throw new Error('Choose a Director model for QA Curation.');
       return beginDirector();
     }).catch(function(err) {

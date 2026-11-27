@@ -382,6 +382,7 @@ function completeFolderLoadPipeline(path, loadSequence, metadataResult) {
 function refreshCurrentDirectory() {
   var path = state.folder || '';
   var loadSequence = ++folderLoadSequence;
+  if (normalizeWorkspaceSurface(workspaceState.surface) === 'dashboard') window.closeSetDashboard();
   state.folderStateWritable = false;
   invalidatePruneCandidates();
   invalidateDuplicateCandidates();
@@ -502,6 +503,10 @@ function refreshCurrentDirectory() {
               console.error('[webcap] Could not refresh working model selector:', err);
             }).then(function () {
               if (typeof window.restoreInitialShellLocationRoute === 'function') window.restoreInitialShellLocationRoute();
+              if (folderLoadSequence === loadSequence && String(state.folder || '') === String(path || '') &&
+                  !state.currentItem && !state.pendingSelectFileName && !pendingSelectFileName &&
+                  deriveShellNavigationState().activity === 'prep' && normalizeWorkspaceSurface(workspaceState.surface) === 'default' &&
+                  isSetFolderContext(path, state.items)) window.openSetDashboard();
             });
             if (typeof window.testGenerationsFolderLoaded === 'function') window.testGenerationsFolderLoaded();
             // Complete the one-time Test Generations handoff only after a valid Set has loaded.
@@ -558,6 +563,7 @@ var debouncedRefreshTrainingReviewForFilter = debounceCreate(250);
 function handleMediaFilterChanged() {
   markSuperSetSearchDirty();
   renderFileList();
+  window.refreshSetDashboard();
   pruneCandidatesScopeChanged();
   duplicateCandidatesScopeChanged();
   if (isTrainingWorkspaceActive()) {

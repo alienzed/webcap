@@ -12,7 +12,7 @@ assert.ok(start >= 0 && end > start, 'Sight action decision block exists');
 
 // Exercise the real action selection rather than a reimplementation of its rules.
 const decide = vm.runInNewContext(
-  '(function (setScanState, scopeCount, rescanBtn, forceBtn, badRetry, stopBtn, itemsCountNeedingAttention) {\n' +
+  '(function (setScanState, scopeCount, rescanBtn, forceBtn, badRetry, stopBtn, itemsCountNeedingAttention, getCaptionVisionModelId) {\n' +
   source.slice(start, end) +
   '\nreturn { shouldRetry, shouldScan };\n})'
 );
@@ -27,14 +27,14 @@ function button() {
   };
 }
 
-function scenario({ known = false, current = 0, total = 10, attention = 0, running = false, scope = 10, phase = 'idle' } = {}) {
+function scenario({ known = false, current = 0, total = 10, attention = 0, running = false, scope = 10, phase = 'idle', model = 'vision-test' } = {}) {
   const rescan = button(), force = button(), retry = button(), actions = button();
   const stop = { parentElement: actions };
   const state = {
     running, phase, hasRun: known, coverage: { known, openCurrent: current, total },
     sightItems: Array.from({ length: attention }, (_, i) => ({ file: String(i), issue: 'Retry' }))
   };
-  const decision = decide(state, scope, rescan, force, retry, stop, items => items.length);
+  const decision = decide(state, scope, rescan, force, retry, stop, items => items.length, () => model);
   return { decision, rescan, retry, actions, force };
 }
 
@@ -129,6 +129,7 @@ test('opening Sight hides stale status and actions before the first render', asy
     window: { setStatus() {} },
     isSetFolderContext: () => true,
     getSetIntelligenceScopeFiles: () => ['one.jpg'],
+    getCaptionVisionModelId: () => 'vision-test',
     el: id => id === 'set-scan-stage' ? stage : status,
     publishSetIntelligenceActivity() {},
     reportConsoleError(label, error) { assert.fail(label + ': ' + error); },
@@ -157,4 +158,12 @@ test('opening Sight hides stale status and actions before the first render', asy
     { statusHidden: true, actionsHidden: true },
     { statusHidden: true, actionsHidden: true }
   ]);
+});
+
+test('no available Vision model disables scan and force actions without implying readiness', () => {
+  const s = scenario({model: ''});
+  assert.equal(s.rescan.disabled, true);
+  assert.equal(s.force.disabled, true);
+  assert.equal(s.retry.disabled, true);
+  assert.equal(s.rescan.classes.has('hidden'), false);
 });

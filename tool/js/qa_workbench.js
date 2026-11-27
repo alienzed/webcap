@@ -2321,6 +2321,7 @@
     var investigations = undisposed.filter(function (finding) { return !!finding.concept; }).length;
     var corrections = undisposed.length - investigations;
     var high = undisposed.filter(function (finding) { return finding.priority === 'high'; }).length;
+    if (qaDashboardHost) window.setSetDashboardQaSummary(undisposed.length, (health.captionless || []).length);
 
     var hero = document.createElement('section');
     hero.className = 'qa-hero';
@@ -4262,7 +4263,7 @@
         var items = qaGetTrainingItems();
         var intent = qaCurationIntent();
         startQaCuration(qaBuildCurateItems(items),
-          qaWorkbenchState.trainingFocus, qaCurationSignature(items, intent), {intent: intent});
+          qaWorkbenchState.trainingFocus, qaCurationSignature(items, intent), {intent: intent, openOnly: true});
       } catch (err) {
         window.reportConsoleError('QA Curation', err);
         qaWorkbenchState.statusMessage = String(err.message || err);

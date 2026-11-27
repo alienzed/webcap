@@ -195,14 +195,16 @@
         actionLabel = 'Sight current';
       }
     }
-    forceBtn.disabled = setScanState.running || !scopeCount;
+    var modelAvailable = !!getCaptionVisionModelId();
+    forceBtn.disabled = setScanState.running || !scopeCount || !modelAvailable;
     var issueCountTotal = itemsCountNeedingAttention(setScanState.sightItems);
     // Sight actions stay here; vocabulary has its own entry in the annotation panel.
     var shouldRetry = !setScanState.running && !!issueCountTotal;
     var shouldScan = !setScanState.running && setScanState.phase !== 'checking-cache' &&
       !shouldRetry && (!coverage.known || !!openMissing);
     rescanBtn.classList.toggle('hidden', !shouldScan);
-    rescanBtn.disabled = !scopeCount;
+    rescanBtn.disabled = !scopeCount || !modelAvailable;
+    badRetry.disabled = !modelAvailable;
     rescanBtn.textContent = actionLabel || 'Run Set Intelligence';
     badRetry.classList.toggle('hidden', !shouldRetry);
     badRetry.textContent = 'Retry ' + String(issueCountTotal) + ' needing attention';
@@ -236,8 +238,8 @@
     else if (flagged.length) itemSelect.value = flagged[0].file;
     itemSelect.disabled = setScanState.running;
     itemView.disabled = !items.length;
-    itemRetry.disabled = setScanState.running || !items.length;
-    badRetry.disabled = setScanState.running || !flagged.length;
+    itemRetry.disabled = setScanState.running || !items.length || !modelAvailable;
+    badRetry.disabled = setScanState.running || !flagged.length || !modelAvailable;
     inspectionContext.textContent = setScanState.running ? 'Live' : '';
 
 
@@ -855,6 +857,10 @@
       window.setStatus('Open a Set before using Set Intelligence.');
       return;
     }
+    if (setScanState.running && setScanState.folder !== folder) {
+      window.setStatus('Sight scan is still finishing for ' + setScanState.folder + '.');
+      return;
+    }
     if (setScanState.folder && setScanState.folder !== folder) {
       setScanState.hasRun = false;
       setScanState.phase = 'idle';
@@ -894,8 +900,8 @@
       setScanState.hasRun = false;
       setScanState.phase = 'idle';
       setSetIntelligenceStatus(
-        'Ready to scan',
-        'No saved Set Intelligence is available for this Set. Run it when the GPU and selected models are ready.'
+        getCaptionVisionModelId() ? 'No saved Sight for selected model and scope' : 'Vision model unavailable',
+        getCaptionVisionModelId() ? 'Scan missing media when needed.' : 'Select an available Vision model before scanning.'
       );
     }).catch(function (err) {
       reportConsoleError('Set Intelligence cached report', err);
@@ -903,13 +909,14 @@
       setScanState.hasRun = false;
       setScanState.phase = 'idle';
       setSetIntelligenceStatus(
-        'Ready to scan',
-        'Saved intelligence could not be checked. Run Set Intelligence when you are ready; opening this view does not start model work.'
+        'Saved Sight could not be checked',
+        String(err.message || err)
       );
     });
   }
 
   function closeSetIntelligence() {
+    setScanState.scopeRequestToken += 1;
     setScanState.open = false;
     renderSetIntelligence();
   }
@@ -1166,7 +1173,7 @@
       setVisionModelPreference(this.value);
     };
     window.addEventListener('webcap:vision-capabilities-refreshed', function () {
-      if (setScanState.open) syncPrepareSetVisionModel();
+      if (setScanState.open) renderSetIntelligence();
     });
     window.addEventListener('webcap:vision-model-changed', function () {
       if (setScanState.open && !setScanState.running) openSetIntelligence();
@@ -1188,13 +1195,7 @@
         closeSavedIntelligence();
       }
     }, true);
-    document.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && setScanState.open) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        window.closeSetDashboard();
-      }
-    }, true);
+
   }
 
   function isSetIntelligenceRunning() {
@@ -1264,6 +1265,11 @@
   window.closeVlWorkspace = closeSavedIntelligence;
   window.openSetIntelligence = openSetIntelligence;
   window.closeSetIntelligence = closeSetIntelligence;
+  window.refreshSetIntelligenceScope = function () {
+    if (!setScanState.open || setScanState.running) return;
+    var files = getSetIntelligenceScopeFiles();
+    if (files.length !== setScanState.files.length || files.some(function (file, i) { return file !== setScanState.files[i]; })) openSetIntelligence();
+  };
   window.isSetIntelligenceOpen = function () { return setScanState.open; };
   window.stopSetIntelligence = stopSetIntelligence;
   window.isSetIntelligenceRunning = isSetIntelligenceRunning;

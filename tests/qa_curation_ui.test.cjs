@@ -993,3 +993,18 @@ test('reopening an in-flight curation does not submit a second analysis', async 
   assert.equal(h.calls.submitted.length,1);
   assert.equal(h.calls.errors.length,0);
 });
+
+test('opening Curate loads saved state without starting inference; Analyze Set is explicit', async () => {
+  const h = harness();
+  const rows = entries();
+  h.ctx.window.qaReanalyzeCuration = () => h.ctx.window.startQaCuration(rows, 'construction', 'same-scope', {reanalyze:true});
+  h.ctx.window.startQaCuration(rows, 'construction', 'same-scope', {openOnly:true});
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(h.calls.submitted.length, 0);
+  assert.equal(h.calls.captionSubmitted.length, 0);
+  const analyze = Array.from(h.root.querySelectorAll('button')).find(button => button.textContent === 'Analyze Set');
+  assert.ok(analyze);
+  analyze.click();
+  await new Promise(resolve => setTimeout(resolve, 55));
+  assert.equal(h.calls.submitted.length, 1);
+});

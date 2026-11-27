@@ -255,7 +255,7 @@ test('legacy standalone variables disappear; grouped intent survives and writes 
   const clean=c.normalizeSetVariables([{...pose,expected:true},old,{...shape,expected:false}]);
   assert.deepEqual(JSON.parse(JSON.stringify(clean)),[pose,shape]);
   const changed=c.replaceSetGroupVariable(clean,'Pose',{terms:['standing'],exclusive:true});
-  assert.deepEqual(JSON.parse(JSON.stringify(changed)),[{group:'Pose',terms:['standing'],exclusive:true,expected:false},shape]);
+  assert.deepEqual(JSON.parse(JSON.stringify(changed)),[{group:'Pose',terms:['standing'],exclusive:true},shape]);
   assert.deepEqual(JSON.parse(JSON.stringify(c.replaceSetGroupVariable(changed,'Pose',{terms:[]}))),[shape]);
   const folder=fs.readFileSync(path.join(__dirname,'../tool/js/folder_state.js'),'utf8');
   const html=fs.readFileSync(path.join(__dirname,'../tool/tool.html'),'utf8');

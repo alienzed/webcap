@@ -166,7 +166,7 @@ function renderChecklistGroupRows(itemsDiv, options) {
     toggleBtn.type = 'button';
     toggleBtn.className = 'checklist-row-toggle-btn';
     toggleBtn.textContent = expanded(item) ? '\u25BE' : '\u25B8';
-    toggleBtn.title = definition ? (expanded(item) ? 'Hide vocabulary terms' : 'Show vocabulary terms')
+    toggleBtn.title = definition ? (expanded(item) ? 'Hide group and Set Variable settings' : 'Show group and Set Variable settings')
       : (expanded(item) ? 'Hide selected tags for primer order' : 'Show selected tags for primer order');
     toggleBtn.setAttribute('aria-expanded', String(expanded(item)));
     (function (requirementLabel) {

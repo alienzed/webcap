@@ -48,7 +48,8 @@ function dashboard(options = {}) {
   let sightOpen = false;
   const context = {
     document, state,
-    statsGetPrimerOptionsFromDom: () => ({ template: 'example template' }),
+    statsGetPrimerOptionsFromDom: () => ({ template: options.template || 'example template' }),
+    getPrimerTemplatePlaceholderItems: () => (options.groups || []).map(label => ({label, placeholder:'{'+label.toLowerCase()+'}'})),
     window: {
       addEventListener() {},
       getQaTrainingFocus: () => state.setTrainingFocus,
@@ -107,6 +108,22 @@ test('Dashboard is a native workspace; grouped work is independently accessible'
   assert.deepEqual(app.actions, ['workspace', 'prepare']);
   app.elements['set-dashboard-tags-guided'].onclick();
   assert.deepEqual(app.actions, ['workspace', 'prepare', 'hide-prepare', 'workspace', 'guided']);
+});
+test('unused template placeholders insert into the draft, never the saved template', () => {
+  const app = dashboard({ groups:['Viewpoint','Lighting'], template:'subject, {viewpoint}, ' });
+  const draft = app.elements['set-dashboard-template-draft'];
+  const host = app.elements['set-dashboard-template-placeholders'];
+  assert.deepEqual(host.children.map(button => button.textContent),['Lighting']);
+  draft.selectionStart = draft.selectionEnd = draft.value.length;
+  draft.setRangeText = (text,start,end) => { draft.value = draft.value.slice(0,start)+text+draft.value.slice(end); };
+  host.children[0].onclick();
+  assert.equal(draft.value,'subject, {viewpoint}, {lighting}');
+  assert.equal(host.children.length,0);
+  app.context.window.refreshSetDashboard();
+  assert.equal(draft.value,'subject, {viewpoint}, {lighting}');
+  app.elements['set-dashboard-template-reset'].onclick();
+  assert.equal(draft.value,'subject, {viewpoint}, ');
+  assert.deepEqual(host.children.map(button => button.textContent),['Lighting']);
 });
 test('QA is opened explicitly and reports retain direct handoffs', () => {
   const app = dashboard();

@@ -186,3 +186,7 @@ QA does not silently repair captions, tags, media, or reviewed state.
 The operating rule remains:
 
 > **Models direct attention and propose meaning; WebCap performs explicit, deterministic user-authorized mutations.**
+
+## Related AI research
+
+See the [AI research index](ai-research/README.md) (R02 R03 R05 R07 R08 R09 R10 R11 R12) for candidate publications and future research questions. This reference does not change the feature contract or establish evidence for its current implementation.

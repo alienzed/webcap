@@ -165,3 +165,7 @@ DINOv2 model and dependency presence is checked **before launch**. Reference-emb
 - Verify DINOv2 Base from the real local snapshot and installed torch/transformers dependencies; measure its CPU throughput.
 - Check developer console, global Console, and storage audit, and confirm no new hidden Set-root state or localStorage.
 - No merge before those runtime checks pass. Repository JavaScript syntax checks were performed using JS parsing; Python tests and live UI runs have **not** been executed in this tool environment.
+
+## Related AI research
+
+See the [AI research index](ai-research/README.md) (R05 R09 R10 R15) for candidate publications and future research questions. This reference does not change the feature contract or establish evidence for its current implementation.

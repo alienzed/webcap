@@ -31,3 +31,7 @@ Repeat counts are written into the persistent dataset TOML when that file is cre
 Calculated repeats are defaults, not a hidden constraint: edit the persistent dataset TOML directly when an intentional custom value is needed.
 
 See [train.md](train.md) for run-capture behavior and [app_settings.md](app_settings.md) for the reference-epoch setting.
+
+## Related AI research
+
+See the [AI research index](ai-research/README.md) (R13 R17) for candidate publications and future research questions. This reference does not change the feature contract or establish evidence for its current implementation.

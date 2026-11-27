@@ -39,3 +39,7 @@ Owner: `tool/server/model_lab.py`. Existing JSON run journals and shared LLM/GPU
 - The Storyboard scene-header and Test Generations workflows guard unrelated UI/workflow regressions.
 - No local model inference smoke test can run on GitHub's Linux runner. A representative local/remote real-model run should be verified before relying on performance or capacity comparisons as production facts.
 - No database, new app-private storage root, new GPU lane, localStorage, hidden run actions, or background inference was introduced. Follow `AGENTS.md`.
+
+## Related AI research
+
+See the [AI research index](ai-research/README.md) (R09 R16 R18) for candidate publications and future research questions. This reference does not change the feature contract or establish evidence for its current implementation.

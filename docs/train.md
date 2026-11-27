@@ -95,3 +95,7 @@ Create and verify the fused Ostris v3 model offline using `tool/server/h3_premer
 On **Resume**, the method is not selectable: the captured checkpoint's recorded diffusion model, adapter list, and CFG are inherited exactly, including the adapter version, rather than substituting the current default. **Fine-tune from saved LoRA** creates a new run and permits a new choice.
 
 Diffusion-pipe documents CFG augmentation and a training adapter as alternatives, not techniques to combine. The Ostris adapter has community reports of running with diffusion-pipe, but no guarantee of better concept learning or likeness. Compare with your existing CFG baseline at matched dataset and training settings.
+
+## Related AI research
+
+See the [AI research index](ai-research/README.md) (R11 R13 R17) for candidate publications and future research questions. This reference does not change the feature contract or establish evidence for its current implementation.

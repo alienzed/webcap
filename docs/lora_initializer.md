@@ -263,3 +263,7 @@ pipelines may override this loader.
 - A supplied Constant LR becomes top-level `force_constant_lr`; blank means no override.
 - Mixed checkpoint/initializer requests and invalid paths fail visibly before launch.
 - Queue and history clearly distinguish `Continues` from `Fine-tuned from`.
+
+## Related AI research
+
+See the [AI research index](ai-research/README.md) (R17) for candidate publications and future research questions. This reference does not change the feature contract or establish evidence for its current implementation.

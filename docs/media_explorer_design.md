@@ -118,3 +118,7 @@ Selected 2 items → **Compare** (side-by-side, linked zoom optional). Selected 
 - Active sessions/video playback are not destroyed by periodic rerenders.
 - Scans never silently mutate files or invoke GPUs; status remains visible.
 - No new persisted library indexes, duplicate files or originals folders.
+
+## Related AI research
+
+See the [AI research index](ai-research/README.md) (R03 R10 R12) for candidate publications and future research questions. This reference does not change the feature contract or establish evidence for its current implementation.

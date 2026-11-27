@@ -45,3 +45,7 @@ No new filter, modal, review state, embedding service, automatic tag vocabulary 
 
 ## Decision/rollback boundary
 Existing review receipts and Caption Assist behavior must remain readable/usable. This feature changes the explicit Deep QA operation and adds optional progress fields to its existing QA review payload, not folder annotation or training outputs. If model behavior proves noisy, downgrade suggestions to observations; do not auto-apply them.
+
+## Related AI research
+
+See the [AI research index](ai-research/README.md) (R03 R07 R08 R09) for candidate publications and future research questions. This reference does not change the feature contract or establish evidence for its current implementation.

@@ -225,9 +225,9 @@ test('QA context has an inspectable snapshot and clearly temporary controls', ()
 });
 
 test('Ask QA uses the task modal without replacing the conversation DOM', () => {
-  const assistant = read('tool/js/director_chat.js');
-  const review = read('tool/js/review_assistant.js');
-  const html = read('tool/tool.html');
+  const assistant = read('director_chat.js');
+  const review = read('review_assistant.js');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'tool/tool.html'), 'utf8');
   assert.match(review, /id: 'qa-finding',[\s\S]*?taskModal: true/);
   assert.match(html, /<dialog id="task-conversation-modal"/);
   assert.match(assistant, /!mode\.taskModal && modeAvailable\(mode\)/);

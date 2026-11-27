@@ -142,3 +142,29 @@ def test_wildcard_rejects_missing_training_run(tmp_path, monkeypatch):
                                                   json={"folder": "set", "directorModel": "director.gguf"})
     assert response.status_code == 400
     assert "Choose a training run" in response.get_json()["error"]
+
+def test_wildcard_snapshot_is_read_only_and_followup_does_not_reread_set(tmp_path, monkeypatch):
+    set_root = tmp_path / "set"
+    set_root.mkdir()
+    (set_root / "one.png").write_bytes(b"image")
+    (set_root / "one.txt").write_text("captured original", encoding="utf-8")
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", tmp_path)
+    calls = []
+    monkeypatch.setattr(app_module, "enqueue_llm",
+                        lambda client, model, contract, **kwargs: calls.append(contract) or {"jobId": "job"})
+    client = app_module.app.test_client()
+    result = client.post("/fs/test_generations/wildcard", json={"action": "context", "folder": "set"})
+    assert result.status_code == 200
+    assert calls == []
+    snapshot = result.get_json()["snapshot"]
+    assert "captured original" in snapshot
+    (set_root / "one.txt").write_text("changed source", encoding="utf-8")
+    result = client.post("/fs/test_generations/wildcard", json={
+        "action": "author", "snapshot": snapshot, "directorModel": "model",
+        "messages": [{"role": "user", "content": "Change pose"}], "currentWildcard": "{standing|sitting}",
+    })
+    assert result.status_code == 202
+    assert len(calls) == 1
+    assert "captured original" in calls[0]["prompt"]
+    assert "changed source" not in calls[0]["prompt"]
+    assert "Change pose" in calls[0]["prompt"]

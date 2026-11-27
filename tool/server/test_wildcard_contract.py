@@ -139,6 +139,64 @@ def _defined_variable_evidence(set_variables, annotations):
     return result
 
 
+def wildcard_response_schema():
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["wildcard", "stableTerms", "variationGroups"],
+        "properties": {
+            "wildcard": {
+                "type": "string",
+                "minLength": 1,
+                "description": "One reusable wildcard caption using observed training values in concrete {a|b|c} syntax.",
+            },
+            "stableTerms": {
+                "type": "array",
+                "items": {"type": "string", "minLength": 1},
+                "description": "Meaningful terms or phrases that stay stable across the Set.",
+            },
+            "variationGroups": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["label", "options"],
+                    "properties": {
+                        "label": {"type": "string", "minLength": 1},
+                        "annotationGroup": {"type": "string", "description": "Exact Set annotation group name when options are tags; empty for free prompt variation."},
+                        "options": {
+                            "type": "array",
+                            "minItems": 2,
+                            "items": {"type": "string"},
+                        },
+                    },
+                },
+                "description": "Semantic dimensions represented by wildcard groups. Empty string is allowed only for an optional attribute.",
+            },
+        },
+    }
+
+
+def build_followup_request(snapshot, messages, current_wildcard=""):
+    """Author from the same captured evidence; a discussion never changes the draft."""
+    snapshot = str(snapshot or "").strip()
+    if not snapshot:
+        raise ValueError("Wildcard evidence must be captured before authoring.")
+    return {
+        "operation": "analyze_caption_wildcard",
+        "output": "json",
+        "prompt": (
+            snapshot
+            + "\n\n[CURRENT EDITABLE WILDCARD]\n" + str(current_wildcard or "")
+            + "\n\n[USER AND ASSISTANT DISCUSSION]\n" + json.dumps(messages or [], ensure_ascii=False)
+            + "\n\n[OUTPUT]\nAuthor the requested wildcard draft from the captured evidence, current "
+            "editable prompt and the user's decisions in the conversation. Preserve useful choices and "
+            "unrelated details when revising. Return only the structured result requested by the schema."
+        ),
+        "response_schema": wildcard_response_schema(),
+    }
+
+
 def build_request(captions, set_name="", focus="", vocabulary=None, annotations=None,
                   set_variables=None, training_focus=""):
     if annotations is not None and len(annotations) != len(captions):
@@ -194,41 +252,7 @@ def build_request(captions, set_name="", focus="", vocabulary=None, annotations=
             if groups else "(no scoped concept tags)"
         )
 
-    schema = {
-        "type": "object",
-        "additionalProperties": False,
-        "required": ["wildcard", "stableTerms", "variationGroups"],
-        "properties": {
-            "wildcard": {
-                "type": "string",
-                "minLength": 1,
-                "description": "One reusable wildcard caption using observed training values in concrete {a|b|c} syntax.",
-            },
-            "stableTerms": {
-                "type": "array",
-                "items": {"type": "string", "minLength": 1},
-                "description": "Meaningful terms or phrases that stay stable across the Set.",
-            },
-            "variationGroups": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "required": ["label", "options"],
-                    "properties": {
-                        "label": {"type": "string", "minLength": 1},
-                        "annotationGroup": {"type": "string", "description": "Exact Set annotation group name when options are tags; empty for free prompt variation."},
-                        "options": {
-                            "type": "array",
-                            "minItems": 2,
-                            "items": {"type": "string"},
-                        },
-                    },
-                },
-                "description": "Semantic dimensions represented by wildcard groups. Empty string is allowed only for an optional attribute.",
-            },
-        },
-    }
+    schema = wildcard_response_schema()
 
     context_lines = [
         "Set name: " + (set_name or "(not supplied)"),

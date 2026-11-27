@@ -91,7 +91,7 @@ from .external_media import register_routes as register_external_media_routes
 from .generate_store import load_result as generate_load_result
 from .generate_store import cleanup_references as generate_cleanup_references, delete_prompt as generate_delete_prompt, list_prompts as generate_list_prompts, list_results as generate_list_results, rate_result as generate_rate_result, tag_result as generate_tag_result, resolve_result_media as generate_resolve_result_media, save_prompt as generate_save_prompt, save_reference as generate_save_reference
 from .generation_director_contract import build_request as generate_build_director_request
-from .test_wildcard_contract import build_request as test_wildcard_build_request
+from .test_wildcard_contract import build_request as test_wildcard_build_request, build_followup_request as test_wildcard_followup_request
 from .inference_runner import action as inference_action, cancel_storyboard_pending_jobs, enqueue_generate, job_status as inference_job_status, prepare_startup_backlog as prepare_inference_startup_backlog, snapshot as inference_snapshot, stop_storyboard_jobs
 from .llm_runner import action as llm_action, enqueue as enqueue_llm, job_status as llm_job_status, reconcile_startup as reconcile_llm_startup, snapshot as llm_snapshot, storyboard_story_busy as llm_storyboard_story_busy, storyboard_target_busy as llm_storyboard_target_busy
 from .activity_monitor import activity_snapshot
@@ -3281,6 +3281,16 @@ def test_generations_wildcard_route():
             return jsonify({"ok": True, **storyboard_director_status()})
 
         data = request.get_json(silent=True) or {}
+        action = str(data.get("action") or "generate")
+        if action == "author":
+            contract = test_wildcard_followup_request(
+                data.get("snapshot"), data.get("messages"), data.get("currentWildcard", "")
+            )
+            job = enqueue_llm("test", str(data.get("directorModel") or "").strip(),
+                              contract, context={}, label="Write Wildcard Draft")
+            return jsonify({"ok": True, "job": job}), 202
+        if action not in {"generate", "context"}:
+            raise ValueError("Unsupported Wildcard Builder action.")
         folder = str(data.get("folder") or "").strip()
         from .epoch_reference import training_wildcard_members
         job_id = str(data.get("jobId") or "").strip()
@@ -3320,6 +3330,17 @@ def test_generations_wildcard_route():
             set_variables=set_state.get("set_variables"),
             training_focus=set_state.get("set_training_focus"),
         )
+        if action == "context":
+            return jsonify({
+                "ok": True,
+                "snapshot": contract["prompt"].rsplit("\n\n[OUTPUT]\n", 1)[0],
+                "captionCount": sum(bool(caption) for caption in captions),
+                "trainingMediaCount": len(media),
+                "sourceScope": source_scope,
+                "warning": filter_warning,
+                "setName": set_name,
+                "focus": focus,
+            })
         job = enqueue_llm(
             "test",
             str(data.get("directorModel") or "").strip(),

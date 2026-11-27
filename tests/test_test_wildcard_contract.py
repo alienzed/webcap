@@ -257,3 +257,13 @@ def test_defined_variables_override_incidental_defaults_and_report_scoped_covera
     assert "Saved Set training focus: garment construction" in prompt
     assert "primary variation plan" in prompt
     assert "Zero observed count does not establish training exposure" in prompt
+
+def test_wildcard_followup_reuses_snapshot_and_preserves_schema():
+    from tool.server.test_wildcard_contract import build_followup_request
+    base = build_request(["standing in bright light"], set_name="original")
+    snapshot = base["prompt"].rsplit("\n\n[OUTPUT]\n", 1)[0]
+    next_request = build_followup_request(snapshot, [{"role": "user", "content": "Keep lighting fixed"}], "{standing|seated}, bright light")
+    assert next_request["response_schema"] == base["response_schema"]
+    assert next_request["prompt"].startswith(snapshot)
+    assert "Keep lighting fixed" in next_request["prompt"]
+    assert "{standing|seated}, bright light" in next_request["prompt"]

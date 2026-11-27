@@ -389,3 +389,7 @@ tests/                regression tests
 ## License
 
 MIT. See [`LICENSE`](LICENSE).
+
+## Related AI research
+
+See the [AI research index](docs/ai-research/README.md) (R01 R02 R03 R04 R05 R07 R09 R10 R11 R12 R14) for candidate publications and future research questions. This reference does not change the feature contract or establish evidence for its current implementation.

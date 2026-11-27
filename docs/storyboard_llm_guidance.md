@@ -311,3 +311,7 @@ concept + atmosphere + invariants + relevant Scene context
 ```
 
 Keep it that way.
+
+## Related AI research
+
+See the [AI research index](ai-research/README.md) (R02 R03 R06 R14) for candidate publications and future research questions. This reference does not change the feature contract or establish evidence for its current implementation.

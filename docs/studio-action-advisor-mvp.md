@@ -39,3 +39,7 @@ After a completed, successfully saved Director chat reply, an **enabled-by-defau
 ## Deliberately deferred
 
 No agent roster, multipersona synthesis, technician authoring, new Overview taxonomy, additional chat response schemas, automatic creative grading, repair calls, Review gates, automatic Reads/Writes, durable action suggestions, or implicit operation selection from Director's ordinary prose. The isolated `runSidecar(operation, model, message)` function is the minimal reusable extension point for another advisor when an actual workflow warrants it.
+
+## Related AI research
+
+See the [AI research index](ai-research/README.md) (R02 R03 R08 R09) for candidate publications and future research questions. This reference does not change the feature contract or establish evidence for its current implementation.

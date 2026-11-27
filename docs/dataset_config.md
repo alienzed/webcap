@@ -32,3 +32,7 @@ Raw saved dataset TOML is authoritative. A valid TOML with buckets outside the m
 `training_plan.json` version 2 records stanza-level roles, buckets, source files, eligibility, native/upscaled counts, limiting files, and repeats. `dataset_manifest.json` records the exact captured selection. `bundle_summary.json` remains a compact view for the existing captured-items UI.
 
 H3 envelope probing remains separate experimental tooling. Each active H3 video role has a conservative uncalibrated ceiling. A saved compatible calibration replaces that exact frame/aspect ceiling, expanding or contracting it within the app-owned model/probe envelope; it does not add runtime dataset roles. The exact calibrated ceiling remains selectable; automatic calibrated defaults retain two 32px ladder rungs below it where available. Calibration affects newly generated or explicitly reset managed datasets rather than rewriting existing TOMLs.
+
+## Related AI research
+
+See the [AI research index](ai-research/README.md) (R11 R13 R17) for candidate publications and future research questions. This reference does not change the feature contract or establish evidence for its current implementation.

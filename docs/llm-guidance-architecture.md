@@ -53,3 +53,7 @@ Automation/live LLM tests may require the author's configured runtime and cannot
 ## Restoration of tested guidance
 
 After the v4 rewrite, the production Classic v3 role and H3 toolkit were restored verbatim from `c801959ec3c5bb7f1ffa89e9faa671b963a9aac1`, matching the frozen `classic-v3` package in `experiments/studio_guidance/unified_final/packages.json`. The other profile defaults, H3 and Storyboard references, and original Studio delivery (role plus toolkit for Chat and Write, technical reference and playbook for prompt-writing tasks only) were also restored from that commit. The operation-scoped Storyboard lookup and system-message diagnostics from #1102 remain. No new prompt wording or changes to user overrides are introduced. Subsequent refinements should be isolated against this baseline.
+
+## Related AI research
+
+See the [AI research index](ai-research/README.md) (R01 R02 R03 R04 R06 R07 R08 R10 R14 R18) for candidate publications and future research questions. This reference does not change the feature contract or establish evidence for its current implementation.

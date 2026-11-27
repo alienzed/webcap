@@ -121,3 +121,7 @@ Official references:
 - Base T2VA / I2VA / FL2VA / L2VA guide: https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_base_en.md
 - Full-reference guide: https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_ref_en.md
 - H3 model/recommended workflow: https://www.minimax.io/news/minimax-h3-open-source
+
+## Related AI research
+
+See the [AI research index](ai-research/README.md) (R01 R06 R10 R14 R18) for candidate publications and future research questions. This reference does not change the feature contract or establish evidence for its current implementation.

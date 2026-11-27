@@ -135,3 +135,7 @@ This corrects the remaining overreach after PR #840: unselected supporting conce
 4. **Quality/review gate.** Run JavaScript and Python contracts and inspect diff; real-browser and controlled trained-LoRA comparisons remain empirical gates, not assumed facts. Surface any model-dependent semantic extraction limitations accurately.
 
 **Implementation:** PR #847 adds caption evidence through the existing Director queue and keeps saved v2 choices; semantic extraction accuracy and trained-LoRA outcomes still require real-model evaluation.
+
+## Related AI research
+
+See the [AI research index](ai-research/README.md) (R09 R11 R12 R13) for candidate publications and future research questions. This reference does not change the feature contract or establish evidence for its current implementation.

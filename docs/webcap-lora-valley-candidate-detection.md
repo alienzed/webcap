@@ -83,3 +83,7 @@ A selected epoch should be visually distinct from:
 Selection does not itself copy, move, delete, or archive any files. It records the human conclusion only.
 
 The archive/finalization lifecycle that consumes this selection is documented in [storage_manager_plan.md](storage_manager_plan.md). Finalize & Archive is a later, separate destructive action: it retains the selected epoch, prunes unselected epochs and resumable checkpoint bulk, moves the trainer timestamp folder under the archive root, and intentionally removes that experiment from WebCap's managed/discoverable run world.
+
+## Related AI research
+
+See the [AI research index](ai-research/README.md) (R16 R17) for candidate publications and future research questions. This reference does not change the feature contract or establish evidence for its current implementation.

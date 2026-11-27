@@ -318,6 +318,13 @@ function dismissCaptionAssistCandidate() {
 
 var primerTemplateAssistCandidate = '';
 
+// The existing template field remains the single saved template owner.
+function setPrimerTemplateFromDashboard(value) {
+  var field = document.getElementById('primer-template');
+  field.value = String(value || '');
+  field.dispatchEvent(new Event('input', {bubbles: true}));
+}
+
 function wireStatsPrimerAutoSave() {
   wirePrimerTemplateAssistUi();
   var statsFields = [

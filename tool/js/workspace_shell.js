@@ -271,6 +271,7 @@ function normalizeWorkspaceSurface(surface) {
   if (value === 'reviewoutput') return 'reviewOutput';
   if (value === 'training') return 'training';
   if (value === 'configeditor') return 'configEditor';
+  if (value === 'dashboard') return 'dashboard';
   return 'default';
 }
 
@@ -867,6 +868,9 @@ function syncApplicationShellContext() {
   }
   var storageOpen = navigation.activity === 'storage';
   if (setControl) setControl.classList.toggle('hidden', generateOpen || storyboardOpen || navigation.activity === 'media');
+  var dashboardBtn = document.getElementById('set-dashboard-header-btn');
+  dashboardBtn.classList.toggle('hidden', navigation.activity !== 'prep' || !isSetFolderContext(folder, state.items));
+  dashboardBtn.setAttribute('aria-pressed', surface === 'dashboard' ? 'true' : 'false');
   if (typeof window.syncInferenceQueueSurface === 'function') {
     window.syncInferenceQueueSurface(navigation.activity);
   }
@@ -1104,7 +1108,8 @@ function openPrepActivity() {
   } else if (surface === 'focus') {
     stopFocusedAnnotation();
   }
-  setWorkspaceSurface('default');
+  if (!state.currentItem && isSetFolderContext(state.folder, state.items)) window.openSetDashboard();
+  else setWorkspaceSurface('default');
 }
 
 function syncWorkspaceConfigEditorUi() {
@@ -1151,7 +1156,8 @@ function syncWorkspaceSurfaceUi() {
     'workspace-surface-focus',
     'workspace-surface-review-output',
     'workspace-surface-training',
-    'workspace-surface-config-editor'
+    'workspace-surface-config-editor',
+    'workspace-surface-dashboard'
   );
   ui.appEl.classList.add('workspace-surface-' + surface.replace(/[A-Z]/g, function (m) { return '-' + m.toLowerCase(); }));
   ui.appEl.classList.toggle('sidebar-hidden', !!workspaceState.sidebarHidden);
@@ -1228,6 +1234,7 @@ function setWorkspaceSurface(surface, options) {
   if (!opts.skipRemember && nextSurface !== currentSurface && nextSurface !== 'default') {
     workspaceState.previousSurface = currentSurface;
   }
+  if (currentSurface === 'dashboard' && nextSurface !== 'dashboard') window.closeSetDashboard({keepSurface: true});
   workspaceState.surface = nextSurface;
   workspaceState.sidebarHidden = !!opts.sidebarHidden || nextSurface === 'focus' || nextSurface === 'grid';
   if (nextSurface === 'reviewOutput' && currentSurface !== 'reviewOutput' && typeof setReviewDetailTab === 'function') {

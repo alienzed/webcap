@@ -894,8 +894,8 @@
       setScanState.hasRun = false;
       setScanState.phase = 'idle';
       setSetIntelligenceStatus(
-        'Ready to scan',
-        'No saved Set Intelligence is available for this Set. Run it when the GPU and selected models are ready.'
+        'No saved Sight for selected model and scope',
+        'Choose an available Vision model to scan missing media.'
       );
     }).catch(function (err) {
       reportConsoleError('Set Intelligence cached report', err);
@@ -903,8 +903,8 @@
       setScanState.hasRun = false;
       setScanState.phase = 'idle';
       setSetIntelligenceStatus(
-        'Ready to scan',
-        'Saved intelligence could not be checked. Run Set Intelligence when you are ready; opening this view does not start model work.'
+        'Saved Sight could not be checked',
+        String(err.message || err)
       );
     });
   }

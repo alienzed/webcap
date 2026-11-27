@@ -1,11 +1,11 @@
 (function () {
   'use strict';
 
-  var stages = ['analyze', 'review', 'reports'];
+  var templateDirty = false;
+  var qaOpen = false;
   var open = false;
   var selected = 'analyze';
   var openedFolder = '';
-  var returnFocus = null;
   var distributionParent = null;
   var focusMigrationFolder = '';
   var focusMigrationStatus = '';
@@ -16,7 +16,7 @@
     var items = (state && Array.isArray(state.items)) ? state.items : [];
     var phrase = String(el('stats-required-phrase').value || '').trim();
     var balances = String(el('stats-phrases').value || '').split(/\r?\n/).map(function (p) { return p.trim(); }).filter(Boolean);
-    // The footer summarizes the same active scope as annotation and captioning.
+    // Distribution and preparation use the current media scope.
     var visibleItems = getFilteredMediaItems(false).filter(function (item) { return !!(item && item.key); });
     var sight = visibleItems.filter(function (item) {
       var s = item && item.metadata && item.metadata.vision_sight;
@@ -49,25 +49,14 @@
   function setHidden(node, hidden) { node.classList.toggle('hidden', !!hidden); }
 
   function run(destination) {
-    var origin = selected;
+    var origin = el('set-dashboard-review').open ? 'review' : 'analyze';
+    if (destination === 'train') { closeDashboard(); return openTrainingSurface('set'); }
+    // Group configuration is a modal over the current workspace.
+    if (destination === 'groups') return openChecklistKeywordsModal();
     closeDashboard();
     if (destination === 'prepare') return openDashboard('analyze');
     if (destination === 'annotation') return startFocusedAnnotation();
-    if (destination === 'groups') return openChecklistKeywordsModal();
     if (destination === 'guided') return openGuidedTagPass({ source: 'set' });
-    if (destination === 'caption') {
-      var visible = getFilteredMediaItems(false);
-      var missing = visible.find(function (item) {
-        return item && item.key && !(item.hasCaption || String(item.caption || '').trim());
-      });
-      return startFocusedCaption(missing ? missing.key : '');
-    }
-    if (destination === 'review-captions') {
-      var captionedKeys = getFilteredMediaItems(false).filter(function (item) {
-        return item && item.key && (item.hasCaption || String(item.caption || '').trim());
-      }).map(function (item) { return item.key; });
-      return startFocusedCaption(captionedKeys[0], 'caption', {itemKeys: captionedKeys});
-    }
     if (destination === 'curate' || ['report', 'captions', 'metadata', 'prune', 'duplicates'].indexOf(destination) !== -1) {
       setWorkspaceSurface('reviewOutput');
       if (destination === 'curate') {
@@ -363,62 +352,52 @@
     if (!open) return;
     if (String(state.folder || '') !== openedFolder) { closeDashboard(); return; }
     var s = snapshot();
-    if (selected !== 'analyze' && window.isSetIntelligenceOpen()) window.closeSetIntelligence();
-    document.querySelectorAll('[data-set-dashboard-tab]').forEach(function (button) {
-      var active = button.getAttribute('data-set-dashboard-tab') === selected;
-      button.setAttribute('aria-selected', active ? 'true' : 'false');
-      button.setAttribute('tabindex', active ? '0' : '-1');
-      button.classList.toggle('is-active', active);
-    });
-    stages.forEach(function (tab) { setHidden(el('set-dashboard-' + tab), selected !== tab); });
     el('set-dashboard-scope').textContent = s.visibleTotal + ' of ' + s.total + ' media' + (state.focusSet ? ' · Focus Set' : '');
-    el('set-dashboard-sight-count').textContent = s.sight + ' / ' + s.visibleTotal;
-    var annotationPercent = s.totalGroups ? Math.floor(s.reviewedGroups * 100 / s.totalGroups) : null;
-    el('set-dashboard-tags-count').textContent = annotationPercent === null ? '—' : annotationPercent + '%';
-    el('set-dashboard-captions-count').textContent = s.visibleCaptions + ' / ' + s.visibleTotal;
     el('set-dashboard-curate').disabled = !s.visibleTotal;
-    if (selected !== 'analyze') return;
+    el('set-dashboard-train').disabled = !s.visibleTotal;
     renderDefinition(s);
-    el('set-dashboard-template-preview').textContent = String(statsGetPrimerOptionsFromDom().template || '');
-    if (!window.isSetIntelligenceOpen()) window.openSetIntelligence();
+    el('set-dashboard-definition-summary').textContent = window.getQaTrainingFocus() || 'Define training focus';
+    if (!templateDirty) el('set-dashboard-template-draft').value = String(statsGetPrimerOptionsFromDom().template || '');
+    if (el('set-dashboard-definition').open && !window.isSetIntelligenceOpen()) window.openSetIntelligence();
     var tagsStatus = el('set-dashboard-tags-status');
-    // The persistent footer owns annotation/caption coverage. Let actions show the remaining work.
-    setHidden(el('set-dashboard-tags-progress'), true);
-    if (annotationPercent !== null) {
-      el('set-dashboard-tags-progress-value').textContent = annotationPercent + '%';
-      el('set-dashboard-tags-progress-fill').style.width = annotationPercent + '%';
-    }
-    tagsStatus.textContent = !s.configuredGroups ? 'No groups configured' : !s.visibleTotal ? 'No media in the current view' : '';
+    var remaining = s.totalGroups - s.reviewedGroups;
+    tagsStatus.textContent = !s.configuredGroups ? 'No groups configured' : remaining ? remaining + ' media/group assignments left to review' : '';
     setHidden(tagsStatus, !tagsStatus.textContent);
     setHidden(el('set-dashboard-tags-primary'), !s.configuredGroups || !s.visibleTotal);
-    var missing = s.visibleTotal - s.visibleCaptions;
-    setHidden(el('set-dashboard-progress'), true);
-    el('set-dashboard-primary').textContent = missing ? 'Caption Assist · ' + missing + ' uncaptioned' : 'Caption Assist';
-    el('set-dashboard-progress-text').textContent = 'Captioned media in current view';
-    el('set-dashboard-progress-value').textContent = s.visibleCaptions + ' / ' + s.visibleTotal;
-    var percent = s.visibleTotal ? Math.round(100 * s.visibleCaptions / s.visibleTotal) : 0;
-    el('set-dashboard-progress-fill').style.width = percent + '%';
-    el('set-dashboard-progress-bar').setAttribute('aria-valuenow', String(percent));
-    el('set-dashboard-primary').disabled = !s.visibleTotal;
-    el('set-dashboard-secondary').disabled = !s.visibleCaptions;
+    el('set-dashboard-tags-primary').textContent = remaining ? 'Continue annotation review' : 'Focused Annotation';
+    var count = s.balances.length + (state.setVariables || []).length;
+    el('set-dashboard-balance-summary').textContent = count ? count + ' priorities' : 'Add training priorities';
     renderDistribution(s);
     renderVariables(s);
   }
 
+  function syncQaSection() {
+    var next = open && el('set-dashboard-review').open;
+    if (next === qaOpen) return;
+    qaOpen = next;
+    if (next) window.showQaInSetDashboard();
+    else window.hideQaInSetDashboard();
+  }
+
   function openDashboard(preferredStage) {
     if (!isSetFolderPath(state.folder) || !Array.isArray(state.items) || !state.items.length) return;
+    if (setWorkspaceSurface('dashboard') === false) return;
     if (openedFolder !== String(state.folder || '')) {
       focusMigrationStatus = '';
       focusMigrationFolder = '';
+      templateDirty = false;
+      el('set-dashboard-definition').open = !window.getQaTrainingFocus() || !String(el('stats-required-phrase').value || '').trim();
+      el('set-dashboard-balance-section').open = true;
+      el('set-dashboard-review').open = false;
     }
     openedFolder = String(state.folder || '');
-    returnFocus = document.activeElement;
-    selected = stages.indexOf(preferredStage) !== -1 ? preferredStage : 'analyze';
+    if (preferredStage === 'review') el('set-dashboard-review').open = true;
+    if (preferredStage === 'reports') el('set-dashboard-reports').open = true;
     el('set-dashboard-name').textContent = openedFolder.split(/[\\/]/).filter(Boolean).pop() || 'Current Set';
     open = true;
     setHidden(el('set-dashboard-modal'), false);
     renderStage();
-    if (selected === 'review') window.showQaInSetDashboard();
+    syncQaSection();
     if (focusMigrationFolder !== openedFolder && state.setTrainingFocus == null) {
       focusMigrationFolder = openedFolder;
       focusMigrationStatus = '';
@@ -435,29 +414,33 @@
         if (open) renderStage();
       });
     }
-    var active = document.querySelector('[data-set-dashboard-tab="' + selected + '"]');
-    if (active) active.focus();
+
   }
 
-  function closeDashboard() {
+  function closeDashboard(options) {
     if (!open) return;
     open = false;
     setHidden(el('set-dashboard-variable-editor'), true);
     if (window.isSetIntelligenceOpen()) window.closeSetIntelligence();
-    window.hideQaInSetDashboard();
+    syncQaSection();
     setHidden(el('set-dashboard-modal'), true);
-    var target = returnFocus;
-    returnFocus = null;
-    if (target && target.isConnected) target.focus();
+    el('set-dashboard-reports').open = false;
+    if (!(options && options.keepSurface)) setWorkspaceSurface('default', {skipRemember: true});
   }
 
   function init() {
     var launcher = el('set-dashboard-open-btn');
-    var close = el('set-dashboard-close');
-    if (!launcher || !close || !el('set-dashboard-modal')) {
+    if (!launcher || !el('set-dashboard-modal')) {
       throw new Error('Set Dashboard UI is incomplete.');
     }
     launcher.addEventListener('click', openDashboard);
+    el('set-dashboard-header-btn').addEventListener('click', openDashboard);
+    el('set-dashboard-definition').addEventListener('toggle', function () {
+      if (!open) return;
+      if (el('set-dashboard-definition').open) renderStage();
+      else if (window.isSetIntelligenceOpen()) window.closeSetIntelligence();
+    });
+    el('set-dashboard-review').addEventListener('toggle', syncQaSection);
     el('set-dashboard-training-focus').addEventListener('input', function () { if (open) renderDefinition(snapshot()); });
     el('set-dashboard-training-focus').addEventListener('change', function () {
       if (String(state.folder || '') !== openedFolder) return;
@@ -470,68 +453,22 @@
     el('set-dashboard-variable-cancel').onclick = function () { setHidden(el('set-dashboard-variable-editor'), true); };
     var destinations = {
       'set-dashboard-tags-primary': 'annotation', 'set-dashboard-tags-groups': 'groups',
-      'set-dashboard-tags-guided': 'guided', 'set-dashboard-primary': 'caption',
-      'set-dashboard-secondary': 'review-captions',
+      'set-dashboard-tags-guided': 'guided', 'set-dashboard-train': 'train',
       'set-dashboard-curate': 'curate', 'set-dashboard-review-captions': 'captions',
       'set-dashboard-review-report': 'report', 'set-dashboard-review-metadata': 'metadata',
       'set-dashboard-review-prune': 'prune', 'set-dashboard-review-duplicates': 'duplicates'
     };
     Object.keys(destinations).forEach(function (id) { el(id).onclick = function () { run(destinations[id]); }; });
-    el('set-dashboard-template-open').onclick = function () {
-      closeDashboard();
-      setWorkspaceSurface('default');
-      el('caption-helper-tab-requirements-btn').click();
-      var section = el('primer-template-section');
-      section.open = true;
-      section.scrollIntoView({ block: 'nearest' });
-      el('primer-template').focus();
+    el('set-dashboard-template-draft').addEventListener('input', function () { templateDirty = true; });
+    el('set-dashboard-template-save').onclick = function () {
+      setPrimerTemplateFromDashboard(el('set-dashboard-template-draft').value);
+      templateDirty = false;
+      renderStage();
     };
-    close.addEventListener('click', closeDashboard);
-    el('set-dashboard-modal').addEventListener('click', function (event) {
-      if (event.target === el('set-dashboard-modal')) closeDashboard();
-    });
-    document.querySelectorAll('[data-set-dashboard-tab]').forEach(function (button) {
-      button.addEventListener('click', function () {
-        var previous = selected;
-        selected = button.getAttribute('data-set-dashboard-tab');
-        if (previous === 'review' && selected !== 'review') window.hideQaInSetDashboard();
-        renderStage();
-        if (selected === 'review' && previous !== 'review') window.showQaInSetDashboard();
-      });
-      button.addEventListener('keydown', function (event) {
-        var index = stages.indexOf(button.getAttribute('data-set-dashboard-tab'));
-        if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft' && event.key !== 'Home' && event.key !== 'End') return;
-        event.preventDefault();
-        var nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? stages.length - 1
-          : (index + (event.key === 'ArrowRight' ? 1 : -1) + stages.length) % stages.length;
-        var next = document.querySelector('[data-set-dashboard-tab="' + stages[nextIndex] + '"]');
-        next.click();
-        next.focus();
-      });
-    });
-    document.addEventListener('keydown', function (event) {
-      if (!open) return;
-      if (event.key === 'Escape') {
-        if (el('primer-template-candidate') && !el('primer-template-candidate').classList.contains('hidden')) return;
-        event.preventDefault();
-        closeDashboard();
-        return;
-      }
-      if (event.key === 'Tab') {
-        var candidates = Array.prototype.slice.call(el('set-dashboard-modal').querySelectorAll('button, input, textarea, select, summary, a[href], [tabindex]'));
-        var visible = candidates.filter(function (node) {
-          return !node.disabled && node.getClientRects().length > 0 && node.getAttribute('tabindex') !== '-1';
-        });
-        if (!visible.length) return;
-        if (event.shiftKey && document.activeElement === visible[0]) {
-          event.preventDefault();
-          visible[visible.length - 1].focus();
-        } else if (!event.shiftKey && document.activeElement === visible[visible.length - 1]) {
-          event.preventDefault();
-          visible[0].focus();
-        }
-      }
-    });
+    el('set-dashboard-template-reset').onclick = function () {
+      templateDirty = false;
+      renderStage();
+    };
     window.addEventListener('webcap:media-metadata-updated', function () { if (open) renderStage(); });
     el('stats-required-phrase').addEventListener('change', function () { if (open) renderStage(); });
     el('stats-phrases').addEventListener('input', function () { if (open) renderStage(); });
@@ -540,6 +477,7 @@
   window.getSetVariableWarnings = variableWarnings;
   window.returnToSetDashboardDistribution = returnFromDistribution;
   window.openSetDashboard = openDashboard;
+  window.refreshSetDashboard = renderStage;
   window.closeSetDashboard = closeDashboard;
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();

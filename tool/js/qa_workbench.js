@@ -4262,7 +4262,7 @@
         var items = qaGetTrainingItems();
         var intent = qaCurationIntent();
         startQaCuration(qaBuildCurateItems(items),
-          qaWorkbenchState.trainingFocus, qaCurationSignature(items, intent), {intent: intent});
+          qaWorkbenchState.trainingFocus, qaCurationSignature(items, intent), {intent: intent, openOnly: true});
       } catch (err) {
         window.reportConsoleError('QA Curation', err);
         qaWorkbenchState.statusMessage = String(err.message || err);

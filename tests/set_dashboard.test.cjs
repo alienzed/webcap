@@ -172,7 +172,7 @@ test('exclusive coverage partitions overlap; independent terms keep full members
   assert.deepEqual(count(sandbox.coverage({...variable,exclusive:false},items)), [2,2,1]);
   assert.deepEqual(Array.from(sandbox.warnings([variable],items),row=>row.kind), ['multiple']);
   const missing = items.filter(item=>item.key!=='a');
-  assert.deepEqual(Array.from(sandbox.warnings([variable],missing),row=>row.kind), ['multiple','missing']);
+  assert.deepEqual(Array.from(sandbox.warnings([variable],missing),row=>row.kind), ['multiple']);
 });
 test('Curate stays visible outside the preparation content, and Grid has an explicit return action', () => {
   const html = fs.readFileSync(path.join(__dirname, '../tool/tool.html'), 'utf8');
@@ -249,12 +249,12 @@ function canonicalVariables() {
 }
 test('legacy standalone variables disappear; grouped intent survives and writes remain scoped', () => {
   const c=canonicalVariables();
-  const pose={group:'Pose',terms:['kneeling','squatting'],exclusive:true,expected:true};
-  const shape={group:'Shape',terms:['triangle'],exclusive:false,expected:false};
+  const pose={group:'Pose',terms:['kneeling','squatting'],exclusive:true};
+  const shape={group:'Shape',terms:['triangle'],exclusive:false};
   const old={group:'',terms:['front view'],exclusive:false,expected:true};
-  const clean=c.normalizeSetVariables([pose,old,shape]);
+  const clean=c.normalizeSetVariables([{...pose,expected:true},old,{...shape,expected:false}]);
   assert.deepEqual(JSON.parse(JSON.stringify(clean)),[pose,shape]);
-  const changed=c.replaceSetGroupVariable(clean,'Pose',{terms:['standing'],exclusive:true,expected:false});
+  const changed=c.replaceSetGroupVariable(clean,'Pose',{terms:['standing'],exclusive:true});
   assert.deepEqual(JSON.parse(JSON.stringify(changed)),[{group:'Pose',terms:['standing'],exclusive:true,expected:false},shape]);
   assert.deepEqual(JSON.parse(JSON.stringify(c.replaceSetGroupVariable(changed,'Pose',{terms:[]}))),[shape]);
   const folder=fs.readFileSync(path.join(__dirname,'../tool/js/folder_state.js'),'utf8');
@@ -277,7 +277,8 @@ test('coverage does not count matching unscoped tags, caption text or other grou
   const v={group:'View',terms:['rear'],expected:true,exclusive:false};
   const items=[{key:'a',fileName:'a',caption:'rear'},{key:'b',fileName:'b',caption:'rear'},{key:'c',fileName:'c',tags:['rear']}];
   assert.deepEqual(Array.from(context.coverage(v,items).rows,row=>row.files.length),[1,2]);
-  assert.equal(context.warnings([v],items)[0].group,'View');
+  assert.equal(context.warnings([v],items).length,0);
+  assert.equal(context.coverage(v,items).rows.at(-1).color,'neutral');
 });
 test('Set Intelligence remains open when definition is collapsed', () => {
   const app=dashboard({phrase:'subject'});
@@ -352,8 +353,8 @@ test('group checkboxes save each scoped selection immediately and preserve other
     return {tag,children:[],textContent:'',checked:false,disabled:false,classList:{toggle(){}},
       append(...children){this.children.push(...children);},appendChild(child){this.children.push(child);}};
   }
-  const initial={group:'View',terms:['front'],exclusive:true,expected:false};
-  const other={group:'Shape',terms:['triangle'],exclusive:false,expected:false};
+  const initial={group:'View',terms:['front'],exclusive:true};
+  const other={group:'Shape',terms:['triangle'],exclusive:false};
   const state={setVariables:[initial,other]};
   let saves=0,refreshes=0;
   const context={state,document:{createElement:node,createTextNode:text=>text},
@@ -367,21 +368,22 @@ test('group checkboxes save each scoped selection immediately and preserve other
   function editor() {
     const host=node('div');
     context.renderGroupVariableEditor('View',host);
-    const [title,terms,options,actions]=host.children;
-    assert.deepEqual(actions.children.map(button=>button.textContent),['Edit terms']);
+    const [title,terms,options]=host.children;
+    assert.equal(host.children.length,3);
+    assert.equal(options.children.length,2);
+    assert.equal(options.children[1].textContent,'Reset');
     return {front:terms.children[0].children[0],rear:terms.children[1].children[0],
-      exclusive:options.children[0].children[0],expected:options.children[1].children[0]};
+      exclusive:options.children[0].children[0],reset:options.children[1]};
   }
   function change(input,value) { input.checked=value; input.onchange(); }
   change(editor().rear,true);
-  assert.deepEqual(JSON.parse(JSON.stringify(state.setVariables)),[{group:'View',terms:['front','rear'],exclusive:true,expected:false},other]);
+  assert.deepEqual(JSON.parse(JSON.stringify(state.setVariables)),[{group:'View',terms:['front','rear'],exclusive:true},other]);
   assert.equal(saves,1);
-  change(editor().expected,true);
-  assert.deepEqual(JSON.parse(JSON.stringify(state.setVariables)),[{group:'View',terms:['front','rear'],exclusive:true,expected:true},other]);
-  change(editor().front,false);
-  change(editor().rear,false);
+  change(editor().exclusive,false);
+  assert.deepEqual(JSON.parse(JSON.stringify(state.setVariables)),[{group:'View',terms:['front','rear'],exclusive:false},other]);
+  editor().reset.onclick();
   assert.deepEqual(JSON.parse(JSON.stringify(state.setVariables)),[other]);
   assert.equal(editor().exclusive.disabled,true);
-  assert.equal(editor().expected.disabled,true);
-  assert.equal(saves,4);assert.equal(refreshes,4);
+  assert.equal(editor().reset.disabled,true);
+  assert.equal(saves,3);assert.equal(refreshes,3);
 });

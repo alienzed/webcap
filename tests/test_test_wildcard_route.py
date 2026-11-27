@@ -16,6 +16,8 @@ def test_test_wildcard_route_queues_frozen_caption_analysis(tmp_path, monkeypatc
     monkeypatch.setattr(app_module.app_config, "FS_ROOT", tmp_path)
     monkeypatch.setattr("tool.server.epoch_reference.training_wildcard_members", lambda folder, job_id: {"one.png", "two.jpg"})
     (set_root / ".webcap_state.json").write_text(json.dumps({
+        "set_training_focus": "shirt construction",
+        "set_variables": [{"group": "Shirt Shape", "terms": ["fitted", "loose"], "exclusive": True}],
         "caption_group_tags_by_media": {
             "one.png": {"Shirt Shape": ["fitted"], "Clothing": ["shirt"]},
             "two.jpg": {"Shirt Shape": ["loose"], "Background": ["studio"]},
@@ -55,6 +57,9 @@ def test_test_wildcard_route_queues_frozen_caption_analysis(tmp_path, monkeypatc
     assert "subject standing in a kitchen" in seen["contract"]["prompt"]
     assert "subject sitting on a couch" in seen["contract"]["prompt"]
     assert "Explicit focus: shirt" in seen["contract"]["prompt"]
+    assert "Saved Set training focus: shirt construction" in seen["contract"]["prompt"]
+    assert "User-defined Set Variables" in seen["contract"]["prompt"]
+    assert '"exclusive":true' in seen["contract"]["prompt"]
     assert '"group":"Shirt Shape"' in seen["contract"]["prompt"]
     assert '"alias":"Shirt construction"' in seen["contract"]["prompt"]
     assert '"group":"Clothing"' not in seen["contract"]["prompt"]

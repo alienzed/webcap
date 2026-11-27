@@ -3307,7 +3307,8 @@ def test_generations_wildcard_route():
         ]
         # One read of existing Set annotations; compile concept coverage only in memory.
         from .caption_ops import _resolve_folder
-        scoped = read_folder_state(_resolve_folder(folder) / ".webcap_state.json").get("caption_group_tags_by_media") or {}
+        set_state = read_folder_state(_resolve_folder(folder) / ".webcap_state.json")
+        scoped = set_state.get("caption_group_tags_by_media") or {}
         if not isinstance(scoped, dict):
             raise ValueError("Scoped Set annotation map is invalid.")
         annotations = [scoped.get(name, {}) for name in media]
@@ -3316,6 +3317,8 @@ def test_generations_wildcard_route():
         contract = test_wildcard_build_request(
             captions, set_name=set_name, focus=focus,
             vocabulary=data.get("vocabulary"), annotations=annotations,
+            set_variables=set_state.get("set_variables"),
+            training_focus=set_state.get("set_training_focus"),
         )
         job = enqueue_llm(
             "test",

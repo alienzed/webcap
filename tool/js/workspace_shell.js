@@ -868,6 +868,8 @@ function syncApplicationShellContext() {
   }
   var storageOpen = navigation.activity === 'storage';
   if (setControl) setControl.classList.toggle('hidden', generateOpen || storyboardOpen || navigation.activity === 'media');
+  // Leaving Prep suspends its embedded read-only workspaces even when another activity owns the shell.
+  if (navigation.activity !== 'prep' && surface === 'dashboard') window.closeSetDashboard({keepSurface: true});
   var dashboardBtn = document.getElementById('set-dashboard-header-btn');
   dashboardBtn.classList.toggle('hidden', navigation.activity !== 'prep' || !isSetFolderContext(folder, state.items));
   dashboardBtn.setAttribute('aria-pressed', surface === 'dashboard' ? 'true' : 'false');
@@ -1108,7 +1110,7 @@ function openPrepActivity() {
   } else if (surface === 'focus') {
     stopFocusedAnnotation();
   }
-  if (!state.currentItem && isSetFolderContext(state.folder, state.items)) window.openSetDashboard();
+  if ((surface === 'dashboard' || !state.currentItem) && isSetFolderContext(state.folder, state.items)) window.openSetDashboard();
   else setWorkspaceSurface('default');
 }
 

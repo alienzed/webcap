@@ -2321,6 +2321,7 @@
     var investigations = undisposed.filter(function (finding) { return !!finding.concept; }).length;
     var corrections = undisposed.length - investigations;
     var high = undisposed.filter(function (finding) { return finding.priority === 'high'; }).length;
+    if (qaDashboardHost) window.setSetDashboardQaSummary(undisposed.length, (health.captionless || []).length);
 
     var hero = document.createElement('section');
     hero.className = 'qa-hero';

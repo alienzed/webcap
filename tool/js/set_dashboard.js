@@ -4,7 +4,6 @@
   var templateDirty = false;
   var qaOpen = false;
   var open = false;
-  var selected = 'analyze';
   var openedFolder = '';
   var distributionParent = null;
   var focusMigrationFolder = '';
@@ -36,13 +35,11 @@
       });
     });
     var totalGroups = visibleItems.length * groups.length;
-    var pending = totalGroups > reviewedGroups;
     return {
       items: items, visibleItems: visibleItems, total: items.length, phrase: phrase, balances: balances,
       sight: sight, configuredGroups: groups.length,
       visibleTotal: visibleItems.length, visibleCaptions: visibleCaptions,
-      reviewedGroups: reviewedGroups, totalGroups: totalGroups,
-      pending: pending
+      reviewedGroups: reviewedGroups, totalGroups: totalGroups
     };
   }
 
@@ -258,7 +255,7 @@
   function renderVariables(s) {
     var host = el('set-dashboard-variables');
     var variables = state.setVariables || [];
-    setHidden(el('set-dashboard-variable-empty'), !!variables.length);
+    setHidden(el('set-dashboard-variable-empty'), !!variables.length || !!s.balances.length);
     var oldCards = new Map(Array.from(host.children).map(function (card) { return [card.dataset.group, card]; }));
     variables.forEach(function (variable, index) {
       var section = oldCards.get(variable.group);
@@ -359,14 +356,20 @@
     el('set-dashboard-definition-summary').textContent = window.getQaTrainingFocus() || 'Define training focus';
     if (!templateDirty) el('set-dashboard-template-draft').value = String(statsGetPrimerOptionsFromDom().template || '');
     if (el('set-dashboard-definition').open && !window.isSetIntelligenceOpen()) window.openSetIntelligence();
+    else if (el('set-dashboard-definition').open) window.refreshSetIntelligenceScope();
+    var missingSight = s.visibleTotal - s.sight;
+    if (missingSight) el('set-dashboard-definition-summary').textContent += ' · ' + missingSight + ' without saved Sight';
+    var missingCaptions = s.visibleTotal - s.visibleCaptions;
+    if (!qaOpen) el('set-dashboard-qa-summary').textContent = missingCaptions ? missingCaptions + ' without captions' : 'Inspect findings';
     var tagsStatus = el('set-dashboard-tags-status');
     var remaining = s.totalGroups - s.reviewedGroups;
-    tagsStatus.textContent = !s.configuredGroups ? 'No groups configured' : remaining ? remaining + ' media/group assignments left to review' : '';
+    tagsStatus.textContent = !s.configuredGroups ? 'No groups configured' : remaining ? remaining + ' group ' + (remaining === 1 ? 'assignment' : 'assignments') + ' left to review' : '';
     setHidden(tagsStatus, !tagsStatus.textContent);
     setHidden(el('set-dashboard-tags-primary'), !s.configuredGroups || !s.visibleTotal);
     el('set-dashboard-tags-primary').textContent = remaining ? 'Continue annotation review' : 'Focused Annotation';
     var count = s.balances.length + (state.setVariables || []).length;
-    el('set-dashboard-balance-summary').textContent = count ? count + ' priorities' : 'Add training priorities';
+    var warnings = variableWarnings(state.setVariables || [], s.visibleItems);
+    el('set-dashboard-balance-summary').textContent = count ? count + (count === 1 ? ' priority' : ' priorities') + (warnings.length ? ' · ' + warnings.length + ' coverage concerns' : '') : 'Add training priorities';
     renderDistribution(s);
     renderVariables(s);
   }
@@ -392,6 +395,7 @@
     }
     openedFolder = String(state.folder || '');
     if (preferredStage === 'review') el('set-dashboard-review').open = true;
+    if (preferredStage === 'analyze' && !el('set-dashboard-definition').open && !el('set-dashboard-balance-section').open) el('set-dashboard-balance-section').open = true;
     if (preferredStage === 'reports') el('set-dashboard-reports').open = true;
     el('set-dashboard-name').textContent = openedFolder.split(/[\\/]/).filter(Boolean).pop() || 'Current Set';
     open = true;
@@ -478,6 +482,9 @@
   window.returnToSetDashboardDistribution = returnFromDistribution;
   window.openSetDashboard = openDashboard;
   window.refreshSetDashboard = renderStage;
+  window.setSetDashboardQaSummary = function (findings, captionless) {
+    el('set-dashboard-qa-summary').textContent = findings + (findings === 1 ? ' finding' : ' findings') + (captionless ? ' · ' + captionless + ' without captions' : '');
+  };
   window.closeSetDashboard = closeDashboard;
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();

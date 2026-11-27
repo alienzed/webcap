@@ -1275,10 +1275,6 @@
         <aside class="set-dashboard-tags-panel" aria-label="Vocabulary and annotation">
           <h4>Vocabulary &amp; Tags</h4>
           <p id="set-dashboard-tags-status" class="set-dashboard-section-copy"></p>
-          <div id="set-dashboard-tags-progress" class="set-dashboard-progress hidden">
-            <div class="set-dashboard-progress-label"><span>Annotation review</span><strong id="set-dashboard-tags-progress-value"></strong></div>
-            <div class="set-dashboard-progress-track"><div id="set-dashboard-tags-progress-fill" class="set-dashboard-progress-fill"></div></div>
-          </div>
           <div class="set-dashboard-section-actions set-dashboard-vocabulary-actions">
             <button type="button" id="set-intelligence-primary-btn" class="set-dashboard-quiet">Discover Vocabulary</button>
             <button type="button" id="set-dashboard-tags-guided" class="set-dashboard-quiet">Guided Tagging</button>
@@ -1294,15 +1290,16 @@
         </div>
         <div class="set-dashboard-stack">
           <details class="set-dashboard-guidance-panel set-dashboard-section" id="set-dashboard-balance-section" open><summary>Distribution &amp; Balance <span id="set-dashboard-balance-summary"></span></summary>
-            <div class="set-dashboard-section-heading"><h5>Training priorities</h5><button type="button" id="set-dashboard-configure-variables" class="set-dashboard-quiet">Add or edit grouped priority</button></div>
-            <div id="set-dashboard-variables" aria-label="Set variable coverage"></div>
-            <div id="set-dashboard-variable-empty" class="set-dashboard-distribution-note"></div>
+            <div id="set-dashboard-priorities" class="set-dashboard-priority-grid" aria-label="Training priority distributions"><div id="set-dashboard-variables"></div><div id="set-dashboard-distribution"></div></div>
+            <div id="set-dashboard-variable-empty" class="set-dashboard-distribution-note">Add a training priority to see its distribution.</div>
+            <details class="set-dashboard-priority-settings"><summary>Manage training priorities</summary><div class="set-dashboard-section-heading"><h5>Grouped priority</h5><button type="button" id="set-dashboard-configure-variables" class="set-dashboard-quiet">Add or edit group</button></div>
             <section id="set-dashboard-variable-editor" class="set-dashboard-variable-editor hidden" aria-label="Configure grouped priorities"><div id="set-dashboard-variable-groups"></div><div class="set-dashboard-section-actions"><button type="button" class="set-dashboard-primary" id="set-dashboard-variable-apply">Apply</button><button type="button" class="set-dashboard-quiet" id="set-dashboard-variable-cancel">Cancel</button></div></section>
-          <div id="set-dashboard-balance" class="set-dashboard-guidance-edit"><div class="section-label-inline"><label for="stats-phrases-add-input">Individual priority</label><button id="stats-balance-info-btn" type="button" class="mini-info-btn" title="Balance phrases help" aria-label="Balance phrases help">i</button></div><div class="checklist-input-row term-input-row"><input id="stats-phrases-add-input" type="text" class="form-control" placeholder="Add a phrase or term…"><button id="stats-phrases-add-btn" type="button" title="Add balance phrase" aria-label="Add balance phrase">+</button><div id="stats-phrases-add-results" class="caption-term-results hidden"></div></div><div id="set-dashboard-distribution" aria-label="Live balance distribution"></div><details><summary>Caption vs. tag counts</summary><div id="set-dashboard-distribution-sources" class="set-dashboard-distribution-note"></div></details><details><summary>Manage individual priorities</summary><div id="stats-phrases-items"></div></details><textarea id="stats-phrases" rows="4" class="hidden" placeholder="face down&#10;face up&#10;front view&#10;back view"></textarea></div>
+          <div id="set-dashboard-balance" class="set-dashboard-guidance-edit"><div class="section-label-inline"><label for="stats-phrases-add-input">Individual priority</label><button id="stats-balance-info-btn" type="button" class="mini-info-btn" title="Balance phrases help" aria-label="Balance phrases help">i</button></div><div class="checklist-input-row term-input-row"><input id="stats-phrases-add-input" type="text" class="form-control" placeholder="Add a phrase or term…"><button id="stats-phrases-add-btn" type="button" title="Add balance phrase" aria-label="Add balance phrase">+</button><div id="stats-phrases-add-results" class="caption-term-results hidden"></div></div><details><summary>Caption vs. tag counts</summary><div id="set-dashboard-distribution-sources" class="set-dashboard-distribution-note"></div></details><details><summary>Manage individual priorities</summary><div id="stats-phrases-items"></div></details><textarea id="stats-phrases" rows="4" class="hidden" placeholder="face down&#10;face up&#10;front view&#10;back view"></textarea></div>
+            </details>
           </details>
         </div>
       </div>
-      <details id="set-dashboard-review" class="set-dashboard-section set-dashboard-review"><summary>Quality Assurance</summary><div id="set-dashboard-qa-workbench" class="qa-workbench" aria-label="Quality Assurance"></div></details>
+      <details id="set-dashboard-review" class="set-dashboard-section set-dashboard-review"><summary>Quality Assurance <span id="set-dashboard-qa-summary"></span></summary><div id="set-dashboard-qa-workbench" class="qa-workbench" aria-label="Quality Assurance"></div></details>
       
     </section>
 

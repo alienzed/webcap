@@ -57,7 +57,8 @@ function dashboard(options = {}) {
       setQaTrainingFocus: value => { state.setTrainingFocus = value; },
       isSetIntelligenceOpen: () => sightOpen,
       openSetIntelligence: () => { sightOpen = true; actions.push('prepare'); },
-      closeSetIntelligence: () => { sightOpen = false; actions.push('hide-prepare'); }
+      closeSetIntelligence: () => { sightOpen = false; actions.push('hide-prepare'); },
+      refreshSetIntelligenceScope: () => {}
     },
     checklistItems: options.groups || [],
     getChecklistKeywordTermsForRequirement: () => ['tag'],
@@ -123,7 +124,7 @@ test('authoritative fields and Sight remain unique; Dashboard lives in Prep', ()
 test('annotation work counts actual incomplete group assignments', () => {
   const items = Array.from({ length: 201 }, (_, i) => ({ key: String(i), fileName: i + '.png' }));
   const app = dashboard({ groups: ['Shape'], items, checked: key => key !== '200' });
-  assert.equal(app.elements['set-dashboard-tags-status'].textContent, '1 media/group assignments left to review');
+  assert.equal(app.elements['set-dashboard-tags-status'].textContent, '1 group assignment left to review');
 });
 test('scope is the current visible selection', () => {
   const a = {key:'a', fileName:'a.png', hasCaption:true};

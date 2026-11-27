@@ -195,14 +195,14 @@
         actionLabel = 'Sight current';
       }
     }
-    forceBtn.disabled = setScanState.running || !scopeCount;
+    forceBtn.disabled = setScanState.running || !scopeCount || !getCaptionVisionModelId();
     var issueCountTotal = itemsCountNeedingAttention(setScanState.sightItems);
     // Sight actions stay here; vocabulary has its own entry in the annotation panel.
     var shouldRetry = !setScanState.running && !!issueCountTotal;
     var shouldScan = !setScanState.running && setScanState.phase !== 'checking-cache' &&
       !shouldRetry && (!coverage.known || !!openMissing);
     rescanBtn.classList.toggle('hidden', !shouldScan);
-    rescanBtn.disabled = !scopeCount;
+    rescanBtn.disabled = !scopeCount || !getCaptionVisionModelId();
     rescanBtn.textContent = actionLabel || 'Run Set Intelligence';
     badRetry.classList.toggle('hidden', !shouldRetry);
     badRetry.textContent = 'Retry ' + String(issueCountTotal) + ' needing attention';
@@ -894,8 +894,8 @@
       setScanState.hasRun = false;
       setScanState.phase = 'idle';
       setSetIntelligenceStatus(
-        'No saved Sight for selected model and scope',
-        'Choose an available Vision model to scan missing media.'
+        getCaptionVisionModelId() ? 'No saved Sight for selected model and scope' : 'Vision model unavailable',
+        getCaptionVisionModelId() ? 'Scan missing media when needed.' : 'Select an available Vision model before scanning.'
       );
     }).catch(function (err) {
       reportConsoleError('Set Intelligence cached report', err);
@@ -1166,7 +1166,7 @@
       setVisionModelPreference(this.value);
     };
     window.addEventListener('webcap:vision-capabilities-refreshed', function () {
-      if (setScanState.open) syncPrepareSetVisionModel();
+      if (setScanState.open) renderSetIntelligence();
     });
     window.addEventListener('webcap:vision-model-changed', function () {
       if (setScanState.open && !setScanState.running) openSetIntelligence();
@@ -1188,13 +1188,7 @@
         closeSavedIntelligence();
       }
     }, true);
-    document.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && setScanState.open) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        window.closeSetDashboard();
-      }
-    }, true);
+
   }
 
   function isSetIntelligenceRunning() {
@@ -1264,6 +1258,11 @@
   window.closeVlWorkspace = closeSavedIntelligence;
   window.openSetIntelligence = openSetIntelligence;
   window.closeSetIntelligence = closeSetIntelligence;
+  window.refreshSetIntelligenceScope = function () {
+    if (!setScanState.open || setScanState.running) return;
+    var files = getSetIntelligenceScopeFiles();
+    if (files.length !== setScanState.files.length || files.some(function (file, i) { return file !== setScanState.files[i]; })) openSetIntelligence();
+  };
   window.isSetIntelligenceOpen = function () { return setScanState.open; };
   window.stopSetIntelligence = stopSetIntelligence;
   window.isSetIntelligenceRunning = isSetIntelligenceRunning;

@@ -1645,7 +1645,12 @@
         renderCurrent();
         return;
       }
-      beginDirector();
+      try { beginDirector(); } catch (err) {
+        session.phase = 'failed';
+        session.error = String(err.message || err);
+        window.reportConsoleError('QA Curate analysis', err);
+        renderCurrent();
+      }
       return;
     }
     draftWrite.catch(function() {}).then(function() {

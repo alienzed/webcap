@@ -143,9 +143,9 @@ test('exclusive coverage partitions overlap; independent terms keep full members
   const end = source.indexOf('  function distributionColor(', start);
   const assigned = {a:['Kneeling'], b:['squatting'], c:['kneeling','squatting'], d:[]};
   const sandbox = {
-    getChecklistAssignedTagsForMediaKey: key => assigned[key],
+    setVariableAssignedTerms: (item, group) => new Set(assigned[item.key].map(term=>term.toLowerCase())),
     normalizeChecklistTerm: term => String(term).trim(),
-    setVariableKey: row => JSON.stringify([row.group, row.group ? '' : row.terms[0].toLowerCase()])
+    setVariableKey: row => row.group
   };
   vm.runInNewContext(source.slice(start,end) + '\nthis.coverage = variableCoverage; this.warnings = variableWarnings;',sandbox);
   const items = Object.keys(assigned).map(key=>({key,fileName:key+'.jpg'}));
@@ -230,36 +230,37 @@ function canonicalVariables() {
   vm.runInNewContext(folderSource.slice(start,end),context);
   return context;
 }
-test('legacy phrases merge idempotently with grouped variables and cannot reappear after deletion', () => {
+test('legacy standalone variables disappear; grouped intent survives and writes remain scoped', () => {
   const c=canonicalVariables();
-  const grouped={group:'Pose',terms:['kneeling','squatting'],exclusive:true,expected:true};
-  const existing={group:'',terms:['front view'],exclusive:false,expected:true};
-  const migrated=c.migrateSetVariables([grouped,existing],'Front view\n rear  view \nRear View\n');
-  assert.deepEqual(JSON.parse(JSON.stringify(migrated)),[grouped,existing,{group:'',terms:['rear view'],exclusive:false,expected:false}]);
-  assert.equal(JSON.stringify(c.migrateSetVariables(migrated,'')),JSON.stringify(migrated));
-  c.state.setVariables=migrated.filter(v=>v.group||v.terms[0]!=='rear view');
-  assert.deepEqual(Array.from(c.getSetVariablePhrases()),['front view']);
-  assert.equal(c.migrateSetVariables(c.state.setVariables,undefined).length,2);
+  const pose={group:'Pose',terms:['kneeling','squatting'],exclusive:true,expected:true};
+  const shape={group:'Shape',terms:['triangle'],exclusive:false,expected:false};
+  const old={group:'',terms:['front view'],exclusive:false,expected:true};
+  const clean=c.normalizeSetVariables([pose,old,shape]);
+  assert.deepEqual(JSON.parse(JSON.stringify(clean)),[pose,shape]);
+  const changed=c.replaceSetGroupVariable(clean,'Pose',{terms:['standing'],exclusive:true,expected:false});
+  assert.deepEqual(JSON.parse(JSON.stringify(changed)),[{group:'Pose',terms:['standing'],exclusive:true,expected:false},shape]);
+  assert.deepEqual(JSON.parse(JSON.stringify(c.replaceSetGroupVariable(changed,'Pose',{terms:[]}))),[shape]);
+  const folder=fs.readFileSync(path.join(__dirname,'../tool/js/folder_state.js'),'utf8');
   const html=fs.readFileSync(path.join(__dirname,'../tool/tool.html'),'utf8');
-  assert.doesNotMatch(html,/id="stats-phrases(?:-|")/);
-  assert.ok(html.indexOf('id="set-dashboard-variable-editor"') < html.indexOf('id="set-dashboard-balance-section"'));
+  assert.match(folder,/set_variables: normalizeSetVariables\(src.set_variables\)/);
+  assert.doesNotMatch(folder,/migrateSetVariables|stats\.phrases/);
+  assert.doesNotMatch(html,/id="(?:stats-phrases|set-dashboard-variable-editor|set-dashboard-variable-term)(?:-|")/);
 });
-test('standalone variables retain caption-or-tag matching and use distinct identity', () => {
+test('coverage does not count matching unscoped tags, caption text or other groups', () => {
   const c=canonicalVariables();
   const start=source.indexOf('  function variableCoverage(');
   const end=source.indexOf('  function distributionColor(',start);
+  const assigned={a:{View:['rear']},b:{Position:['rear']},c:{}};
   const context={
     setVariableKey:c.setVariableKey,
-    balanceWheelItemMatchesPhrase:(item,term)=>item.caption===term||item.tags.includes(term),
-    getChecklistAssignedTagsForMediaKey:()=>[],
+    setVariableAssignedTerms:(item,group)=>new Set(assigned[item.key][group]||[]),
     normalizeChecklistTerm:term=>term
   };
   vm.runInNewContext(source.slice(start,end)+'\nthis.coverage=variableCoverage;this.warnings=variableWarnings;',context);
-  const v={group:'',terms:['rear'],expected:true,exclusive:false};
-  const items=[{key:'a',fileName:'a',caption:'rear',tags:[]},{key:'b',fileName:'b',caption:'',tags:['rear']},{key:'c',fileName:'c',caption:'',tags:[]}];
-  assert.deepEqual(Array.from(context.coverage(v,items).rows,row=>row.files.length),[2,1]);
-  assert.equal(context.warnings([v],items)[0].group,'rear');
-  assert.notEqual(c.setVariableKey(v),c.setVariableKey({group:'rear',terms:['rear']}));
+  const v={group:'View',terms:['rear'],expected:true,exclusive:false};
+  const items=[{key:'a',fileName:'a',caption:'rear'},{key:'b',fileName:'b',caption:'rear'},{key:'c',fileName:'c',tags:['rear']}];
+  assert.deepEqual(Array.from(context.coverage(v,items).rows,row=>row.files.length),[1,2]);
+  assert.equal(context.warnings([v],items)[0].group,'View');
 });
 test('Set Intelligence remains open when definition is collapsed', () => {
   const app=dashboard({phrase:'subject'});
@@ -277,7 +278,8 @@ test('Set Definition reuses Manage Groups rows in a bounded two-column layout', 
   assert.doesNotMatch(html,/id="set-dashboard-group-workbench"/);
   assert.match(source,/renderChecklistGroupRows\(el\('set-dashboard-group-list'\)/);
   assert.match(manager,/renderChecklistGroupRows\(itemsDiv, \{mediaKey:state.currentItem.key\}\)/);
-  assert.match(css,/grid-template-columns:minmax\(0,1fr\) minmax\(300px, min\(40%,560px\)\)/);
+  assert.match(css,/grid-template-columns:minmax\(0,2fr\) minmax\(0,1fr\)/);
+  assert.match(css,/max-width:1180px; margin:0 auto/);
   assert.doesNotMatch(css,/#set-dashboard-group-list[^\n]*max-height/);
 });
 
@@ -304,7 +306,10 @@ test('shared Manage Groups renderer expands vocabulary and targets the clicked r
   const manager=fs.readFileSync(path.join(__dirname,'../tool/js/checklist_panel.js'),'utf8');
   vm.runInNewContext(manager,context);
   context.renderChecklistPanel=()=>{};
-  context.renderChecklistGroupRows(host,{definition:true,expanded});
+  context.renderChecklistGroupRows(host,{definition:true,expanded,
+    renderDefinitionSummary(){},
+    renderDefinitionEditor(group,host){host.textContent=context.getChecklistKeywordTermsForRequirement(group).join(' · ');}
+  });
   const toggle=host.children[0].children[0].children[0].children[0];
   toggle.onclick();
   assert.equal(host.children[0].children[1].textContent,'front · rear');
@@ -319,4 +324,36 @@ test('shared Manage Groups renderer expands vocabulary and targets the clicked r
   assert.deepEqual(moves,[[1,-1]]);
   host.children[1].children[0].children[1].children[0].onclick();
   assert.deepEqual(hidden,[['Position',true]]);
+});
+
+test('expanded group editor applies only its own selection and preserves other groups', () => {
+  const c=canonicalVariables();
+  function node(tag) {
+    return {tag,children:[],textContent:'',checked:false,disabled:false,classList:{toggle(){}},
+      append(...children){this.children.push(...children);},appendChild(child){this.children.push(child);}};
+  }
+  const initial={group:'View',terms:['front'],exclusive:true,expected:false};
+  const other={group:'Shape',terms:['triangle'],exclusive:false,expected:false};
+  const state={setVariables:[initial,other]};
+  let saves=0,refreshes=0;
+  const context={state,document:{createElement:node,createTextNode:text=>text},
+    normalizeChecklistTerm:term=>term.trim(),
+    normalizeSetVariables:c.normalizeSetVariables,replaceSetGroupVariable:c.replaceSetGroupVariable,
+    getChecklistKeywordTermsForRequirement:()=>['front','rear'],
+    scheduleSetDefinitionSave:()=>saves++,updateBalanceDistributionWheel(){},
+    renderStage:()=>refreshes++,openChecklistGroupTermsModal(){}};
+  const start=source.indexOf('  function variableForGroup('),end=source.indexOf('  function renderVocabulary(',start);
+  vm.runInNewContext(source.slice(start,end),context);
+  const host=node('div');
+  context.renderGroupVariableEditor('View',host);
+  const terms=host.children[1],options=host.children[2],actions=host.children[3];
+  const rear=terms.children[1].children[0],expected=options.children[1].children[0],apply=actions.children[0],reset=actions.children[1];
+  assert.equal(apply.disabled,true);
+  rear.checked=true;rear.onchange();
+  assert.equal(apply.disabled,false);
+  reset.onclick();assert.equal(rear.checked,false);assert.equal(saves,0);
+  rear.checked=true;rear.onchange();expected.checked=true;expected.onchange();
+  apply.onclick();
+  assert.deepEqual(JSON.parse(JSON.stringify(state.setVariables)),[{group:'View',terms:['front','rear'],exclusive:true,expected:true},other]);
+  assert.equal(saves,1);assert.equal(refreshes,1);
 });

@@ -274,7 +274,8 @@ test('resume uses the recorded scope even when the visible Media List changed', 
       deepScanStage: 'paused', deepScanSessionActive: false,
       aiModel: 'local::test', deepScanTrainingFocus: 'outfits', trainingFocus: 'outfits'
     },
-    getDirectorModelPreference() { return 'local::test'; }
+    getDirectorModelPreference() { return 'local::test'; },
+    qaSetVariableSignature: () => sandbox.currentIntent, currentIntent: ''
   };
   vm.createContext(sandbox);
   vm.runInContext(
@@ -283,6 +284,9 @@ test('resume uses the recorded scope even when the visible Media List changed', 
     sandbox
   );
   assert.equal(sandbox.canResume(), true);
+  sandbox.currentIntent = 'changed';
+  assert.equal(sandbox.canResume(), false);
+  sandbox.currentIntent = '';
   sandbox.qaWorkbenchState.deepScanStage = 'complete';
   assert.equal(sandbox.canResume(), false);
   sandbox.qaWorkbenchState.deepScanStage = 'paused';
@@ -304,7 +308,8 @@ function singleItemScanFixture(responses, options = {}) {
     folder: 'set', model: 'local::test', files: names,
     orderedFiles: names.slice(), signatures, inputs,
     inputsByFile: Object.fromEntries(inputs.map(item => [item.fileName, item])),
-    supportingFindings: [], deferred: {}, attempted: {}
+    supportingFindings: [], deferred: {}, attempted: {},
+    setVariables: [{group:'View',terms:['front','rear'],exclusive:true}], variableSignature: 'captured'
   };
   const requests = [], errors = [], saves = [];
   const wb = {
@@ -324,10 +329,13 @@ function singleItemScanFixture(responses, options = {}) {
     qaBuildAssociationFindings: () => [],
     qaDeepScanPrioritizedFiles: () => scan.orderedFiles.slice(),
     qaCurrentItemSignatureMap: () => signatures,
+    qaSetVariableSignature: () => options.changedIntent ? 'changed' : 'captured',
     qaDeepScanProgress(_scan, phase) { wb.deepScanStatus = phase; },
     qaRequestJson(url, options) {
       assert.equal(url, '/fs/qa/deep-scan');
-      const sent = JSON.parse(options.body).items;
+      const payload = JSON.parse(options.body);
+      assert.deepEqual(payload.setVariables, scan.setVariables);
+      const sent = payload.items;
       assert.equal(sent.length, 1, 'One item per model request');
       const file = sent[0].fileName;
       requests.push(file);
@@ -582,4 +590,13 @@ test('QA Apply awaits tag persistence and can retry after source findings become
   assert.equal(await sandbox.apply('a'),true);
   assert.equal(saves,1);
   assert.equal(sandbox.qaCorrectionCursor.drafts.a,undefined);
+});
+
+ test('a changed variable definition pauses before another item and preserves completed receipts', async () => {
+  const f = singleItemScanFixture({}, {changedIntent:true, checked:{'a.jpg':'sig-a.jpg'}});
+  await f.sandbox.run(f.scan, 1);
+  assert.equal(f.requests.length,0);
+  assert.equal(f.wb.deepScanStage,'paused');
+  assert.equal(f.wb.deepScanSessionActive,false);
+  assert.deepEqual(f.wb.aiItemSignatures,{'a.jpg':'sig-a.jpg'});
 });

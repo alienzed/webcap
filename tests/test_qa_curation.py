@@ -207,3 +207,14 @@ def test_qa_curate_caption_route_reuses_same_director_queue(tmp_path, monkeypatc
     rejected = client.post("/fs/qa/curate", json=payload)
     assert rejected.status_code == 400
     assert "belong to the selected Set" in rejected.get_json()["error"]
+
+
+def test_curate_director_uses_declared_variables_in_both_requests():
+    from tool.server.qa_curation import build_caption_curation_request
+    variables = [{"group": "View", "terms": ["front", "rear"], "exclusive": True}]
+    prompt = build_curation_request(concepts(), item_count=150, set_variables=variables)["prompt"]
+    assert '[SET VARIABLES]' in prompt
+    assert 'primary balancing objectives' in prompt
+    caption_prompt = build_caption_curation_request([{"fileName": "a.png", "caption": "front view, distinctive fastener"}], set_variables=variables)["prompt"]
+    assert '[SET VARIABLES]' in caption_prompt
+    assert 'complementary visual facts' in caption_prompt

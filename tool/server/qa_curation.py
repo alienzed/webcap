@@ -6,7 +6,7 @@ delete or captions to rewrite. WebCap owns the actual candidate selection.
 import json
 
 
-def build_curation_request(concepts, training_focus="", item_count=0):
+def build_curation_request(concepts, training_focus="", item_count=0, set_variables=None):
     if not isinstance(concepts, list) or not concepts or len(concepts) > 180:
         raise ValueError("QA Curation needs 1-180 aggregated concept entries.")
     if not 1 <= int(item_count) <= 5000:
@@ -47,6 +47,8 @@ def build_curation_request(concepts, training_focus="", item_count=0):
         "training performance. Return existing IDs only; no invented concepts.\n"
         "[TRAINING FOCUS]\n" + (str(training_focus or "").strip()[:300] or
                                  "Not specified; infer visual focus from coherent annotations.") +
+        ("\n[SET VARIABLES] " + json.dumps(set_variables, ensure_ascii=False, separators=(",", ":")) +
+         "\nThese selected group terms establish the primary balancing objectives. Interpret the remaining inventory as complementary supporting variation; preserve meaningful distinctions." if set_variables else "") +
         "\n[IMAGE COUNT] " + str(item_count) +
         "\n[CONCEPT INVENTORY]\n" +
         json.dumps(compact, ensure_ascii=False, separators=(",", ":")) +
@@ -94,7 +96,7 @@ def normalize_curation_result(data, allowed_ids):
     return result
 
 
-def build_caption_curation_request(captions, training_focus="", known_concepts=None):
+def build_caption_curation_request(captions, training_focus="", known_concepts=None, set_variables=None):
     """One small Director batch of authored captions; no Vision/Sight inference."""
     import re
     if not isinstance(captions, list) or not 1 <= len(captions) <= 24:
@@ -131,6 +133,8 @@ def build_caption_curation_request(captions, training_focus="", known_concepts=N
         "facts worth preserving. Give recurring ordinary background and incidental wording "
         "low priority; preserve unusual relevant constructions even if they appear once.\n"
         "[TRAINING FOCUS] " + (str(training_focus or "").strip()[:300] or "Not specified") +
+        ("\n[SET VARIABLES] " + json.dumps(set_variables, ensure_ascii=False, separators=(",", ":")) +
+         "\nExtract complementary visual facts beyond the selected terms themselves. Retain genuinely distinctive constructions and relationships, including those involving a selected term." if set_variables else "") +
         "\n[KNOWN CANONICAL LABELS] " + json.dumps(known, ensure_ascii=False) +
         "\n[CAPTIONS] " + json.dumps(compact, ensure_ascii=False) +
         "\n[OUTPUT] Return up to 64 observations. Each observation has fileName "

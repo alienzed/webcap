@@ -1913,13 +1913,13 @@ def qa_curate_route():
             if any(not isinstance(row, dict) or row.get("fileName") not in names for row in captions):
                 raise ValueError("Curate caption evidence must belong to the selected Set.")
             contract = build_caption_curation_request(
-                captions, data.get("trainingFocus"), data.get("knownConcepts")
+                captions, data.get("trainingFocus"), data.get("knownConcepts"), data.get("setVariables")
             )
             label = "QA · Curate Caption Evidence"
         else:
             from .qa_curation import build_curation_request
             contract = build_curation_request(
-                data.get("concepts"), data.get("trainingFocus"), len(names)
+                data.get("concepts"), data.get("trainingFocus"), len(names), data.get("setVariables")
             )
             label = "QA · Curate Training Set"
         job = enqueue_llm(
@@ -1968,7 +1968,7 @@ def qa_deep_scan_route():
                 items, data.get("vocabulary"), data.get("trainingFocus"), data.get("primer"),
                 sight_evidence=visual_evidence,
                 statistical_candidates=data.get("statisticalCandidates"),
-                sight_records=sight_records,
+                sight_records=sight_records, set_variables=data.get("setVariables"),
             )
             if data.get("preflight") is True:
                 # Deliberately approximate: not a tokenizer or a hard capacity gate.
@@ -2007,6 +2007,7 @@ def qa_deep_scan_route():
             items,
             training_focus=data.get("trainingFocus"),
             deterministic_findings=data.get("deterministicFindings"),
+            set_variables=data.get("setVariables"),
         )
         job = enqueue_llm(
             "qa",

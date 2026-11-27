@@ -185,3 +185,12 @@ def test_qa_preserves_long_sight_description_and_context():
         "analysis": {"visionSight": {"description": description,
                                      "inventory": {"details": ["distinctive connectors"]}}}
     }])["prompt"]
+
+
+def test_declared_set_variables_are_review_context_not_required_presence():
+    variables = [{"group": "View", "terms": ["front", "rear"], "exclusive": True}]
+    prompt = build_request(_items(), set_variables=variables)["prompt"]
+    assert '[SET VARIABLES]' in prompt
+    assert '"group":"View"' in prompt
+    assert 'Absence can be legitimate' in prompt
+    assert '[SET VARIABLES]' not in build_request(_items())["prompt"]

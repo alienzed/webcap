@@ -270,7 +270,7 @@ test('Set Intelligence remains open when definition is collapsed', () => {
   assert.deepEqual(app.actions,['workspace','prepare']);
 });
 
-test('Set Definition reuses Manage Groups rows in a bounded two-column layout', () => {
+test('Set Dashboard reuses Manage Groups rows in a workspace-width two-column layout', () => {
   const html=fs.readFileSync(path.join(__dirname,'../tool/tool.html'),'utf8');
   const css=fs.readFileSync(path.join(__dirname,'../tool/css/set_dashboard.css'),'utf8');
   const manager=fs.readFileSync(path.join(__dirname,'../tool/js/checklist_panel.js'),'utf8');
@@ -278,8 +278,11 @@ test('Set Definition reuses Manage Groups rows in a bounded two-column layout', 
   assert.doesNotMatch(html,/id="set-dashboard-group-workbench"/);
   assert.match(source,/renderChecklistGroupRows\(el\('set-dashboard-group-list'\)/);
   assert.match(manager,/renderChecklistGroupRows\(itemsDiv, \{mediaKey:state.currentItem.key\}\)/);
-  assert.match(css,/grid-template-columns:minmax\(0,2fr\) minmax\(0,1fr\)/);
-  assert.match(css,/max-width:1180px; margin:0 auto/);
+  assert.match(html,/id="set-dashboard-groups-panel" class="set-dashboard-tags-panel set-dashboard-section"/);
+  assert.match(html,/class="set-dashboard-stack set-dashboard-balance-stack"/);
+  assert.match(css,/#set-dashboard-analyze > \.set-dashboard-balance-stack \{ grid-column:1\/-1; \}/);
+  assert.match(css,/repeat\(auto-fit,minmax\(min\(100%,max\(420px,calc\(\(100% - 20px\) \/ 2\)\)\),1fr\)\)/);
+  assert.doesNotMatch(css,/max-width:1180px; margin:0 auto/);
   assert.doesNotMatch(css,/#set-dashboard-group-list[^\n]*max-height/);
 });
 

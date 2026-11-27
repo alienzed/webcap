@@ -322,14 +322,14 @@ function renderChecklistGroupRows(itemsDiv, options) {
 
     actions.appendChild(menuDetails);
 
+    if (definition) opts.renderDefinitionSummary(item, summaryRow);
     summaryRow.appendChild(actions);
     row.appendChild(summaryRow);
 
     if (definition && expanded(item)) {
       var vocabulary = document.createElement('div');
       vocabulary.className = 'checklist-definition-terms';
-      var terms = getChecklistKeywordTermsForRequirement(item);
-      vocabulary.textContent = terms.length ? terms.join(' · ') : 'No terms configured.';
+      opts.renderDefinitionEditor(item, vocabulary);
       row.appendChild(vocabulary);
     } else if (!definition && expanded(item)) {
       var selectedTags = getChecklistSelectedTagsForRequirementForMediaKey(mediaKey, item);

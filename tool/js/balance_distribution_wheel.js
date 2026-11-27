@@ -32,7 +32,7 @@ function getBalanceWheelStats() {
     var groupRows = coverage.rows.map(function (entry, index) {
       var term = index < termRows.length ? termRows[index] : null;
       return {term:entry.label, index:index, count:entry.files.length,
-        color:term ? term.color : entry.key === 'multiple' ? '#f59e0b' : '#94a3b8',
+        color:term ? term.color : entry.key === 'multiple' ? '#b45309' : '#94a3b8',
         currentMatch:!!currentItem && (term ? term.currentMatch && (!variable.exclusive || currentCount === 1) :
           entry.key === 'multiple' ? currentCount > 1 : currentCount === 0)};
     });

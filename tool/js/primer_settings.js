@@ -104,6 +104,7 @@ function statsGetPrimerOptionsFromDom() {
   var templateEl = document.getElementById('primer-template');
   return {
     template: templateEl ? templateEl.value : '',
+    referenceCaptions: normalizePrimerReferenceCaptions(state.primerReferenceCaptions),
     mappings: []
   };
 }
@@ -319,7 +320,8 @@ function dismissCaptionAssistCandidate() {
 var primerTemplateAssistCandidate = '';
 
 // The existing template field remains the single saved template owner.
-function setPrimerTemplateFromDashboard(value) {
+function setPrimerTemplateFromDashboard(value, referenceCaptions) {
+  if (Array.isArray(referenceCaptions)) state.primerReferenceCaptions = normalizePrimerReferenceCaptions(referenceCaptions);
   var field = document.getElementById('primer-template');
   field.value = String(value || '');
   field.dispatchEvent(new Event('input', {bubbles: true}));
@@ -1596,6 +1598,7 @@ function buildCaptionAssistRequest(mediaItem) {
     tags: getUnscopedTagsForMediaKey(mediaKey),
     requiredPhrase: requiredPhraseEl ? String(requiredPhraseEl.value || '').trim() : '',
     template: primer.template,
+    referenceCaptions: primer.referenceCaptions,
     renderedPrimer: buildPrimerFromConfig(mediaItem.fileName, mediaKey, primer),
     draft: getCaptionAssistDraftForMediaItem(mediaItem),
     openSight: mediaItem.metadata && mediaItem.metadata.vision_sight || null

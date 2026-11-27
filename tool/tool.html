@@ -1158,7 +1158,7 @@
                 </div>
         <section id="set-dashboard-modal" class="set-dashboard-modal hidden" aria-labelledby="set-dashboard-name">
   <div class="set-dashboard-dialog">
-    <header class="set-dashboard-header"><div><div id="set-dashboard-title" class="set-dashboard-kicker">Set Dashboard</div><h2 id="set-dashboard-name"></h2></div><div class="set-dashboard-header-scope"><strong id="set-dashboard-scope"></strong><button type="button" id="set-dashboard-curate" class="set-dashboard-primary">Curate Training Set</button><button type="button" id="set-dashboard-train" class="set-dashboard-primary">Train Set</button><details id="set-dashboard-reports" class="set-dashboard-report-menu"><summary>Reports</summary><div class="set-dashboard-report-links">
+    <header class="set-dashboard-header"><div><div id="set-dashboard-title" class="set-dashboard-kicker">Set Dashboard</div><h2 id="set-dashboard-name"></h2></div><div class="set-dashboard-header-scope"><strong id="set-dashboard-scope"></strong><button type="button" id="set-dashboard-train" class="set-dashboard-primary">Train Set</button><details id="set-dashboard-reports" class="set-dashboard-report-menu"><summary>Reports</summary><div class="set-dashboard-report-links">
             <button type="button" id="set-dashboard-review-captions" class="set-dashboard-quiet">Combined Captions</button>
             <button type="button" id="set-dashboard-review-report" class="set-dashboard-quiet">Caption Report</button>
             <button type="button" id="set-dashboard-review-metadata" class="set-dashboard-quiet">Media Metadata</button>
@@ -1168,8 +1168,10 @@
     <section id="set-dashboard-stage">
       <div id="set-dashboard-analyze" class="set-dashboard-analyze">
         <div class="set-dashboard-stack">
-          <details id="set-dashboard-definition" class="set-dashboard-guidance-panel set-dashboard-section" open><summary>Set Definition <span id="set-dashboard-definition-summary"></span></summary>
-            <div id="set-dashboard-definition-status" class="set-dashboard-warning hidden" role="status"></div>
+          <details id="set-dashboard-definition" class="set-dashboard-guidance-panel set-dashboard-section" open>
+            <summary><span class="set-dashboard-section-title">Set Definition</span><span id="set-dashboard-definition-summary"></span><span id="set-dashboard-definition-status" class="set-dashboard-warning hidden" role="status"></span></summary>
+            <div class="set-dashboard-definition-grid">
+              <section class="set-dashboard-intent-panel" aria-label="Training Intent"><h4>Training Intent</h4>
             <div class="set-dashboard-definition-fields">
             <div class="set-dashboard-guidance-edit"><label for="set-dashboard-training-focus">Training Focus</label><input id="set-dashboard-training-focus" type="text" maxlength="240" placeholder="What should the model learn?"></div>
           <div id="set-dashboard-phrase" class="set-dashboard-guidance-edit"><label for="stats-required-phrase">Required key phrase</label><input id="stats-required-phrase" type="text" placeholder="e.g. subject name"></div>
@@ -1177,6 +1179,21 @@
             <p id="set-dashboard-focus-migration" class="set-dashboard-distribution-note hidden" role="status"></p>
 
             <details class="set-dashboard-template-disclosure"><summary>Caption Template</summary><textarea id="set-dashboard-template-draft" rows="5" aria-label="Caption template"></textarea><div class="set-dashboard-section-actions"><button id="set-dashboard-template-save" type="button" class="set-dashboard-primary">Save Template</button><button id="set-dashboard-template-reset" type="button" class="set-dashboard-quiet">Reset draft</button></div></details>
+              </section>
+        <aside class="set-dashboard-tags-panel" aria-label="Vocabulary and annotation">
+          <h4>Vocabulary</h4>
+          <div class="set-dashboard-add-group"><input id="set-dashboard-group-name" type="text" aria-label="New group name" placeholder="New vocabulary group"><button type="button" id="set-dashboard-group-add" class="set-dashboard-quiet">Add group</button></div>
+          <div id="set-dashboard-group-workbench" class="group-workbench-list" aria-label="Manage vocabulary groups"></div>
+          <p id="set-dashboard-tags-status" class="set-dashboard-section-copy"></p>
+          <div class="set-dashboard-section-actions set-dashboard-vocabulary-actions">
+            <button type="button" id="set-intelligence-primary-btn" class="set-dashboard-quiet">Discover Vocabulary</button>
+            <button type="button" id="set-dashboard-tags-guided" class="set-dashboard-quiet">Guided Tagging</button>
+          </div>
+          <div class="set-dashboard-section-actions set-dashboard-annotation-shortcuts">
+            <button type="button" id="set-dashboard-tags-primary" class="set-dashboard-secondary">Focused Annotation</button>
+            
+          </div>
+        </aside>
             <section class="set-dashboard-variable-definition" aria-label="Set Variables">
               <div class="set-dashboard-section-heading"><h4>Set Variables</h4><button type="button" id="set-dashboard-configure-variables" class="set-dashboard-quiet">Edit Set Variables</button></div>
               <p id="set-dashboard-variable-summary"></p>
@@ -1185,11 +1202,13 @@
                 <div id="set-dashboard-variable-groups"></div><div class="set-dashboard-section-actions"><button type="button" class="set-dashboard-primary" id="set-dashboard-variable-apply">Apply</button><button type="button" class="set-dashboard-quiet" id="set-dashboard-variable-cancel">Cancel</button></div>
               </section>
             </section>
-          <section class="set-dashboard-work-panel set-dashboard-intelligence-panel" aria-label="Sight and Vocabulary">
+            </div>
+          </details>
+          <section class="set-dashboard-section set-dashboard-intelligence-panel" aria-label="Set Intelligence">
         <div class="set-dashboard-sight-panel">
           <div class="set-dashboard-sight-heading">
-            <h4>Sight</h4>
-            <select id="set-scan-vision-model" aria-label="Sight Vision model"></select>
+            <h4>Set Intelligence</h4>
+            <span id="set-scan-active-model" class="set-scan-active-model"></span>
             <span id="set-scan-open-badge" class="set-scan-evidence-badge">Checking</span>
           </div>
           <div id="set-scan-modal" class="set-scan-modal hidden" role="region" aria-label="Set Intelligence">
@@ -1236,7 +1255,10 @@
                   </div>
                   <details class="set-scan-inspection-disclosure" id="set-scan-inspection-disclosure">
                     <summary>Inspect &amp; troubleshoot <span id="set-scan-inspection-context"></span></summary>
-                    <div class="set-scan-inspection-body">
+                    <div class="set-scan-inspection-body" id="set-scan-focus-overlay">
+                      <section class="set-scan-focus-panel" role="dialog" aria-modal="true" aria-labelledby="set-scan-focus-title">
+                        <header class="set-scan-focus-header"><h2 id="set-scan-focus-title">Sight · Inspect &amp; troubleshoot</h2><button type="button" id="set-scan-focus-close" class="set-dashboard-quiet">Close</button></header>
+                        <div id="set-scan-focus-progress" class="set-scan-focus-progress hidden" aria-live="polite"><div class="set-scan-focus-progress-line"><strong id="set-scan-focus-status"></strong><span id="set-scan-focus-timing"></span><button type="button" id="set-scan-focus-stop" class="set-dashboard-quiet">Stop</button></div><progress id="set-scan-focus-meter" max="100" value="0" aria-label="Sight scan progress"></progress></div>
                       <section id="set-scan-issues" class="set-scan-issues hidden" aria-label="Inspect and refresh individual Sight">
                         <div class="set-scan-item-heading">
                           <strong>Inspect or refresh media</strong>
@@ -1274,6 +1296,7 @@
                         <strong>Advanced</strong>
                         <button id="set-scan-force-btn" type="button" class="review-captions-btn set-scan-quiet" title="Rerun Sight for every item in the current scope; previous valid evidence is preserved when a retry fails">Force refresh all</button>
                       </div>
+                      </section>
                     </div>
                   </details>
                 </section>
@@ -1282,24 +1305,10 @@
           </div>
         </div>
 
-        <aside class="set-dashboard-tags-panel" aria-label="Vocabulary and annotation">
-          <h4>Vocabulary &amp; Tags</h4>
-          <p id="set-dashboard-tags-status" class="set-dashboard-section-copy"></p>
-          <div class="set-dashboard-section-actions set-dashboard-vocabulary-actions">
-            <button type="button" id="set-intelligence-primary-btn" class="set-dashboard-quiet">Discover Vocabulary</button>
-            <button type="button" id="set-dashboard-tags-guided" class="set-dashboard-quiet">Guided Tagging</button>
-          </div>
-          <div class="set-dashboard-section-actions set-dashboard-annotation-shortcuts">
-            <button type="button" id="set-dashboard-tags-primary" class="set-dashboard-secondary">Focused Annotation</button>
-            <button type="button" id="set-dashboard-tags-groups" class="set-dashboard-secondary">Manage Groups</button>
-          </div>
-        </aside>
-
           </section>
-          </details>
         </div>
         <div class="set-dashboard-stack">
-          <details class="set-dashboard-guidance-panel set-dashboard-section" id="set-dashboard-balance-section" open><summary>Distribution &amp; Balance <span id="set-dashboard-balance-summary"></span></summary>
+          <details class="set-dashboard-guidance-panel set-dashboard-section" id="set-dashboard-balance-section" open><summary><span class="set-dashboard-section-title">Distribution &amp; Balance</span><span id="set-dashboard-balance-summary"></span><button type="button" id="set-dashboard-curate" class="set-dashboard-primary">Curate Training Set</button></summary>
             <div id="set-dashboard-variables" class="set-dashboard-priority-grid" aria-label="Set Variable distributions"></div>
             <div id="set-dashboard-variable-empty" class="set-dashboard-distribution-note">No Set Variables defined. <button type="button" id="set-dashboard-variable-empty-action" class="set-dashboard-quiet">Define Set Variables</button></div>
 

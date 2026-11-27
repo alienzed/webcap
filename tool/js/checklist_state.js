@@ -1104,6 +1104,7 @@ function refreshChecklistGroupConfigurationUi() {
   renderAnnotateStrip();
   renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
   refreshCurrentPrimerDerivedUi();
+  window.refreshSetDashboard();
 }
 
 function deleteChecklistGroupByIndex(index) {
@@ -1444,6 +1445,7 @@ function applyChecklistKeywordTermsForRequirement(requirementLabel, terms) {
     renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
   }
   renderFocusedAnnotationSurface();
+  window.refreshSetDashboard();
   return true;
 }
 

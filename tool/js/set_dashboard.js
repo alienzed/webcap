@@ -8,6 +8,7 @@
   var distributionParent = null;
   var focusMigrationFolder = '';
   var focusMigrationStatus = '';
+  var vocabularySignature = '';
 
   function el(id) { return document.getElementById(id); }
 
@@ -45,10 +46,8 @@
   function setHidden(node, hidden) { node.classList.toggle('hidden', !!hidden); }
 
   function run(destination) {
-    var origin = el('set-dashboard-review').open ? 'review' : 'analyze';
+    var origin = 'analyze';
     if (destination === 'train') return openTrainingSurface('set');
-    // Group configuration is a modal over the current workspace.
-    if (destination === 'groups') return openChecklistKeywordsModal();
     if (destination === 'prepare') return openDashboard('analyze');
     if (destination === 'annotation') { closeDashboard(); return startFocusedAnnotation(); }
     if (destination === 'guided') { closeDashboard(); return openGuidedTagPass({ source: 'set' }); }
@@ -307,6 +306,26 @@
     renderStage();
   }
 
+  function renderVocabulary() {
+    var signature = JSON.stringify([openedFolder, checklistItems.map(function (group) {
+      return [group, getChecklistKeywordTermsForRequirement(group)];
+    })]);
+    if (signature === vocabularySignature) return;
+    vocabularySignature = signature;
+    renderGroupWorkbench({mode:'definition', targetEl:el('set-dashboard-group-workbench')});
+  }
+
+  function addVocabularyGroup() {
+    var input = el('set-dashboard-group-name');
+    if (!String(input.value || '').trim()) return;
+    if (!addChecklistGroup(input.value)) {
+      setStatus('A vocabulary group with that name already exists.');
+      return;
+    }
+    input.value = '';
+    renderStage();
+  }
+
   function renderDefinition(s) {
     var input = el('set-dashboard-training-focus');
     var value = window.getQaTrainingFocus();
@@ -331,14 +350,16 @@
     el('set-dashboard-curate').disabled = !s.visibleTotal;
     el('set-dashboard-train').disabled = !s.visibleTotal;
     renderDefinition(s);
-    el('set-dashboard-definition-summary').textContent = window.getQaTrainingFocus() || 'Define training focus';
+    el('set-dashboard-definition-summary').textContent = el('set-dashboard-definition').open ? '' : window.getQaTrainingFocus();
     var variables = state.setVariables || [];
-    el('set-dashboard-variable-summary').textContent = variables.length ? variables.map(function (row) { return row.group || row.terms[0]; }).join(' · ') : 'No Set Variables defined';
+    el('set-dashboard-variable-summary').textContent = variables.length ? variables.map(function (row) {
+      return row.group ? row.group + ': ' + row.terms.join(', ') : row.terms[0];
+    }).join(' · ') : 'No Set Variables defined';
+    el('set-dashboard-configure-variables').textContent = variables.length ? 'Edit Set Variables' : 'Define Set Variables';
     if (!templateDirty) el('set-dashboard-template-draft').value = String(statsGetPrimerOptionsFromDom().template || '');
-    if (el('set-dashboard-definition').open && !window.isSetIntelligenceOpen()) window.openSetIntelligence();
-    else if (el('set-dashboard-definition').open) window.refreshSetIntelligenceScope();
-    var missingSight = s.visibleTotal - s.sight;
-    if (missingSight) el('set-dashboard-definition-summary').textContent += ' · ' + missingSight + ' without saved Sight (any model)';
+    if (!window.isSetIntelligenceOpen()) window.openSetIntelligence();
+    else window.refreshSetIntelligenceScope();
+    if (el('set-dashboard-definition').open) renderVocabulary();
     var missingCaptions = s.visibleTotal - s.visibleCaptions;
     if (!qaOpen) el('set-dashboard-qa-summary').textContent = missingCaptions ? missingCaptions + ' without captions' : 'Inspect findings';
     var tagsStatus = el('set-dashboard-tags-status');
@@ -368,7 +389,9 @@
       focusMigrationStatus = '';
       focusMigrationFolder = '';
       templateDirty = false;
-      el('set-dashboard-definition').open = !window.getQaTrainingFocus() || !String(el('stats-required-phrase').value || '').trim();
+      vocabularySignature = '';
+      el('set-dashboard-group-name').value = '';
+      el('set-dashboard-definition').open = !window.getQaTrainingFocus() || !String(el('stats-required-phrase').value || '').trim() || !(state.setVariables || []).length;
       el('set-dashboard-balance-section').open = true;
       el('set-dashboard-review').open = false;
     }
@@ -420,8 +443,7 @@
     el('set-dashboard-header-btn').addEventListener('click', openDashboard);
     el('set-dashboard-definition').addEventListener('toggle', function () {
       if (!open) return;
-      if (el('set-dashboard-definition').open) renderStage();
-      else if (window.isSetIntelligenceOpen()) window.closeSetIntelligence();
+      renderStage();
     });
     el('set-dashboard-review').addEventListener('toggle', syncQaSection);
     el('set-dashboard-training-focus').addEventListener('input', function () { if (open) renderDefinition(snapshot()); });
@@ -431,17 +453,24 @@
       focusMigrationStatus = '';
       renderStage();
     });
-    el('set-dashboard-configure-variables').onclick = openVariableEditor;
+    el('set-dashboard-configure-variables').onclick = function () {
+      if (el('set-dashboard-variable-editor').classList.contains('hidden')) openVariableEditor();
+      el('set-dashboard-variable-term').focus();
+    };
+    el('set-dashboard-group-add').onclick = addVocabularyGroup;
+    el('set-dashboard-group-name').addEventListener('keydown', function (event) {
+      if (event.key === 'Enter') { event.preventDefault(); addVocabularyGroup(); }
+    });
     el('set-dashboard-variable-apply').onclick = applyVariableEditor;
     el('set-dashboard-variable-cancel').onclick = function () { setHidden(el('set-dashboard-variable-editor'), true); };
     var destinations = {
-      'set-dashboard-tags-primary': 'annotation', 'set-dashboard-tags-groups': 'groups',
+      'set-dashboard-tags-primary': 'annotation',
       'set-dashboard-tags-guided': 'guided', 'set-dashboard-train': 'train',
       'set-dashboard-curate': 'curate', 'set-dashboard-review-captions': 'captions',
       'set-dashboard-review-report': 'report', 'set-dashboard-review-metadata': 'metadata',
       'set-dashboard-review-prune': 'prune', 'set-dashboard-review-duplicates': 'duplicates'
     };
-    Object.keys(destinations).forEach(function (id) { el(id).onclick = function () { run(destinations[id]); }; });
+    Object.keys(destinations).forEach(function (id) { el(id).onclick = function (event) { if (id === 'set-dashboard-curate' && event) { event.preventDefault(); event.stopPropagation(); } run(destinations[id]); }; });
     el('set-dashboard-template-draft').addEventListener('input', function () { templateDirty = true; });
     el('set-dashboard-template-save').onclick = function () {
       setPrimerTemplateFromDashboard(el('set-dashboard-template-draft').value);
@@ -456,7 +485,7 @@
     el('stats-required-phrase').addEventListener('change', function () { if (open) renderStage(); });
     el('set-dashboard-variable-add-term').onclick = addStandaloneVariable;
     el('set-dashboard-variable-term').addEventListener('keydown', function (event) { if (event.key === 'Enter') { event.preventDefault(); addStandaloneVariable(); } });
-    el('set-dashboard-variable-empty-action').onclick = function () { el('set-dashboard-definition').open = true; openVariableEditor(); el('set-dashboard-variable-editor').scrollIntoView({block:'nearest'}); };
+    el('set-dashboard-variable-empty-action').onclick = function () { el('set-dashboard-definition').open = true; el('set-dashboard-configure-variables').onclick(); el('set-dashboard-variable-editor').scrollIntoView({block:'nearest'}); };
   }
 
   window.getSetVariableWarnings = variableWarnings;

@@ -506,6 +506,7 @@ function renderGroupWorkbench(options) {
     onTermMutation: opts.onTermMutation
   };
   var isGridMode = opts.mode === 'grid';
+  var isDefinitionMode = opts.mode === 'definition';
   var useVisibilityFilter = !isGridMode && targetEl.id === 'group-workbench-list';
   var hiddenGroupCount = syncGroupWorkbenchVisibilityHeader(targetEl, opts.mode);
   var hasGridTargets = isGridMode && opts.mediaKeys.length > 0;
@@ -517,7 +518,7 @@ function renderGroupWorkbench(options) {
   }
 
   targetEl.innerHTML = '';
-  if (!hasActionTarget) {
+  if (!hasActionTarget && !isDefinitionMode) {
     appendGroupWorkbenchNotice(targetEl, isGridMode
       ? 'Select Grid thumbnails to tag them.'
       : 'Select an item to review groups.');
@@ -526,7 +527,7 @@ function renderGroupWorkbench(options) {
   var mediaKey = opts.currentMediaKey || opts.mediaKeys[0] || '';
   var mediaKeys = opts.mediaKeys;
   var contextMediaKeys = opts.getContextMediaKeys();
-  if (!isGridMode && (!Array.isArray(contextMediaKeys) || contextMediaKeys.length <= 1) && state && Array.isArray(state.items)) {
+  if (!isGridMode && !isDefinitionMode && (!Array.isArray(contextMediaKeys) || contextMediaKeys.length <= 1) && state && Array.isArray(state.items)) {
     contextMediaKeys = state.items.map(function (item) {
       return item && item.key;
     }).filter(Boolean);
@@ -562,8 +563,8 @@ function renderGroupWorkbench(options) {
     groupEl.dataset.group = requirementLabel;
     groupEl.classList.toggle('is-reviewed', isReviewed);
     groupEl.classList.toggle('is-complete', isReviewed);
-    groupEl.classList.toggle('is-incomplete', !isReviewed);
-    groupEl.classList.toggle('is-disabled', !hasActionTarget);
+    groupEl.classList.toggle('is-incomplete', !isReviewed && !isDefinitionMode);
+    groupEl.classList.toggle('is-disabled', !hasActionTarget && !isDefinitionMode);
     groupEl.classList.toggle('is-caption-matched', isCaptionMatched);
     if (!isGridMode && hasItemTarget) {
       (function (key, label) {
@@ -596,7 +597,7 @@ function renderGroupWorkbench(options) {
     titleEl.setAttribute('aria-pressed', isReviewed ? 'true' : 'false');
     titleEl.classList.toggle('active', isReviewed);
     titleEl.classList.toggle('mixed', isReviewedMixed);
-    titleEl.disabled = !hasActionTarget;
+    titleEl.disabled = !hasActionTarget && !isDefinitionMode;
     if (isReviewedMixed) {
       titleEl.title = 'Mixed reviewed state for ' + requirementLabel;
       titleEl.setAttribute('aria-label', 'Mixed reviewed state for ' + requirementLabel);
@@ -617,6 +618,13 @@ function renderGroupWorkbench(options) {
         refreshGroupWorkbenchForCurrentItem();
       });
     })(mediaKey, requirementLabel, opts.mode, opts.getMediaKeys, opts.onAfterMutation, opts.getContextMediaKeys, isReviewed);
+    if (isDefinitionMode) {
+      titleEl.classList.remove('group-workbench-reviewed-title-btn');
+      titleEl.removeAttribute('aria-pressed');
+      titleEl.title = 'Edit group terms';
+      titleEl.setAttribute('aria-label', 'Edit terms for ' + requirementLabel);
+      (function (label) { bindGroupWorkbenchHeaderButton(titleEl, function () { openChecklistGroupTermsModal(label); }); })(requirementLabel);
+    }
 
     var actionsEl = document.createElement('div');
     actionsEl.className = 'group-workbench-group-actions';
@@ -704,7 +712,7 @@ function renderGroupWorkbench(options) {
       termBtn.classList.toggle('mixed', isMixed);
       termBtn.classList.toggle('matched', isMatched);
       termBtn.classList.toggle('mismatch', isMismatch);
-      termBtn.disabled = !hasActionTarget;
+      termBtn.disabled = !hasActionTarget && !isDefinitionMode;
       groupHasActiveTerm = groupHasActiveTerm || isActive;
       groupHasMixedTerm = groupHasMixedTerm || isMixed;
       groupHasMismatchTerm = groupHasMismatchTerm || isMismatch;
@@ -713,6 +721,7 @@ function renderGroupWorkbench(options) {
       (function (btn, key, label, termText, mode, afterMutation, termMutation, getMediaKeys, getContextMediaKeys) {
         btn.onclick = function () {
           if (btn.disabled) return;
+          if (mode === 'definition') { openChecklistGroupTermsModal(label); return; }
           if (mode === 'grid') {
             toggleGroupWorkbenchTermForMediaKeys(getMediaKeys(), label, termText, {
               targetEl: targetEl,

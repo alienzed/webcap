@@ -10,8 +10,8 @@ test('Set Definition renders group-only intent and persists a scoped change in t
   fs.mkdirSync(root,{recursive:true});
   fs.writeFileSync(path.join(root,'example.png'),Buffer.from('iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAALUlEQVR4nGN0TKlloCVgoqnpoxaMWjBqwagFoxaMWjBqwagFoxaMWjBqARUBAErBAWK46tBKAAAAAElFTkSuQmCC','base64'));
   fs.writeFileSync(path.join(root,'example.txt'),'subject, front');
-  const shape={group:'Shape',terms:['triangle'],exclusive:false,expected:false};
-  const view={group:'Viewpoint',terms:['front'],exclusive:true,expected:false};
+  const shape={group:'Shape',terms:['triangle'],exclusive:false};
+  const view={group:'Viewpoint',terms:['front'],exclusive:true,expected:true};
   fs.writeFileSync(path.join(root,'.webcap_state.json'),JSON.stringify({
     set_training_focus:'Subject geometry',
     stats:{requiredPhrase:'subject',phrases:'legacy phrase'},
@@ -38,15 +38,35 @@ test('Set Definition renders group-only intent and persists a scoped change in t
   const edit=row.locator('.checklist-definition-terms');
   await expect(edit).toBeVisible();
   await expect(edit.getByRole('checkbox',{name:'front',exact:true})).toBeChecked();
+  await expect(edit.getByRole('button',{name:'Apply',exact:true})).toHaveCount(0);
+  await expect(edit.getByRole('button',{name:'Reset',exact:true})).toBeVisible();
+  await expect(edit.getByRole('button',{name:'Edit terms',exact:true})).toHaveCount(0);
+  await expect(edit.getByRole('checkbox',{name:'Expected on most media'})).toHaveCount(0);
+  const waitForVariableSave=predicate=>page.waitForResponse(response=>
+    response.url().endsWith('/fs/folder_state/save')&&response.request().method()==='POST'&&
+    predicate(response.request().postDataJSON()?.state?.set_variables||[]));
+  const saveRear=waitForVariableSave(rows=>rows.some(variable=>variable.group==='Viewpoint'&&variable.terms.includes('rear')));
   await edit.getByRole('checkbox',{name:'rear',exact:true}).check();
-  await edit.getByRole('checkbox',{name:'Expected on most media'}).check();
-  const save=page.waitForResponse(response=>response.url().endsWith('/fs/folder_state/save')&&response.request().method()==='POST'&&response.request().postDataJSON()?.state?.set_variables?.some(variable=>variable.group==='Viewpoint'&&variable.terms.includes('rear')));
-  await edit.getByRole('button',{name:'Apply',exact:true}).click();
-  expect((await save).ok()).toBeTruthy();
+  expect((await saveRear).ok()).toBeTruthy();
   await expect(row).toContainText('2 selected');
-  await expect(row).toContainText('Expected');
+  // Opening another group preserves the immediate change.
+  await list.locator('.checklist-row-block').filter({hasText:'Lighting'}).locator('.checklist-row-toggle-btn').click();
+  await expect(edit.getByRole('checkbox',{name:'rear',exact:true})).toBeChecked();
+  const reset=waitForVariableSave(rows=>!rows.some(variable=>variable.group==='Viewpoint'));
+  await edit.getByRole('button',{name:'Reset',exact:true}).click();
+  expect((await reset).ok()).toBeTruthy();
+  await expect(row).toContainText('Vocabulary only');
+  await expect(edit.getByRole('checkbox',{name:'front',exact:true})).not.toBeChecked();
+  await expect(edit.getByRole('checkbox',{name:'rear',exact:true})).not.toBeChecked();
+  expect(JSON.parse(fs.readFileSync(path.join(root,'.webcap_state.json'),'utf8')).set_variables).toEqual([shape]);
+  const reselect=waitForVariableSave(rows=>rows.some(variable=>variable.group==='Viewpoint'&&variable.terms.includes('rear')));
+  await edit.getByRole('checkbox',{name:'rear',exact:true}).check();
+  expect((await reselect).ok()).toBeTruthy();
+  const exclusive=waitForVariableSave(rows=>rows.some(variable=>variable.group==='Viewpoint'&&variable.exclusive));
+  await edit.getByRole('checkbox',{name:'Mutually exclusive'}).check();
+  expect((await exclusive).ok()).toBeTruthy();
   const saved=JSON.parse(fs.readFileSync(path.join(root,'.webcap_state.json'),'utf8'));
-  expect(saved.set_variables).toEqual([shape,{group:'Viewpoint',terms:['front','rear'],exclusive:true,expected:true}]);
+  expect(saved.set_variables).toEqual([shape,{group:'Viewpoint',terms:['rear'],exclusive:true}]);
   expect(saved.stats).not.toHaveProperty('phrases');
   const intelligence=page.locator('#set-scan-modal');
   const intelligencePanel=page.locator('.set-dashboard-intelligence-panel');

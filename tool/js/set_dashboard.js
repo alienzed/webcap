@@ -112,9 +112,8 @@
     });
     if (variable.exclusive) rows.push({ key: 'multiple', label: 'Multiple', files: multiple, color: 'warning' });
     rows.push({ key: 'neither', label: 'Neither', files: neither,
-      color: variable.expected && items.length && neither.length / items.length > .25 ? 'warning' : 'neutral' });
-    return { rows: rows, neither: neither.length, multiple: multiple.length,
-      missingFiles: neither, multipleFiles: multiple };
+      color: 'neutral' });
+    return { rows: rows, multiple: multiple.length, multipleFiles: multiple };
   }
 
   function variableWarnings(variables, items) {
@@ -123,9 +122,6 @@
       var result = variableCoverage(variable, items);
       if (variable.exclusive && result.multiple) warnings.push({
         key: setVariableKey(variable), group: variable.group, kind: 'multiple', label: 'Multiple exclusive terms', files: result.multipleFiles
-      });
-      if (variable.expected && items.length && result.neither / items.length > .25) warnings.push({
-        key: setVariableKey(variable), group: variable.group, kind: 'missing', label: 'Missing coverage', files: result.missingFiles
       });
     });
     return warnings;
@@ -141,7 +137,7 @@
     var title = section.querySelector('h5');
     title.textContent = variable.group;
     section.querySelector('.set-dashboard-variable-kind').textContent =
-      (variable.exclusive ? 'Exclusive' : 'May coexist') + (variable.expected ? ' · Expected' : '');
+      (variable.exclusive ? 'Exclusive' : 'May coexist');
     var stack = section.querySelector('.set-dashboard-variable-stack');
     setHidden(stack, !variable.exclusive || !total);
     var legend = section.querySelector('.set-dashboard-variable-rows');
@@ -195,7 +191,6 @@
     oldRows.forEach(function (node) { node.remove(); });
     oldSegments.forEach(function (node) { node.remove(); });
     var warnings = [];
-    if (variable.expected && total && result.neither / total > .25) warnings.push(Math.round(100 * result.neither / total) + '% missing');
     if (variable.exclusive && result.multiple) warnings.push(result.multiple + ' with multiple terms');
     var notice = section.querySelector('.set-dashboard-variable-notice');
     notice.textContent = warnings.join(' · ');
@@ -233,7 +228,7 @@
   // Dashboard owns the selected training terms; neither changes item tags.
   function variableForGroup(group) {
     return (state.setVariables || []).find(function (row) { return row.group === group; }) ||
-      {group:group, terms:[], exclusive:false, expected:false};
+      {group:group, terms:[], exclusive:false};
   }
 
   function makeVariableCheckbox(label, checked) {
@@ -249,7 +244,7 @@
     var summary = document.createElement('span');
     summary.className = 'set-dashboard-group-variable-status';
     summary.textContent = variable.terms.length
-      ? variable.terms.length + ' selected · ' + (variable.exclusive ? 'Exclusive' : 'May coexist') + (variable.expected ? ' · Expected' : '')
+      ? variable.terms.length + ' selected · ' + (variable.exclusive ? 'Exclusive' : 'May coexist')
       : 'Vocabulary only';
     summary.classList.toggle('is-variable', !!variable.terms.length);
     host.appendChild(summary);
@@ -273,73 +268,65 @@
     host.appendChild(title);
     var terms = document.createElement('div');
     terms.className = 'set-dashboard-variable-terms';
+    function identify(input, field, term) {
+      input.id = 'set-variable-' + encodeURIComponent(JSON.stringify([group,field,term || '']));
+    }
     var checks = [];
     catalog.forEach(function (entry, key) {
       var check = makeVariableCheckbox(entry.term + (entry.retained ? ' (saved)' : ''), selected.has(key));
+      identify(check.input, 'term', entry.term);
       checks.push({term:entry.term,input:check.input});
       terms.appendChild(check.node);
     });
     if (!checks.length) {
-      terms.textContent = 'Add vocabulary terms using Edit terms.';
+      terms.textContent = 'Add vocabulary terms using the group menu.';
     }
     host.appendChild(terms);
     var options = document.createElement('div');
     options.className = 'set-dashboard-variable-options';
     var exclusive = makeVariableCheckbox('Mutually exclusive', variable.exclusive);
-    var expected = makeVariableCheckbox('Expected on most media', variable.expected);
-    options.append(exclusive.node,expected.node);
-    host.appendChild(options);
-    var actions = document.createElement('div');
-    actions.className = 'set-dashboard-section-actions';
-    var apply = document.createElement('button');
-    apply.type = 'button'; apply.className = 'set-dashboard-primary'; apply.textContent = 'Apply';
+    identify(exclusive.input, 'exclusive');
     var reset = document.createElement('button');
-    reset.type = 'button'; reset.className = 'set-dashboard-quiet'; reset.textContent = 'Reset';
-    var edit = document.createElement('button');
-    edit.type = 'button'; edit.className = 'set-dashboard-quiet'; edit.textContent = 'Edit terms';
+    reset.type = 'button'; reset.className = 'set-dashboard-quiet set-dashboard-variable-reset';
+    reset.textContent = 'Reset'; reset.title = 'Clear selected Set Variables in this group';
+    reset.disabled = !variable.terms.length;
+    options.append(exclusive.node,reset);
+    host.appendChild(options);
     function selectedTerms() {
       var chosen = new Map(checks.filter(function (check) { return check.input.checked; }).map(function (check) {
         return [normalizeChecklistTerm(check.term).toLowerCase(), check.term];
       }));
       var terms = [];
-      variable.terms.forEach(function (term) {
+      variableForGroup(group).terms.forEach(function (term) {
         var key = normalizeChecklistTerm(term).toLowerCase();
         if (chosen.has(key)) { terms.push(term); chosen.delete(key); }
       });
       return terms.concat(Array.from(chosen.values()));
     }
-    var refreshControls = function () {
-      var terms = selectedTerms();
-      var next = replaceSetGroupVariable([variable], group, {terms:terms,exclusive:exclusive.input.checked,expected:expected.input.checked});
-      var original = normalizeSetVariables([variable]);
-      var dirty = JSON.stringify(next) !== JSON.stringify(original);
-      apply.disabled = !dirty;
-      reset.disabled = !dirty;
-      exclusive.input.disabled = !terms.length;
-      expected.input.disabled = !terms.length;
-    };
-    checks.forEach(function (check) { check.input.onchange = refreshControls; });
-    exclusive.input.onchange = refreshControls;
-    expected.input.onchange = refreshControls;
-    apply.onclick = function () {
+    function saveSelection() {
+      var active = document.activeElement;
+      var restoreFocus = active === this ? this.id : '';
       state.setVariables = replaceSetGroupVariable(state.setVariables, group, {
-        terms:selectedTerms(),
-        exclusive:exclusive.input.checked, expected:expected.input.checked
+        terms:selectedTerms(), exclusive:exclusive.input.checked
       });
       scheduleSetDefinitionSave();
       updateBalanceDistributionWheel();
       renderStage();
-    };
+      // The existing renderer refreshes group summaries and editor state.
+      // Keep keyboard users on the checkbox they just changed.
+      if (restoreFocus) {
+        var next = document.getElementById(restoreFocus);
+        if (next && !next.disabled) next.focus({preventScroll:true});
+      }
+    }
+    checks.forEach(function (check) { check.input.onchange = saveSelection; });
+    exclusive.input.onchange = saveSelection;
+    exclusive.input.disabled = !variable.terms.length;
     reset.onclick = function () {
-      checks.forEach(function (check) { check.input.checked = selected.has(normalizeChecklistTerm(check.term).toLowerCase()); });
-      exclusive.input.checked = variable.exclusive;
-      expected.input.checked = variable.expected;
-      refreshControls();
+      checks.forEach(function (check) { check.input.checked = false; });
+      exclusive.input.checked = false;
+      saveSelection.call(reset);
     };
-    edit.onclick = function () { openChecklistGroupTermsModal(group); };
-    actions.append(apply,reset,edit);
-    host.appendChild(actions);
-    refreshControls();
   }
 
   function renderVocabulary() {

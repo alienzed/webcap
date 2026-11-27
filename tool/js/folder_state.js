@@ -49,7 +49,7 @@ function normalizeSetVariables(rows) {
     });
     if (terms.length) {
       seen.add(group.toLowerCase());
-      out.push({group:group, terms:terms, exclusive:!!row.exclusive, expected:!!row.expected});
+      out.push({group:group, terms:terms, exclusive:!!row.exclusive});
     }
     return out;
   }, []);

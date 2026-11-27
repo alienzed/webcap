@@ -770,7 +770,8 @@
 }
 .set-dashboard-variable-terms label { border:1px solid var(--border); border-radius:6px; background:var(--panel-soft); }
 .set-dashboard-variable-terms input, .set-dashboard-variable-options input { width:18px; height:18px; accent-color:var(--accent); }
-#set-dashboard-group-list .set-dashboard-variable-options { margin-top:12px; padding-top:8px; border-top:1px solid var(--border); }
+#set-dashboard-group-list .set-dashboard-variable-options { margin-top:12px; padding-top:8px; border-top:1px solid var(--border); align-items:center; }
+#set-dashboard-group-list .set-dashboard-variable-reset { margin-left:auto; }
 #set-dashboard-group-list .set-dashboard-section-actions { margin-top:10px; }
 #set-dashboard-definition .set-dashboard-guidance-edit label { font-size:18px; margin:0 0 8px; }
 #set-dashboard-definition :is(#set-dashboard-training-focus,#stats-required-phrase,#set-dashboard-template-draft) {

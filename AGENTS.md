@@ -206,6 +206,8 @@ model failures.
 
 Write model-facing instructions as positive, actionable directions describing the desired behavior. Prefer what the model should do over negated prohibitions (for example, `do not ...`), which can inadvertently prime the unwanted behavior. Keep guidance concise, concrete, and appropriate to the current task; express exceptions or boundaries through affirmative scope and explicit output contracts wherever possible. Review existing prompts for redundant or conflicting creative directives before adding new ones.
 
+For meaningful AI/model interaction design, consult and maintain the relevant published research and established practices in the [AI research index](docs/ai-research/README.md). Document applicable evidence and open gaps as features evolve. Candidate references are not established findings; this is a documentation and engineering principle, not a requirement to replicate studies or a new runtime/review gate.
+
 ## UX Guidance
 
 Keep the UI efficient and calm.

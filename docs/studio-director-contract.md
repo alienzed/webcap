@@ -104,3 +104,7 @@ Static and mocked tests do not establish live-model reliability. Do not weaken a
 - [Studio user flows](studio-user-flows.md) — user journeys; historical Review assertions are superseded by this document.
 - [Director behavioral audit](studio-director-behavioral-contract.md) — useful historical failure analysis; previous Review, chat-capture and abbreviated-history instructions are superseded.
 - [AGENTS.md](../AGENTS.md) — repository development rules.
+
+## Related AI research
+
+See the [AI research index](ai-research/README.md) (R01 R02 R03 R04 R06 R08 R18) for candidate publications and future research questions. This reference does not change the feature contract or establish evidence for its current implementation.

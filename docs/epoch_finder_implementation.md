@@ -106,3 +106,7 @@ Real-machine confirmation of media accounting, VL completion, restart and purge 
 For Krea2, round planning defaults to supported Test Generations dimension presets closest to 512, 640, and 768 pixels on the short side (fourth round stays near 768). Operators may still override each round. Other models retain their existing MP settings.
 
 New campaigns use a fixed 0.45 MP vision input ceiling. The existing image encoder only downscales above that ceiling, never upscales, and retains original campaign evidence. Existing saved campaigns keep their configured ceiling.
+
+## Related AI research
+
+See the [AI research index](ai-research/README.md) (R03 R05 R09 R10 R12 R13 R15) for candidate publications and future research questions. This reference does not change the feature contract or establish evidence for its current implementation.

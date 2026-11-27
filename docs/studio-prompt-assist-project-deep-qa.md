@@ -114,3 +114,7 @@ Record actual requests, model responses, saved results, and failures. Distinguis
 ## Implementation note
 
 This contract intentionally does not prescribe a new agent hierarchy, scoring framework, orchestration layer, schema, or storage subsystem. First map the existing Project/Scene/cut text model, the mature Prep Deep QA lifecycle, Caption Assist's review/apply interaction, and the current Studio Director/Scene editing path. Then implement the smallest Studio-owned solution that satisfies the behavior above.
+
+## Related AI research
+
+See the [AI research index](ai-research/README.md) (R02 R03 R06 R07 R09 R14) for candidate publications and future research questions. This reference does not change the feature contract or establish evidence for its current implementation.

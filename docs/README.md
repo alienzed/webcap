@@ -10,6 +10,10 @@ This folder mixes three different kinds of documents:
 
 Do not treat every file in `docs/` as live product truth.
 
+## AI research references
+
+- [AI research index](ai-research/README.md) — provisional model-interaction research agenda, feature mapping and candidate bibliography; not current behavior or implementation guidance.
+
 ## Canonical Current-Behavior References
 
 Start here when you need to know what the app does today:

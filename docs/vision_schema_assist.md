@@ -62,3 +62,7 @@ Discover Vocabulary mutates only explicitly selected vocabulary for the current 
 Tag materialization mutates only explicitly accepted tag candidates through its owning workflow.
 
 No Vision or Director result automatically marks a group reviewed.
+
+## Related AI research
+
+See the [AI research index](ai-research/README.md) (R02 R03 R05 R07 R09 R10 R12 R18) for candidate publications and future research questions. This reference does not change the feature contract or establish evidence for its current implementation.

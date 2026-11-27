@@ -269,3 +269,7 @@ Proceed with implementation planning around:
 - `Review Set` analysis details as the first consumer
 
 The actual execution location should remain open until we test performance.
+
+## Related AI research
+
+See the [AI research index](ai-research/README.md) (R05 R09) for candidate publications and future research questions. This reference does not change the feature contract or establish evidence for its current implementation.

@@ -113,16 +113,21 @@
   function renderVariableCard(section, variable, result, total) {
     var title = section.querySelector('h5');
     title.textContent = variable.group;
+    // A missing selected term says nothing about whether the group is visible.
+    // Count distinct classified media once, even for coexisting terms.
+    var unmatched = result.rows.find(function (row) { return row.key === 'neither'; });
+    var classified = total - unmatched.files.length;
     section.querySelector('.set-dashboard-variable-kind').textContent =
-      (variable.exclusive ? 'Exclusive' : 'May coexist');
+      (variable.exclusive ? 'Exclusive' : 'May coexist') + ' · ' +
+      (classified ? 'Distribution among ' + classified + ' classified media' : 'No matching terms in scope');
     var stack = section.querySelector('.set-dashboard-variable-stack');
-    setHidden(stack, !variable.exclusive || !total);
+    setHidden(stack, !variable.exclusive || !classified);
     var legend = section.querySelector('.set-dashboard-variable-rows');
     legend.classList.toggle('is-exclusive', variable.exclusive);
     var oldRows = new Map(Array.from(legend.children).map(function (row) { return [row.dataset.key, row]; }));
     var oldSegments = new Map(Array.from(stack.children).map(function (row) { return [row.dataset.key, row]; }));
-    result.rows.forEach(function (row, index) {
-      var share = total ? 100 * row.files.length / total : 0;
+    result.rows.filter(function (row) { return row.key !== 'neither'; }).forEach(function (row, index) {
+      var share = classified ? 100 * row.files.length / classified : 0;
       var color = distributionColor(row.color);
       var entry = oldRows.get(row.key);
       if (!entry) {
@@ -142,11 +147,13 @@
       var labelNode = entry.children[0];
       labelNode.children[0].style.backgroundColor = color;
       labelNode.children[1].textContent = row.label;
-      entry.children[1].textContent = row.files.length + ' / ' + total;
+      entry.children[1].textContent = classified
+        ? row.files.length + ' / ' + classified + ' · ' + Math.round(share) + '%'
+        : '0';
       entry.children[2].firstElementChild.style.width = share + '%';
       entry.children[2].firstElementChild.style.backgroundColor = color;
       entry.disabled = !row.files.length;
-      entry.title = row.label + ' · ' + Math.round(share) + '% · Inspect matching media';
+      entry.title = row.label + (classified ? ' · ' + Math.round(share) + '% of classified media' : ' · No matches') + ' · Inspect matching media';
       entry.setAttribute('aria-label', variable.group + ' · ' + row.label + ': inspect ' + row.files.length + ' media');
       entry.onclick = function () { inspectDistribution(row.files, variable.group + ' · ' + row.label); };
       if (legend.children[index] !== entry) legend.insertBefore(entry, legend.children[index] || null);
@@ -167,6 +174,14 @@
     });
     oldRows.forEach(function (node) { node.remove(); });
     oldSegments.forEach(function (node) { node.remove(); });
+    var coverage = section.querySelector('.set-dashboard-variable-coverage');
+    coverage.querySelector('.set-dashboard-coverage-fill').style.width = (total ? 100 * classified / total : 0) + '%';
+    coverage.querySelector('.set-dashboard-coverage-classified').textContent = classified + ' / ' + total + ' classified';
+    var missing = coverage.querySelector('.set-dashboard-coverage-unmatched');
+    missing.textContent = unmatched.files.length + ' without matching terms';
+    missing.disabled = !unmatched.files.length;
+    missing.title = 'Inspect media without matching selected terms';
+    missing.onclick = function () { inspectDistribution(unmatched.files, variable.group + ' · Without matching terms'); };
     var warnings = [];
     if (variable.exclusive && result.multiple) warnings.push(result.multiple + ' with multiple terms');
     var notice = section.querySelector('.set-dashboard-variable-notice');
@@ -191,7 +206,20 @@
         stack.setAttribute('aria-hidden', 'true');
         var legend = document.createElement('div'); legend.className = 'set-dashboard-variable-rows';
         var notice = document.createElement('div'); notice.className = 'set-dashboard-variable-notice';
-        section.append(title, kind, stack, legend, notice);
+        var coverage = document.createElement('div'); coverage.className = 'set-dashboard-variable-coverage';
+        var coverageTitle = document.createElement('div'); coverageTitle.className = 'set-dashboard-coverage-title';
+        coverageTitle.textContent = 'Overall coverage';
+        var coverageTrack = document.createElement('div'); coverageTrack.className = 'set-dashboard-coverage-track';
+        coverageTrack.setAttribute('aria-hidden', 'true');
+        var coverageFill = document.createElement('span'); coverageFill.className = 'set-dashboard-coverage-fill';
+        coverageTrack.appendChild(coverageFill);
+        var coverageCounts = document.createElement('div'); coverageCounts.className = 'set-dashboard-coverage-counts';
+        var classifiedCount = document.createElement('span'); classifiedCount.className = 'set-dashboard-coverage-classified';
+        var unmatchedCount = document.createElement('button'); unmatchedCount.type = 'button';
+        unmatchedCount.className = 'set-dashboard-coverage-unmatched';
+        coverageCounts.append(classifiedCount, unmatchedCount);
+        coverage.append(coverageTitle, coverageTrack, coverageCounts);
+        section.append(title, kind, stack, legend, notice, coverage);
         host.appendChild(section);
       }
       oldCards.delete(key);
@@ -405,7 +433,7 @@
     el('set-dashboard-tags-primary').textContent = remaining ? 'Continue annotation review' : 'Focused Annotation';
     var count = variables.length;
     var warnings = variableWarnings(state.setVariables || [], s.visibleItems);
-    el('set-dashboard-balance-summary').textContent = count ? count + (count === 1 ? ' variable' : ' variables') + (warnings.length ? ' · ' + warnings.length + ' coverage concerns' : '') : 'Define Set Variables';
+    el('set-dashboard-balance-summary').textContent = count ? count + (count === 1 ? ' variable' : ' variables') + (warnings.length ? ' · ' + warnings.length + (warnings.length === 1 ? ' group with multiple terms' : ' groups with multiple terms') : '') : 'Define Set Variables';
     renderVariables(s);
   }
 

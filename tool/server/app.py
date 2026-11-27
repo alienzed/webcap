@@ -877,6 +877,7 @@ def caption_assist_route():
             open_sight=data.get("openSight"),
             context_sight=data.get("contextSight"),
             sight_led=data.get("sightLed") is True,
+            reference_captions=data.get("referenceCaptions"),
         )
         job = enqueue_llm(
             "caption",
@@ -1284,6 +1285,12 @@ def caption_template_assist_route():
             mappings=data.get("mappings"),
             current_template=data.get("currentTemplate", ""),
             default_template=data.get("defaultCaptionTemplate", ""),
+            training_focus=data.get("trainingFocus", ""),
+            set_variables=data.get("setVariables"),
+            required_phrase=data.get("requiredPhrase", ""),
+            reference_captions=data.get("referenceCaptions"),
+            conversation=data.get("conversation"),
+            discuss=data.get("action") == "discuss",
         )
         job = enqueue_llm(
             "caption",

@@ -3794,7 +3794,13 @@
         return Promise.resolve(execute.call(mode, {
           instruction: content,
           modelId: state.modelId,
-          messages: messages.slice()
+          messages: messages.slice(),
+          onJob: function (job) {
+            if (!job || !job.jobId) return;
+            state.jobId = String(job.jobId);
+            state.requestDiagnostic = job.request || null;
+            renderProgress({phase:job.status === 'queued' ? 'queued' : 'preparing',jobStatus:job.status,model:job.modelId});
+          }
         })).then(function (result) {
           result = result && typeof result === 'object' ? result : {};
           messages.push({
@@ -5201,7 +5207,7 @@
     target = target && typeof target === 'object' ? target : {};
     var modeId = String(target.mode || 'chat');
     if (target.contextKey) {
-      if (state.pending) throw new Error('Finish the current Assistant response before opening a different QA finding.');
+      if (state.pending) throw new Error('Finish the current Assistant response before opening a different task conversation.');
       var key = String(target.contextKey);
       if (state.modeContextKeys[modeId] !== key) {
         // Contextual conversations are transient, scoped to the evidence snapshot

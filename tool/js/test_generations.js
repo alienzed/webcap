@@ -1849,6 +1849,7 @@
     }).then(function (payload) {
       wildcardDirector.jobId = String(payload.job && payload.job.jobId || '');
       wildcardDirector.requestDiagnostic = payload.job && payload.job.request || null;
+      if (request.onJob) request.onJob(payload.job);
       if (wildcardDirector.stopRequested && wildcardDirector.jobId)
         return resetLlmExecution().then(function () { return waitForWildcardJob(payload.job); });
       return waitForWildcardJob(payload.job);

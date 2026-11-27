@@ -1428,6 +1428,7 @@ function executePrimerTemplateTask(request, author) {
   }).then(function (response) {
     if (!response.job || !response.job.jobId) throw new Error('Caption Template did not return a queued job.');
     task.jobId = String(response.job.jobId);
+    if (request.onJob) request.onJob(response.job);
     if (task.stopRequested) return cancelCaptionAssistJob(task.jobId).then(function () {
       return waitForCaptionAssistJob(response.job);
     });

@@ -3442,17 +3442,17 @@ iframe {
   width: 100%;
   box-sizing: border-box;
 }
-.test-generations-wildcard-modal .test-generations-wildcard-analysis {
+#test-generations-wildcard-result .test-generations-wildcard-analysis {
   gap: 12px;
   padding: 0;
   border: 0;
   background: transparent;
 }
-.test-generations-wildcard-modal .test-generations-wildcard-analysis > div {
+#test-generations-wildcard-result .test-generations-wildcard-analysis > div {
   display: grid;
   grid-template-columns: 72px minmax(0, 1fr);
 }
-.test-generations-wildcard-modal .test-generations-wildcard-output textarea {
+#test-generations-wildcard-result .test-generations-wildcard-output textarea {
   min-height: 150px;
   padding: 10px;
   font-family: var(--mono, ui-monospace, SFMono-Regular, Consolas, monospace);

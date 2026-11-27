@@ -177,7 +177,7 @@ CAPTION_ASSIST_SYSTEM_PROMPT = (
     "or other visual facts absent from Open Sight, Context Sight, selected annotations, required phrase, or draft, apart from an "
     "explicit subject description authored in captionTemplate. If a required phrase is provided, include it verbatim "
     "exactly once. captionTemplate is the Set's caption-writing template. renderedPrimer demonstrates its "
-    "populated structure, desired order, and wording conventions. Follow the saved template's order, density, "
+    "populated structure, desired order, and wording conventions. The order of groupedAnnotations also does not define caption order. Follow the saved template's order, density, "
     "punctuation and phrase style for ordinary caption authoring; omit unpopulated sections. "
     "approvedStyleExamples, when supplied, demonstrate expression and structure only. Use their style, not their visual facts. "
     "The template, rendered Primer and examples establish form; the current item's evidence establishes content. "

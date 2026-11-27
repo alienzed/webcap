@@ -969,7 +969,7 @@ test('older Sight-weighted draft is restored without reinstating Sight in rankin
   assert.equal(Number(restored.root.querySelector('[data-curation-selected]').textContent),1);
 });
 
-test('fresh curation uses exact declared variable terms without erasing other group priorities', async () => {
+test('fresh curation uses exact declared variable terms as initial balance priorities', async () => {
   const h = harness();
   h.ctx.window.startQaCuration(entries(), 'geometry', 'same-scope', {
     intent: {variables:[{group:'Shape',terms:['rare']},{group:'View',terms:['rear']}]}
@@ -1007,4 +1007,38 @@ test('opening Curate loads saved state without starting inference; Analyze Set i
   analyze.click();
   await new Promise(resolve => setTimeout(resolve, 55));
   assert.equal(h.calls.submitted.length, 1);
+});
+
+test('declared variables displace inferred priorities but retain supporting tags and caption requests', async () => {
+  const h = harness();
+  const variables = [{group:'View',terms:['rear'],exclusive:true}];
+  h.ctx.window.startQaCuration(entries(), 'geometry', 'same-scope', {intent:{variables}});
+  await new Promise(resolve=>setTimeout(resolve,60));
+  assert.equal(h.calls.errors.length,0);
+  const draft=h.calls.draft;
+  assert.deepEqual(draft.balanceGroups,['View']);
+  const roles=new Map(draft.conceptRoles);
+  const id=draft.snapshot.concepts.find(c=>c.group==='Shape'&&c.term==='rare').id;
+  assert.equal(roles.get(id),'supporting');
+  assert.deepEqual(h.calls.submitted[0].setVariables,variables);
+  assert.ok(h.calls.captionSubmitted.length);
+  assert.ok(h.calls.captionSubmitted.every(p=>JSON.stringify(p.setVariables)===JSON.stringify(variables)));
+});
+test('exclusive overlaps retain raw assignments without contributing balance coverage', async () => {
+  const h=harness();
+  const rows=entries();
+  rows[0].groupedTags.push({group:'View',term:'rear'});
+  const variables=[{group:'View',terms:['front','rear'],exclusive:true}];
+  h.ctx.window.startQaCuration(rows,'geometry','same-scope',{intent:{variables}});
+  await new Promise(resolve=>setTimeout(resolve,60));
+  assert.equal(h.calls.errors.length,0);
+  const draft=h.calls.draft;
+  const viewIds=draft.snapshot.concepts.filter(c=>c.group==='View').map(c=>c.id);
+  const conflict=draft.snapshot.rows.find(r=>r[0]===rows[0].fileName);
+  assert.ok(viewIds.every(id=>conflict[1].includes(id)&&conflict[6].includes(id)));
+  const restored=harness(draft);
+  restored.ctx.window.startQaCuration(rows,'geometry','same-scope',{intent:{variables}});
+  await new Promise(resolve=>setTimeout(resolve,60));
+  assert.equal(restored.calls.errors.length,0);
+  assert.equal(restored.calls.submitted.length,0);
 });

@@ -972,7 +972,7 @@ test('older Sight-weighted draft is restored without reinstating Sight in rankin
 test('fresh curation uses exact declared variable terms without erasing other group priorities', async () => {
   const h = harness();
   h.ctx.window.startQaCuration(entries(), 'geometry', 'same-scope', {
-    intent: {variables:[{group:'Shape',terms:['rare']}],phrases:['rear']}
+    intent: {variables:[{group:'Shape',terms:['rare']},{group:'',terms:['rear']}]}
   });
   await new Promise(resolve=>setTimeout(resolve,60));
   assert.equal(h.calls.errors.length,0);

@@ -149,7 +149,8 @@
     legend.classList.toggle('is-exclusive', variable.exclusive);
     var oldRows = new Map(Array.from(legend.children).map(function (row) { return [row.dataset.key, row]; }));
     var oldSegments = new Map(Array.from(stack.children).map(function (row) { return [row.dataset.key, row]; }));
-    result.rows.forEach(function (row, index) {
+    var displayRows = variable.group || variable.expected ? result.rows : result.rows.filter(function (row) { return row.key !== 'neither'; });
+    displayRows.forEach(function (row, index) {
       var share = total ? 100 * row.files.length / total : 0;
       var color = distributionColor(row.color);
       var entry = oldRows.get(row.key);
@@ -313,6 +314,20 @@
     if (signature === vocabularySignature) return;
     vocabularySignature = signature;
     renderGroupWorkbench({mode:'definition', targetEl:el('set-dashboard-group-workbench')});
+    var editor = el('set-dashboard-variable-editor');
+    if (!editor.classList.contains('hidden')) {
+      var host = el('set-dashboard-variable-groups');
+      var fields = new Map(Array.from(host.children).filter(function (field) {return !!field.dataset.group;}).map(function (field) {return [field.dataset.group,field];}));
+      checklistItems.forEach(function (group) {
+        var terms = getChecklistKeywordTermsForRequirement(group);
+        var field = fields.get(group);
+        if (!field) { appendVariableField(host,{group:group,terms:[],expected:false,exclusive:false},terms); return; }
+        var existing = new Set(Array.from(field.querySelectorAll('[data-variable-type="term"]')).map(function (input) {return input.value.toLowerCase();}));
+        terms.forEach(function (term) {
+          if (!existing.has(term.toLowerCase())) field.insertBefore(makeVariableCheckbox(term,false,'term',term),field.querySelector('.set-dashboard-variable-options'));
+        });
+      });
+    }
   }
 
   function addVocabularyGroup() {

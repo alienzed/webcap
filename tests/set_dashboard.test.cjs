@@ -41,7 +41,6 @@ function dashboard(options = {}) {
     addEventListener(name, callback) { listeners['document:' + name] = callback; }
   };
   element('stats-required-phrase').value = options.phrase || '';
-  element('stats-phrases').value = '';
   const folder = 'Sets/Test';
   const state = { folder, setTrainingFocus: '', setVariables: [], items: options.items || [{ key: 'a', fileName: 'a.png', hasCaption: false, caption: '', metadata: {} }] };
   const actions = [];
@@ -61,6 +60,7 @@ function dashboard(options = {}) {
       refreshSetIntelligenceScope: () => {}
     },
     checklistItems: options.groups || [],
+    renderGroupWorkbench() {},
     getChecklistKeywordTermsForRequirement: () => ['tag'],
     isChecklistRequirementCheckedForMediaKey: (key, name) => typeof options.checked === 'function' ? options.checked(key, name) : !!options.checked,
     getTrainingRunnerActiveJob: () => options.training ? { status: 'running' } : null,
@@ -116,7 +116,7 @@ test('QA is opened explicitly and reports retain direct handoffs', () => {
 });
 test('authoritative fields and Sight remain unique; Dashboard lives in Prep', () => {
   const html = fs.readFileSync(path.join(__dirname, '../tool/tool.html'), 'utf8');
-  for (const id of ['set-dashboard-modal','stats-required-phrase','stats-phrases','stats-phrases-items','primer-template','set-scan-modal','set-intelligence-primary-btn']) {
+  for (const id of ['set-dashboard-modal','stats-required-phrase','primer-template','set-scan-modal','set-intelligence-primary-btn']) {
     assert.equal((html.match(new RegExp('id="' + id + '"','g')) || []).length,1,id);
   }
   assert.ok(html.indexOf('id="prep-workspace-root"') < html.indexOf('id="set-dashboard-modal"'));
@@ -142,7 +142,8 @@ test('exclusive coverage partitions overlap; independent terms keep full members
   const assigned = {a:['Kneeling'], b:['squatting'], c:['kneeling','squatting'], d:[]};
   const sandbox = {
     getChecklistAssignedTagsForMediaKey: key => assigned[key],
-    normalizeChecklistTerm: term => String(term).trim()
+    normalizeChecklistTerm: term => String(term).trim(),
+    setVariableKey: row => JSON.stringify([row.group, row.group ? '' : row.terms[0].toLowerCase()])
   };
   vm.runInNewContext(source.slice(start,end) + '\nthis.coverage = variableCoverage; this.warnings = variableWarnings;',sandbox);
   const items = Object.keys(assigned).map(key=>({key,fileName:key+'.jpg'}));
@@ -156,7 +157,9 @@ test('exclusive coverage partitions overlap; independent terms keep full members
 });
 test('Curate stays visible outside the preparation content, and Grid has an explicit return action', () => {
   const html = fs.readFileSync(path.join(__dirname, '../tool/tool.html'), 'utf8');
-  assert.ok(html.indexOf('id="set-dashboard-curate"') < html.indexOf('id="set-dashboard-stage"'));
+  const balance = html.indexOf('id="set-dashboard-balance-section"');
+  assert.ok(balance < html.indexOf('id="set-dashboard-curate"'));
+  assert.ok(html.indexOf('id="set-dashboard-curate"') < html.indexOf('id="set-dashboard-variables"'));
   assert.match(html, /id="media-grid-return-to-analysis-btn"/);
 });
 
@@ -213,6 +216,53 @@ test('native Dashboard has readable grouped definition, bounded priority grid an
   assert.match(html, /class="set-dashboard-definition-fields"/);
   assert.match(html, /class="set-dashboard-qa-open-label"/);
   assert.ok(css.includes('calc((100% - 48px) / 4)'));
-  assert.ok(css.includes('#set-dashboard-modal .set-dashboard-dist-count:disabled'));
+  assert.ok(css.includes('#set-dashboard-modal .set-dashboard-variable-row:disabled'));
   assert.doesNotMatch(css, /\.set-dashboard-review p\s*\{/);
+});
+
+function canonicalVariables() {
+  const folderSource=fs.readFileSync(path.join(__dirname,'../tool/js/folder_state.js'),'utf8');
+  const start=folderSource.indexOf('function setVariableKey(');
+  const end=folderSource.indexOf('function scheduleSetDefinitionSave()',start);
+  const context={state:{setVariables:[]}};
+  vm.runInNewContext(folderSource.slice(start,end),context);
+  return context;
+}
+test('legacy phrases merge idempotently with grouped variables and cannot reappear after deletion', () => {
+  const c=canonicalVariables();
+  const grouped={group:'Pose',terms:['kneeling','squatting'],exclusive:true,expected:true};
+  const existing={group:'',terms:['front view'],exclusive:false,expected:true};
+  const migrated=c.migrateSetVariables([grouped,existing],'Front view\n rear  view \nRear View\n');
+  assert.deepEqual(JSON.parse(JSON.stringify(migrated)),[grouped,existing,{group:'',terms:['rear view'],exclusive:false,expected:false}]);
+  assert.equal(JSON.stringify(c.migrateSetVariables(migrated,'')),JSON.stringify(migrated));
+  c.state.setVariables=migrated.filter(v=>v.group||v.terms[0]!=='rear view');
+  assert.deepEqual(Array.from(c.getSetVariablePhrases()),['front view']);
+  assert.equal(c.migrateSetVariables(c.state.setVariables,undefined).length,2);
+  const html=fs.readFileSync(path.join(__dirname,'../tool/tool.html'),'utf8');
+  assert.doesNotMatch(html,/id="stats-phrases(?:-|")/);
+  assert.ok(html.indexOf('id="set-dashboard-variable-editor"') < html.indexOf('id="set-dashboard-balance-section"'));
+});
+test('standalone variables retain caption-or-tag matching and use distinct identity', () => {
+  const c=canonicalVariables();
+  const start=source.indexOf('  function variableCoverage(');
+  const end=source.indexOf('  function distributionColor(',start);
+  const context={
+    setVariableKey:c.setVariableKey,
+    balanceWheelItemMatchesPhrase:(item,term)=>item.caption===term||item.tags.includes(term),
+    getChecklistAssignedTagsForMediaKey:()=>[],
+    normalizeChecklistTerm:term=>term
+  };
+  vm.runInNewContext(source.slice(start,end)+'\nthis.coverage=variableCoverage;this.warnings=variableWarnings;',context);
+  const v={group:'',terms:['rear'],expected:true,exclusive:false};
+  const items=[{key:'a',fileName:'a',caption:'rear',tags:[]},{key:'b',fileName:'b',caption:'',tags:['rear']},{key:'c',fileName:'c',caption:'',tags:[]}];
+  assert.deepEqual(Array.from(context.coverage(v,items).rows,row=>row.files.length),[2,1]);
+  assert.equal(context.warnings([v],items)[0].group,'rear');
+  assert.notEqual(c.setVariableKey(v),c.setVariableKey({group:'rear',terms:['rear']}));
+});
+test('Set Intelligence remains open when definition is collapsed', () => {
+  const app=dashboard({phrase:'subject'});
+  app.elements['set-dashboard-definition'].open=false;
+  app.listeners['set-dashboard-definition:toggle']();
+  assert.equal(app.context.window.isSetIntelligenceOpen(),true);
+  assert.deepEqual(app.actions,['workspace','prepare']);
 });

@@ -90,7 +90,7 @@
   function renderActiveSightModel() {
     var active = el('set-scan-active-model');
     var model = setScanState.running ? setScanState.visionModel : getCaptionVisionModelId();
-    active.textContent = model ? (setScanState.running ? 'Scanning with ' : 'Sight · ') + model : 'Vision unavailable';
+    active.textContent = setScanState.running ? (model ? 'Scanning with ' + model : 'Preparing Sight') : (model ? 'Sight' : 'Vision unavailable');
   }
 
   var setSightTimingTimer = 0;

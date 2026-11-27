@@ -744,7 +744,7 @@
 #set-dashboard-modal #set-dashboard-balance-section > summary::before { content:'▸'; flex:none; }
 #set-dashboard-modal #set-dashboard-definition[open] > summary::before,
 #set-dashboard-modal #set-dashboard-balance-section[open] > summary::before { content:'▾'; }
-#set-dashboard-modal .set-dashboard-section-title { font-size:24px; font-weight:700; color:var(--text); margin:0; }
+#set-dashboard-modal .set-dashboard-section > summary .set-dashboard-section-title { font-size:24px; font-weight:700; color:var(--text); margin:0; }
 #set-dashboard-modal #set-dashboard-definition-status {
   margin:0 0 0 auto; padding:3px 10px; border-left:3px solid #d99a38;
   color:var(--text); font-size:16px; font-weight:600;
@@ -759,6 +759,8 @@
 #set-dashboard-group-list .checklist-row-actions { gap:6px; }
 #set-dashboard-group-list :is(.checklist-row-toggle-btn,.checklist-row-action-btn,.checklist-row-overflow-btn) { width:28px; height:28px; min-width:28px; min-height:28px; padding:0; font-size:16px; border:1px solid var(--border); color:var(--text); background:var(--panel); }
 #set-dashboard-group-list .checklist-row-menu { z-index:12100; }
+#set-dashboard-definition .set-dashboard-section-heading h4 { margin:0; }
+#set-dashboard-definition .set-dashboard-section-heading { margin-bottom:12px; }
 #set-dashboard-group-list .checklist-row-menu-item { font-size:16px; min-height:34px; }
 #set-dashboard-group-list .checklist-definition-terms { padding:8px 12px 10px 40px; font-size:16px; color:var(--muted); line-height:1.5; overflow-wrap:anywhere; }
 #set-dashboard-variable-summary { display:flex; flex-wrap:wrap; gap:8px; }

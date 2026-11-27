@@ -626,11 +626,6 @@
 .set-dashboard-section-heading { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
 .set-dashboard-section-heading h5, .set-dashboard-variable-card h5 { font-size:18px; margin:0; }
 .set-dashboard-variable-card { border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:12px; }
-.set-dashboard-variable-editor { border:1px solid var(--border); padding:12px; border-radius:8px; }
-.set-dashboard-variable-group { border-bottom:1px solid var(--border); padding:10px 0; }
-.set-dashboard-variable-group summary { font-size:18px; font-weight:600; cursor:pointer; }
-.set-dashboard-variable-group label { display:inline-flex; align-items:center; gap:6px; font-size:16px; margin:8px 12px 4px 0; }
-.set-dashboard-variable-group input { width:18px; height:18px; }
 .set-dashboard-variable-options { padding-top:8px; margin-top:8px; border-top:1px solid var(--border); }
 
 #set-dashboard-review { display:block; }

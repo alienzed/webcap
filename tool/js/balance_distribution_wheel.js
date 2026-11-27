@@ -1,34 +1,9 @@
 // Balance distribution wheel overlay for preview.
 
-function balanceWheelNormalize(text) {
-  return normalizeVariableTerm(text);
-}
-
 function balanceWheelPercent(count, total) {
   if (!total) return '0%';
   var value = Math.round((count / total) * 1000) / 10;
   return String(value).replace(/\.0$/, '') + '%';
-}
-
-function balanceWheelItemTags(item) {
-  if (!item || !item.key) return [];
-  return getTagsForMediaKey(item.key).map(balanceWheelNormalize).filter(Boolean);
-}
-
-function balanceWheelCaptionMatches(item, phrase) {
-  return captionContainsPhrase(String((item && item.caption) || ''), phrase);
-}
-
-function balanceWheelTagMatches(item, phrase) {
-  var target = balanceWheelNormalize(phrase).toLowerCase();
-  if (!target) return false;
-  return balanceWheelItemTags(item).some(function (tag) {
-    return tag.toLowerCase() === target;
-  });
-}
-
-function balanceWheelItemMatchesPhrase(item, phrase) {
-  return balanceWheelCaptionMatches(item, phrase) || balanceWheelTagMatches(item, phrase);
 }
 
 function getBalanceWheelVisibleItems() {
@@ -37,45 +12,22 @@ function getBalanceWheelVisibleItems() {
   });
 }
 
-function getBalanceWheelItemCaption(item) {
-  if (state.currentItem && item && item.key === state.currentItem.key && ui.editorEl) {
-    return String(ui.editorEl.value || '');
-  }
-  return String((item && item.caption) || '');
-}
-
 function getBalanceWheelStats() {
-  var phrases = getSetVariablePhrases();
+  var variables = normalizeSetVariables(state.setVariables);
   var items = getBalanceWheelVisibleItems();
-  var currentKey = state.currentItem && state.currentItem.key;
-  var currentItem = currentKey ? state.currentItem : null;
-  var total = items.length;
-
-  var rows = phrases.map(function (phrase, idx) {
-    var count = 0;
-    var currentCaptionMatch = currentItem ? captionContainsPhrase(getBalanceWheelItemCaption(currentItem), phrase) : false;
-    var currentTagMatch = currentItem ? balanceWheelTagMatches(currentItem, phrase) : false;
-    items.forEach(function (item) {
-      if (captionContainsPhrase(getBalanceWheelItemCaption(item), phrase) || balanceWheelTagMatches(item, phrase)) {
-        count += 1;
-      }
+  var currentItem = state.currentItem && state.currentItem.key ? state.currentItem : null;
+  var rows = [];
+  variables.forEach(function (variable) {
+    var assignments = items.map(function (item) { return setVariableAssignedTerms(item, variable.group); });
+    var current = currentItem ? setVariableAssignedTerms(currentItem, variable.group) : new Set();
+    variable.terms.forEach(function (term) {
+      var key = normalizeChecklistTerm(term).toLowerCase();
+      rows.push({group:variable.group, term:term, index:rows.length,
+        count:assignments.filter(function (assigned) { return assigned.has(key); }).length,
+        currentMatch:current.has(key)});
     });
-    return {
-      phrase: phrase,
-      count: count,
-      index: idx,
-      currentMatch: currentCaptionMatch || currentTagMatch,
-      currentCaptionMatch: currentCaptionMatch,
-      currentTagMatch: currentTagMatch
-    };
   });
-
-  return {
-    phrases: phrases,
-    rows: rows,
-    total: total,
-    currentItem: currentItem
-  };
+  return {rows:rows, total:items.length, currentItem:currentItem};
 }
 
 function balanceWheelColor(index) {
@@ -112,18 +64,13 @@ function balanceWheelPolar(cx, cy, radius, angle) {
 
 function buildBalanceWheelTitle(stats) {
   if (!stats.currentItem) return 'Select a media item.';
-  if (!stats.phrases.length) return 'No standalone Set Variables configured.';
+  if (!stats.rows.length) return 'No Set Variables configured.';
   if (!stats.total) return 'No filtered media items.';
-
   var matched = stats.rows.filter(function (row) { return row.currentMatch; });
-  if (!matched.length) return 'No matched balance phrases in current item.';
+  if (!matched.length) return 'No selected variable terms assigned to this item.';
   return matched.map(function (row) {
-    var sources = [];
-    if (row.currentCaptionMatch) sources.push('caption');
-    if (row.currentTagMatch) sources.push('tag');
-    return row.phrase + ': ' + row.count + '/' + stats.total + ' (' +
-      balanceWheelPercent(row.count, stats.total) + ')' +
-      (sources.length ? ' via ' + sources.join('+') : '');
+    return row.group + ' · ' + row.term + ': ' + row.count + '/' + stats.total +
+      ' (' + balanceWheelPercent(row.count, stats.total) + ')';
   }).join('\n');
 }
 
@@ -132,8 +79,7 @@ function renderBalanceWheelSvg(stats) {
   var cy = 50;
   var radius = 36;
   var strokeWidth = 17;
-  var angle = 0;
-  var maxAngle = 360;
+  var sector = stats.rows.length ? 360 / stats.rows.length : 0;
   var parts = [
     '<svg viewBox="0 0 100 100" aria-hidden="true">',
     '<circle cx="50" cy="50" r="' + radius + '" class="balance-wheel-bg"></circle>'
@@ -141,11 +87,10 @@ function renderBalanceWheelSvg(stats) {
 
   stats.rows.forEach(function (row) {
     if (!row.count || !stats.total) return;
-    var sweep = Math.max(0, Math.min(maxAngle - angle, (row.count / stats.total) * 360));
+    var sweep = Math.min(sector - Math.min(1, sector / 10), (row.count / stats.total) * sector);
     if (sweep <= 0) return;
-    var start = angle;
-    var end = angle + sweep;
-    angle = end;
+    var start = row.index * sector;
+    var end = start + sweep;
     var classes = 'balance-wheel-slice' + (row.currentMatch ? ' is-current' : '');
     parts.push(
       '<path class="' + classes + '" d="' + balanceWheelArcPath(cx, cy, radius, start, end) + '"' +
@@ -165,7 +110,7 @@ function renderBalanceWheelSvg(stats) {
 function updateBalanceDistributionWheel() {
   var el = ui.balanceDistributionWheelEl;
   var stats = getBalanceWheelStats();
-  if (!stats.currentItem || !stats.phrases.length) {
+  if (!stats.currentItem || !stats.rows.length) {
     el.classList.add('hidden');
     el.innerHTML = '';
     el.removeAttribute('title');

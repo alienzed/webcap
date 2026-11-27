@@ -129,13 +129,6 @@ function getCaptionHelperCatalogTerms() {
     seen[low] = true;
     out.push(clean);
   });
-  getSetVariablePhrases().forEach(function (phrase) {
-    var clean = normalizeCatalogTerm(phrase);
-    var low = clean.toLowerCase();
-    if (!clean || seen[low]) return;
-    seen[low] = true;
-    out.push(clean);
-  });
   if (captionItemTagsByMedia && typeof captionItemTagsByMedia === 'object') {
     Object.keys(captionItemTagsByMedia).forEach(function (mediaKey) {
       var tags = Array.isArray(captionItemTagsByMedia[mediaKey]) ? captionItemTagsByMedia[mediaKey] : [];

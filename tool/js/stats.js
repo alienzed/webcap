@@ -402,14 +402,12 @@ function buildCombinedCaptionsText(items) {
 // Review DOM helpers
 function getOptionsFromDom() {
   var requiredPhraseEl = document.getElementById('stats-required-phrase');
-  var phrasesValue = getSetVariablePhrases().join('\n');
   var reviewRulesRows = [];
   if (typeof getReviewRulesRows === 'function') {
     reviewRulesRows = getReviewRulesRows();
   }
   return {
     requiredPhrase: requiredPhraseEl ? requiredPhraseEl.value : '',
-    phrases: phrasesValue,
     reviewRules: reviewRulesRows
   };
 }

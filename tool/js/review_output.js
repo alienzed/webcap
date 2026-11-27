@@ -417,7 +417,6 @@ function buildReviewReport() {
     var options = getOptionsFromDom();
     var report = compute(results, {
       requiredPhrase: options.requiredPhrase,
-      phrases: options.phrases,
       reviewRules: options.reviewRules
     });
     renderReviewSetPreview(report, results.map(function (row) { return row.fileName; }), buildReviewScopeSummary(results));

@@ -307,16 +307,9 @@
   function qaCurationSignature(items, intent) {
     var signature = qaBuildDeepScanSignature(items);
     if (!intent.variables.length) return signature;
-    // Historical drafts used an intent signature with separate group and phrase
-    // arrays. Project the old signature only when the new model expresses exactly
-    // that old intent; all newly supported standalone expectations use the new form.
-    if (!intent.variables.some(function (row) {return !row.group && row.expected;})) {
-      return JSON.stringify([signature, {
-        variables:intent.variables.filter(function (row) {return !!row.group;}),
-        phrases:intent.variables.filter(function (row) {return !row.group;}).map(function (row) {return row.terms[0];})
-      }]);
-    }
-    return JSON.stringify([signature, intent]);
+    // Preserve saved grouped-only draft identities from the previous format.
+    // The empty array is signature encoding only, not a second intent source.
+    return JSON.stringify([signature, {variables:intent.variables, phrases:[]}]);
   }
 
   function qaDeepScanFindingPayload(items) {

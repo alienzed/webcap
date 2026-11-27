@@ -329,7 +329,6 @@ function wireStatsPrimerAutoSave() {
   wirePrimerTemplateAssistUi();
   var statsFields = [
     document.getElementById('stats-required-phrase'),
-    document.getElementById('stats-phrases'),
     document.getElementById('primer-template')
   ];
   statsFields.forEach(function (el) {

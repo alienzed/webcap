@@ -196,9 +196,9 @@
     var group = normalize(concept.group).toLowerCase();
     var term = normalize(concept.term).toLowerCase();
     return intent.variables.some(function (variable) {
-      return normalize(variable.group).toLowerCase() === group &&
+      return (!variable.group || normalize(variable.group).toLowerCase() === group) &&
         variable.terms.some(function (value) { return normalize(value).toLowerCase() === term; });
-    }) || intent.phrases.some(function (phrase) { return normalize(phrase).toLowerCase() === term; });
+    });
   }
 
   function buildInventory(items, intent) {
@@ -1599,7 +1599,7 @@
     var priorPreset = reanalyze ? session.preset : '';
     var token = ++session.token;
     // Capture the explicit Set intent once, with the analysis inputs.
-    var intent = options && options.intent || {variables: [], phrases: []};
+    var intent = options && options.intent || {variables: []};
     var inventory = buildInventory(items, intent);
     session.intent = intent;
     var model = String(getDirectorModelPreference() || '').trim();
@@ -1729,7 +1729,7 @@
       var declared = session.concepts.filter(function (concept) { return explicitPriority(concept, intent); });
       var declaredGroups = new Set(declared.map(function (concept) { return concept.group; }));
       var initialGroups = new Set(session.balanceGroups);
-      var variableGroups = new Set(intent.variables.map(function (variable) {
+      var variableGroups = new Set(intent.variables.filter(function (variable) { return !!variable.group; }).map(function (variable) {
         return normalize(variable.group).toLowerCase();
       }));
       declaredGroups.forEach(function (group) { session.balanceGroups.add(group); });

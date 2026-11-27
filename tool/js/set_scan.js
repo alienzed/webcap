@@ -87,23 +87,10 @@
     return items.filter(function (item) { return !!item.issue || !item.structured; }).length;
   }
 
-  function syncPrepareSetVisionModel() {
-    var selector = el('set-scan-vision-model');
-    var header = el('app-header-vision-model');
-    if (!selector || !header) throw new Error('Prepare Set Vision model controls are missing.');
-    var selected = getCaptionVisionModelId();
-    selector.replaceChildren();
-    Array.prototype.forEach.call(header.options, function (option) {
-      selector.appendChild(option.cloneNode(true));
-    });
-    if (selected && !Array.prototype.some.call(selector.options, function (option) { return option.value === selected; })) {
-      var option = document.createElement('option');
-      option.value = selected;
-      option.textContent = selected;
-      selector.appendChild(option);
-    }
-    selector.value = selected;
-    selector.disabled = setScanState.running || header.disabled;
+  function renderActiveSightModel() {
+    var active = el('set-scan-active-model');
+    var model = setScanState.running ? setScanState.visionModel : getCaptionVisionModelId();
+    active.textContent = setScanState.running ? (model ? 'Scanning with ' + model : 'Preparing Sight') : (model ? 'Sight' : 'Vision unavailable');
   }
 
   var setSightTimingTimer = 0;
@@ -129,6 +116,7 @@
     if (!timing) throw new Error('Set Sight timing display is missing.');
     if (!setScanState.running || !setScanState.activityStartedAt) {
       timing.hidden = true;
+      el('set-scan-focus-timing').textContent = '';
       return;
     }
     var now = setScanState.activityFinishedAt || Date.now() / 1000;
@@ -140,6 +128,7 @@
              setScanState.completed === 0) label += ' · ETA after first Sight check';
     timing.textContent = label;
     timing.hidden = false;
+    if (el('set-scan-inspection-disclosure').open) el('set-scan-focus-timing').textContent = label;
   }
 
   function renderSetIntelligence() {
@@ -175,7 +164,7 @@
     }
 
     modal.classList.toggle('hidden', !setScanState.open);
-    syncPrepareSetVisionModel();
+    renderActiveSightModel();
     scopeToggle.disabled = setScanState.running;
     var scopeCount = setScanState.running ? setScanState.files.length : getSetIntelligenceScopeFiles().length;
     scopeSummary.textContent = String(scopeCount) + ' / ' + String(getCurrentSetMediaFileNames().length) + ' media';
@@ -255,6 +244,12 @@
     progressFill.style.width = String(percent) + '%';
     progressFill.parentElement.setAttribute('aria-valuenow', String(percent));
     updateSetSightTiming();
+    if (inspection.open) {
+      el('set-scan-focus-progress').classList.toggle('hidden', !setScanState.running);
+      el('set-scan-focus-meter').value = percent;
+      el('set-scan-focus-status').textContent = el('set-scan-stage').textContent + ' · ' + el('set-scan-status').textContent;
+      el('set-scan-focus-stop').disabled = setScanState.stopRequested;
+    }
 
     if (!coverage.known) {
       var checking = setScanState.phase === 'checking-cache' || setScanState.running;
@@ -918,6 +913,8 @@
   function closeSetIntelligence() {
     setScanState.scopeRequestToken += 1;
     setScanState.open = false;
+    el('set-scan-inspection-disclosure').open = false;
+    el('set-scan-preview-video').pause();
     renderSetIntelligence();
   }
 
@@ -1151,12 +1148,23 @@
       return runVisionImageCaption(setScanState.reviewMediaItem);
     };
     el('set-scan-preview-review').onclick = function () { openSightReviewForFile(setScanState.previewFileName); };
-    el('set-scan-inspection-disclosure').addEventListener('toggle', function () {
+    var inspection = el('set-scan-inspection-disclosure');
+    var focusOverlay = el('set-scan-focus-overlay');
+    var focusClose = el('set-scan-focus-close');
+    var focusWasOpen = false;
+    focusClose.onclick = function () { inspection.open = false; };
+    el('set-scan-focus-stop').onclick = stopSetIntelligence;
+    focusOverlay.addEventListener('click', function (event) { if (event.target === focusOverlay) inspection.open = false; });
+    inspection.addEventListener('toggle', function () {
       if (!this.open) {
         el('set-scan-preview-video').pause();
+        if (focusWasOpen && setScanState.open) inspection.querySelector('summary').focus();
+        focusWasOpen = false;
         return;
       }
+      focusWasOpen = true;
       if (setScanState.open) renderSetIntelligence();
+      focusClose.focus();
     });
     el('sight-review-model').onchange = renderSightReview;
     el('sight-review-activate').onclick = activateSightReviewModel;
@@ -1167,10 +1175,6 @@
     el('set-scan-bad-retry').onclick = function () {
       var files = setScanState.sightItems.filter(function (item) { return !!item.issue || !item.structured; }).map(function (item) { return item.file; });
       if (files.length) runSetIntelligence('open', files);
-    };
-    el('set-scan-vision-model').onchange = function () {
-      if (setScanState.running) throw new Error('Cannot change the scanning model during an active scan.');
-      setVisionModelPreference(this.value);
     };
     window.addEventListener('webcap:vision-capabilities-refreshed', function () {
       if (setScanState.open) renderSetIntelligence();
@@ -1193,6 +1197,21 @@
         event.preventDefault();
         event.stopImmediatePropagation();
         closeSavedIntelligence();
+        return;
+      }
+      if (!inspection.open || !setScanState.open || !savedModal.classList.contains('hidden')) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        inspection.open = false;
+      } else if (event.key === 'Tab') {
+        var focusable = Array.from(focusOverlay.querySelectorAll('button:not(:disabled),select:not(:disabled),input:not(:disabled),video[controls],[tabindex="0"]')).filter(function (node) { return node.getClientRects().length > 0; });
+        if (!focusable.length) return;
+        var first = focusable[0], last = focusable[focusable.length - 1];
+        if (!focusOverlay.contains(document.activeElement) || (event.shiftKey && document.activeElement === first) || (!event.shiftKey && document.activeElement === last)) {
+          event.preventDefault();
+          (event.shiftKey ? last : first).focus();
+        }
       }
     }, true);
 

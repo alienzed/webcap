@@ -1,7 +1,7 @@
 // Balance distribution wheel overlay for preview.
 
 function balanceWheelNormalize(text) {
-  return normalizeBalancePhrase(text);
+  return normalizeVariableTerm(text);
 }
 
 function balanceWheelPercent(count, total) {
@@ -31,18 +31,6 @@ function balanceWheelItemMatchesPhrase(item, phrase) {
   return balanceWheelCaptionMatches(item, phrase) || balanceWheelTagMatches(item, phrase);
 }
 
-function getBalanceWheelPhrases() {
-  var seen = {};
-  return (Array.isArray(statsBalancePhrases) ? statsBalancePhrases : [])
-    .map(balanceWheelNormalize)
-    .filter(function (phrase) {
-      var key = phrase.toLowerCase();
-      if (!phrase || seen[key]) return false;
-      seen[key] = true;
-      return true;
-    });
-}
-
 function getBalanceWheelVisibleItems() {
   return getFilteredMediaItems(false).filter(function (item) {
     return !!(item && item.key);
@@ -57,7 +45,7 @@ function getBalanceWheelItemCaption(item) {
 }
 
 function getBalanceWheelStats() {
-  var phrases = getBalanceWheelPhrases();
+  var phrases = getSetVariablePhrases();
   var items = getBalanceWheelVisibleItems();
   var currentKey = state.currentItem && state.currentItem.key;
   var currentItem = currentKey ? state.currentItem : null;
@@ -124,7 +112,7 @@ function balanceWheelPolar(cx, cy, radius, angle) {
 
 function buildBalanceWheelTitle(stats) {
   if (!stats.currentItem) return 'Select a media item.';
-  if (!stats.phrases.length) return 'No balance phrases configured.';
+  if (!stats.phrases.length) return 'No standalone Set Variables configured.';
   if (!stats.total) return 'No filtered media items.';
 
   var matched = stats.rows.filter(function (row) { return row.currentMatch; });

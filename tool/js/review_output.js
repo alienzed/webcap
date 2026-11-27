@@ -259,8 +259,8 @@ function wireReviewActions() {
       return;
     }
     if (data.type === 'caption-review-phrase') {
-      if (typeof setFilterFromBalancePhrase === 'function') {
-        setFilterFromBalancePhrase(data.phrase);
+      if (typeof setFilterFromVariableTerm === 'function') {
+        setFilterFromVariableTerm(data.phrase);
       } else {
         applyTokenFilter(data.phrase);
       }

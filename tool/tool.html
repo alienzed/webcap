@@ -699,24 +699,11 @@
                                                 id="primer-template-wand-btn"
                                                 type="button"
                                                 class="review-captions-btn"
-                                                title="Generate a better template from the current groups and vocabulary"
-                                                aria-label="Generate Caption Template"
+                                                title="Design the Caption Template in conversation"
+                                                aria-label="Design Caption Template"
                                             >&#10024;</button>
                                         </div>
                                         <textarea id="primer-template" rows="9"></textarea>
-                                        <div id="primer-template-candidate" class="primer-template-candidate hidden" aria-live="polite" role="dialog" aria-modal="true" aria-labelledby="primer-template-candidate-title">
-                                            <div class="primer-template-candidate-dialog">
-                                                <div class="primer-template-candidate-header">
-                                                    <div id="primer-template-candidate-title" class="primer-template-candidate-title">Suggested Caption Template</div>
-                                                    <button id="primer-template-candidate-dismiss" type="button" class="primer-template-candidate-close" title="Dismiss template" aria-label="Dismiss template">&times;</button>
-                                                </div>
-                                                <pre id="primer-template-candidate-text"></pre>
-                                                <div class="primer-template-candidate-actions">
-                                                    <button id="primer-template-candidate-use" type="button">Use</button>
-                                                    <button id="primer-template-candidate-regenerate" type="button" title="Generate another template" aria-label="Generate another template">&#8635;</button>
-                                                </div>
-                                            </div>
-                                        </div>
                                         <div class="primer-template-placeholder-row">
                                             <div class="primer-template-placeholder-label">Insert group placeholder</div>
                                             <div id="primer-template-placeholders" class="primer-template-placeholder-list"></div>
@@ -1177,7 +1164,7 @@
             </div>
             <p id="set-dashboard-focus-migration" class="set-dashboard-distribution-note hidden" role="status"></p>
 
-            <details class="set-dashboard-template-disclosure" open><summary>Caption Template</summary><textarea id="set-dashboard-template-draft" rows="5" aria-label="Caption template"></textarea><div id="set-dashboard-template-placeholders" class="primer-template-placeholder-list" aria-label="Insert unused group placeholders"></div><div class="set-dashboard-section-actions"><button id="set-dashboard-template-save" type="button" class="set-dashboard-primary">Save Template</button><button id="set-dashboard-template-reset" type="button" class="set-dashboard-quiet">Reset draft</button></div></details>
+            <details class="set-dashboard-template-disclosure" open><summary>Caption Template</summary><textarea id="set-dashboard-template-draft" rows="5" aria-label="Caption template"></textarea><div id="set-dashboard-template-placeholders" class="primer-template-placeholder-list" aria-label="Insert unused group placeholders"></div><div class="set-dashboard-section-actions"><button id="set-dashboard-template-design" type="button" class="set-dashboard-quiet">Design Template</button><button id="set-dashboard-template-save" type="button" class="set-dashboard-primary">Save Template</button><button id="set-dashboard-template-reset" type="button" class="set-dashboard-quiet">Reset draft</button></div></details>
               </section>
           </details>
           <section class="set-dashboard-section set-dashboard-intelligence-panel" aria-label="Set Intelligence">
@@ -2250,6 +2237,27 @@
                     </div>
                 </section>
             </section>
+            <div id="primer-task-home" class="hidden">
+                <section id="primer-task-result" class="task-conversation-result primer-task-result" aria-labelledby="primer-task-heading">
+                    <header class="keep-lora-header"><h2 id="primer-task-heading">Working template</h2></header>
+                    <div class="primer-task-body">
+                        <label>Template<textarea id="primer-task-draft" rows="7" spellcheck="false"></textarea></label>
+                        <section><h3>Rendered examples</h3><div id="primer-task-examples" class="primer-task-examples"></div></section>
+                        <section><h3>Approved style examples</h3>
+                            <div class="primer-task-reference-controls">
+                                <select id="primer-task-reference-select" aria-label="Choose a saved caption as a style example"></select>
+                                <button id="primer-task-reference-add" type="button" class="review-captions-btn">Add</button>
+                            </div>
+                            <div id="primer-task-references" class="primer-task-examples"></div>
+                        </section>
+                        <p id="primer-task-status" role="status" aria-live="polite"></p>
+                    </div>
+                    <footer class="primer-task-footer">
+                        <button id="primer-task-generate" type="button" class="review-captions-btn">Generate Draft</button>
+                        <button id="primer-task-write" type="button" class="storyboard-primary-btn">Write Template</button>
+                    </footer>
+                </section>
+            </div>
             <dialog id="task-conversation-modal" class="task-conversation-modal" aria-labelledby="director-chat-title"></dialog>
             <aside id="director-chat-drawer" class="director-chat-drawer hidden" aria-label="Assistant" aria-hidden="true">
                 <div id="studio-director-resizer" role="separator" aria-orientation="vertical" aria-label="Resize Director" aria-controls="director-chat-drawer" tabindex="0" title="Drag to resize; arrow keys adjust width; double-click to reset"></div>

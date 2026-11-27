@@ -4744,3 +4744,25 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   }
   .task-conversation-modal > .task-conversation-result { border-left: 0; border-top: 1px solid var(--border); }
 }
+
+.primer-task-body {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  padding: 18px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+.primer-task-body label { display: grid; gap: 8px; font-weight: 600; }
+.primer-task-body textarea { width: 100%; resize: vertical; font-weight: 400; }
+.primer-task-body h3 { font-size: 18px; margin: 0 0 10px; }
+.primer-task-examples { display: grid; gap: 10px; overflow-wrap: anywhere; }
+.primer-task-examples > div { border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+.primer-task-examples strong { font-size: 14px; color: var(--muted); }
+.primer-task-examples p { margin: 6px 0; white-space: pre-wrap; font-size: 16px; }
+.primer-task-reference-controls { display: flex; gap: 8px; margin-bottom: 10px; }
+.primer-task-reference-controls select { flex: 1; min-width: 0; }
+.primer-task-footer { display: flex; justify-content: space-between; gap: 12px; padding: 14px; border-top: 1px solid var(--border); }
+.primer-task-footer #primer-task-write { font-size: 18px; }
+#primer-task-status { font-size: 16px; margin: 0; }

@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "chains": [
+    {
+      "id": "overview-to-draft",
+      "turns": [
+        "I want six ordinary short clips about people sharing an umbrella in different settings. The umbrella is the same in every clip, but the people are all different. What should we work out?",
+        "Two clips on streets, two at work, two at home. Keep each self-contained and realistic, with quiet human warmth. What would make the progression work?",
+        "Actually, switch the home clips to transit stops. Preserve the rest. How would you reconcile that?",
+        "Write the Project Overview into this chat."
+      ]
+    },
+    {
+      "id": "ordinary-scene-pivot",
+      "turns": [
+        "I want a short ordinary conversation at a cafe table. A woman asks if a seat is taken and a man says no. What would be a sensible way to frame it?",
+        "Let's talk about Scene 1. I prefer one fixed two-shot and no music. How do we keep the interaction natural?",
+        "Make it ten seconds. She wears a navy sweater and says exactly 'Is this seat taken?' He wears a beige cardigan and says exactly 'No, please sit.' She sits. Any concern?",
+        "Write Scene 1 into this chat!"
+      ]
+    }
+  ]
+}

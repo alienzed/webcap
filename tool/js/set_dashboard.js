@@ -95,11 +95,9 @@
     });
     var neither = [], multiple = [];
     items.forEach(function (item) {
-      var assigned = variable.group ? new Set(getChecklistAssignedTagsForMediaKey(item.key, variable.group).map(function (term) {
-        return normalizeChecklistTerm(term).toLowerCase();
-      })) : null;
+      var assigned = setVariableAssignedTerms(item, variable.group);
       var matches = terms.filter(function (row) {
-        return variable.group ? assigned.has(normalizeChecklistTerm(row.label).toLowerCase()) : balanceWheelItemMatchesPhrase(item, row.label);
+        return assigned.has(normalizeChecklistTerm(row.label).toLowerCase());
       });
       matches.forEach(function (row) { row.files.push(item.fileName); });
       if (!matches.length) neither.push(item.fileName);
@@ -109,11 +107,11 @@
     // Exclusive bars partition the population exactly once. Multi-label bars
     // retain independent membership counts; their sum can exceed the scope.
     var rows = terms.map(function (row) {
-      return { key: row.key, label: (variable.group ? row.label : 'Present') + (variable.exclusive && multiple.length ? ' only' : ''),
+      return { key: row.key, label: row.label + (variable.exclusive && multiple.length ? ' only' : ''),
         files: variable.exclusive ? row.only : row.files, color: row.color };
     });
     if (variable.exclusive) rows.push({ key: 'multiple', label: 'Multiple', files: multiple, color: 'warning' });
-    rows.push({ key: 'neither', label: variable.group ? 'Neither' : 'Absent', files: neither,
+    rows.push({ key: 'neither', label: 'Neither', files: neither,
       color: variable.expected && items.length && neither.length / items.length > .25 ? 'warning' : 'neutral' });
     return { rows: rows, neither: neither.length, multiple: multiple.length,
       missingFiles: neither, multipleFiles: multiple };
@@ -124,10 +122,10 @@
     variables.forEach(function (variable) {
       var result = variableCoverage(variable, items);
       if (variable.exclusive && result.multiple) warnings.push({
-        key: setVariableKey(variable), group: variable.group || variable.terms[0], kind: 'multiple', label: 'Multiple exclusive terms', files: result.multipleFiles
+        key: setVariableKey(variable), group: variable.group, kind: 'multiple', label: 'Multiple exclusive terms', files: result.multipleFiles
       });
       if (variable.expected && items.length && result.neither / items.length > .25) warnings.push({
-        key: setVariableKey(variable), group: variable.group || variable.terms[0], kind: 'missing', label: 'Missing coverage', files: result.missingFiles
+        key: setVariableKey(variable), group: variable.group, kind: 'missing', label: 'Missing coverage', files: result.missingFiles
       });
     });
     return warnings;
@@ -141,17 +139,16 @@
 
   function renderVariableCard(section, variable, result, total) {
     var title = section.querySelector('h5');
-    title.textContent = variable.group || variable.terms[0];
+    title.textContent = variable.group;
     section.querySelector('.set-dashboard-variable-kind').textContent =
-      (variable.group ? (variable.exclusive ? 'Exclusive' : 'May coexist') : 'Caption or tag') + (variable.expected ? ' · Expected' : '');
+      (variable.exclusive ? 'Exclusive' : 'May coexist') + (variable.expected ? ' · Expected' : '');
     var stack = section.querySelector('.set-dashboard-variable-stack');
     setHidden(stack, !variable.exclusive || !total);
     var legend = section.querySelector('.set-dashboard-variable-rows');
     legend.classList.toggle('is-exclusive', variable.exclusive);
     var oldRows = new Map(Array.from(legend.children).map(function (row) { return [row.dataset.key, row]; }));
     var oldSegments = new Map(Array.from(stack.children).map(function (row) { return [row.dataset.key, row]; }));
-    var displayRows = variable.group || variable.expected ? result.rows : result.rows.filter(function (row) { return row.key !== 'neither'; });
-    displayRows.forEach(function (row, index) {
+    result.rows.forEach(function (row, index) {
       var share = total ? 100 * row.files.length / total : 0;
       var color = distributionColor(row.color);
       var entry = oldRows.get(row.key);
@@ -177,8 +174,8 @@
       entry.children[2].firstElementChild.style.backgroundColor = color;
       entry.disabled = !row.files.length;
       entry.title = row.label + ' · ' + Math.round(share) + '% · Inspect matching media';
-      entry.setAttribute('aria-label', (variable.group || variable.terms[0]) + ' · ' + row.label + ': inspect ' + row.files.length + ' media');
-      entry.onclick = function () { inspectDistribution(row.files, (variable.group || variable.terms[0]) + ' · ' + row.label); };
+      entry.setAttribute('aria-label', variable.group + ' · ' + row.label + ': inspect ' + row.files.length + ' media');
+      entry.onclick = function () { inspectDistribution(row.files, variable.group + ' · ' + row.label); };
       if (legend.children[index] !== entry) legend.insertBefore(entry, legend.children[index] || null);
 
       var segment = oldSegments.get(row.key);
@@ -232,103 +229,119 @@
     oldCards.forEach(function (card) { card.remove(); });
   }
 
-  function makeVariableCheckbox(label, checked, type, value) {
+  // One group, one scoped edit. The group list owns vocabulary and the
+  // Dashboard owns the selected training terms; neither changes item tags.
+  function variableForGroup(group) {
+    return (state.setVariables || []).find(function (row) { return row.group === group; }) ||
+      {group:group, terms:[], exclusive:false, expected:false};
+  }
+
+  function makeVariableCheckbox(label, checked) {
     var wrapper = document.createElement('label');
     var input = document.createElement('input');
-    input.type = 'checkbox'; input.checked = checked; input.dataset.variableType = type;
-    if (value !== undefined) input.value = value;
+    input.type = 'checkbox'; input.checked = checked;
     wrapper.append(input, document.createTextNode(' ' + label));
-    return wrapper;
+    return {node:wrapper,input:input};
   }
 
-  function appendVariableField(host, variable, availableTerms) {
-    var field = document.createElement('details');
-    field.className = 'set-dashboard-variable-group';
-    field.dataset.group = variable.group;
-    var summary = document.createElement('summary');
-    summary.textContent = variable.group || variable.terms[0];
-    field.appendChild(summary);
-    field.open = !!variable.terms.length;
-    availableTerms.forEach(function (term) {
-      field.appendChild(makeVariableCheckbox(term, variable.terms.includes(term), 'term', term));
+  function renderGroupVariableSummary(group, host) {
+    var variable = variableForGroup(group);
+    var summary = document.createElement('span');
+    summary.className = 'set-dashboard-group-variable-status';
+    summary.textContent = variable.terms.length
+      ? variable.terms.length + ' selected · ' + (variable.exclusive ? 'Exclusive' : 'May coexist') + (variable.expected ? ' · Expected' : '')
+      : 'Vocabulary only';
+    summary.classList.toggle('is-variable', !!variable.terms.length);
+    host.appendChild(summary);
+  }
+
+  function renderGroupVariableEditor(group, host) {
+    var variable = variableForGroup(group);
+    var selected = new Set(variable.terms.map(function (term) { return normalizeChecklistTerm(term).toLowerCase(); }));
+    var catalog = new Map();
+    getChecklistKeywordTermsForRequirement(group).forEach(function (term) {
+      catalog.set(normalizeChecklistTerm(term).toLowerCase(), {term:term,retained:false});
     });
+    // Preserve explicit choices if the vocabulary is edited or temporarily hidden.
+    variable.terms.forEach(function (term) {
+      var key = normalizeChecklistTerm(term).toLowerCase();
+      if (!catalog.has(key)) catalog.set(key,{term:term,retained:true});
+    });
+    var title = document.createElement('p');
+    title.className = 'set-dashboard-variable-editor-label';
+    title.textContent = 'Set Variable · Select training terms';
+    host.appendChild(title);
+    var terms = document.createElement('div');
+    terms.className = 'set-dashboard-variable-terms';
+    var checks = [];
+    catalog.forEach(function (entry, key) {
+      var check = makeVariableCheckbox(entry.term + (entry.retained ? ' (saved)' : ''), selected.has(key));
+      checks.push({term:entry.term,input:check.input});
+      terms.appendChild(check.node);
+    });
+    if (!checks.length) {
+      terms.textContent = 'Add vocabulary terms using Edit terms.';
+    }
+    host.appendChild(terms);
     var options = document.createElement('div');
     options.className = 'set-dashboard-variable-options';
-    if (variable.group) options.append(makeVariableCheckbox('Mutually exclusive', variable.exclusive, 'exclusive'));
-    options.append(makeVariableCheckbox('Expected on most media', variable.expected, 'expected'));
-    field.appendChild(options);
-    host.appendChild(field);
-    return field;
-  }
-
-  function openVariableEditor() {
-    var host = el('set-dashboard-variable-groups');
-    host.replaceChildren();
-    var saved = normalizeSetVariables(state.setVariables);
-    saved.filter(function (row) { return !row.group; }).forEach(function (row) {
-      appendVariableField(host, row, row.terms);
-    });
-    var grouped = new Map(saved.filter(function (row) { return !!row.group; }).map(function (row) { return [row.group, row]; }));
-    Array.from(new Set(checklistItems.concat(Array.from(grouped.keys())))).forEach(function (group) {
-      var row = grouped.get(group) || {group:group, terms:[], exclusive:false, expected:false};
-      var terms = Array.from(new Set(getChecklistKeywordTermsForRequirement(group).concat(row.terms)));
-      appendVariableField(host, row, terms);
-    });
-    el('set-dashboard-variable-term').value = '';
-    setHidden(el('set-dashboard-variable-editor'), false);
-  }
-
-  function addStandaloneVariable() {
-    var input = el('set-dashboard-variable-term');
-    var term = normalizeVariableTerm(input.value);
-    if (!term) return;
-    var host = el('set-dashboard-variable-groups');
-    var existing = Array.from(host.children).find(function (field) {
-      return !field.dataset.group && field.querySelector('[data-variable-type="term"]').value.toLowerCase() === term.toLowerCase();
-    });
-    if (existing) { existing.querySelector('[data-variable-type="term"]').checked = true; existing.open = true; }
-    else appendVariableField(host, {group:'',terms:[term],expected:false}, [term]);
-    input.value = '';
-  }
-
-  function applyVariableEditor() {
-    var rows = Array.from(el('set-dashboard-variable-groups').children).map(function (field) {
-      var exclusive = field.querySelector('[data-variable-type="exclusive"]');
-      return {
-        group: field.dataset.group,
-        terms: Array.from(field.querySelectorAll('[data-variable-type="term"]:checked')).map(function (input) { return input.value; }),
-        exclusive: !!(exclusive && exclusive.checked),
-        expected: field.querySelector('[data-variable-type="expected"]').checked
-      };
-    });
-    state.setVariables = normalizeSetVariables(rows);
-    scheduleSetDefinitionSave();
-    updateBalanceDistributionWheel();
-    setHidden(el('set-dashboard-variable-editor'), true);
-    renderStage();
+    var exclusive = makeVariableCheckbox('Mutually exclusive', variable.exclusive);
+    var expected = makeVariableCheckbox('Expected on most media', variable.expected);
+    options.append(exclusive.node,expected.node);
+    host.appendChild(options);
+    var actions = document.createElement('div');
+    actions.className = 'set-dashboard-section-actions';
+    var apply = document.createElement('button');
+    apply.type = 'button'; apply.className = 'set-dashboard-primary'; apply.textContent = 'Apply';
+    var reset = document.createElement('button');
+    reset.type = 'button'; reset.className = 'set-dashboard-quiet'; reset.textContent = 'Reset';
+    var edit = document.createElement('button');
+    edit.type = 'button'; edit.className = 'set-dashboard-quiet'; edit.textContent = 'Edit terms';
+    var refreshControls = function () {
+      var terms = checks.filter(function (check) { return check.input.checked; }).map(function (check) { return check.term; });
+      var next = replaceSetGroupVariable([variable], group, {terms:terms,exclusive:exclusive.input.checked,expected:expected.input.checked});
+      var original = normalizeSetVariables([variable]);
+      var dirty = JSON.stringify(next) !== JSON.stringify(original);
+      apply.disabled = !dirty;
+      reset.disabled = !dirty;
+      exclusive.input.disabled = !terms.length;
+      expected.input.disabled = !terms.length;
+    };
+    checks.forEach(function (check) { check.input.onchange = refreshControls; });
+    exclusive.input.onchange = refreshControls;
+    expected.input.onchange = refreshControls;
+    apply.onclick = function () {
+      state.setVariables = replaceSetGroupVariable(state.setVariables, group, {
+        terms:checks.filter(function (check) { return check.input.checked; }).map(function (check) { return check.term; }),
+        exclusive:exclusive.input.checked, expected:expected.input.checked
+      });
+      scheduleSetDefinitionSave();
+      updateBalanceDistributionWheel();
+      renderStage();
+    };
+    reset.onclick = function () {
+      checks.forEach(function (check) { check.input.checked = selected.has(normalizeChecklistTerm(check.term).toLowerCase()); });
+      exclusive.input.checked = variable.exclusive;
+      expected.input.checked = variable.expected;
+      refreshControls();
+    };
+    edit.onclick = function () { openChecklistGroupTermsModal(group); };
+    actions.append(apply,reset,edit);
+    host.appendChild(actions);
+    refreshControls();
   }
 
   function renderVocabulary() {
-    var signature = JSON.stringify([openedFolder, checklistItems.map(function (group) {
+    var signature = JSON.stringify([openedFolder, state.setVariables, checklistItems.map(function (group) {
       return [group, getChecklistKeywordTermsForRequirement(group), isChecklistRequirementHidden(group)];
     })]);
     if (signature === vocabularySignature) return;
     vocabularySignature = signature;
-    renderChecklistGroupRows(el('set-dashboard-group-list'), {definition:true, expanded:expandedVocabularyGroups});
-    var editor = el('set-dashboard-variable-editor');
-    if (!editor.classList.contains('hidden')) {
-      var host = el('set-dashboard-variable-groups');
-      var fields = new Map(Array.from(host.children).filter(function (field) {return !!field.dataset.group;}).map(function (field) {return [field.dataset.group,field];}));
-      checklistItems.forEach(function (group) {
-        var terms = getChecklistKeywordTermsForRequirement(group);
-        var field = fields.get(group);
-        if (!field) { appendVariableField(host,{group:group,terms:[],expected:false,exclusive:false},terms); return; }
-        var existing = new Set(Array.from(field.querySelectorAll('[data-variable-type="term"]')).map(function (input) {return input.value.toLowerCase();}));
-        terms.forEach(function (term) {
-          if (!existing.has(term.toLowerCase())) field.insertBefore(makeVariableCheckbox(term,false,'term',term),field.querySelector('.set-dashboard-variable-options'));
-        });
-      });
-    }
+    renderChecklistGroupRows(el('set-dashboard-group-list'), {
+      definition:true, expanded:expandedVocabularyGroups,
+      renderDefinitionSummary:renderGroupVariableSummary,
+      renderDefinitionEditor:renderGroupVariableEditor
+    });
   }
 
   function addVocabularyGroup() {
@@ -368,16 +381,6 @@
     renderDefinition(s);
     el('set-dashboard-definition-summary').textContent = el('set-dashboard-definition').open ? '' : window.getQaTrainingFocus();
     var variables = state.setVariables || [];
-    var summary = el('set-dashboard-variable-summary');
-    summary.replaceChildren();
-    if (!variables.length) summary.textContent = 'No Set Variables defined';
-    else variables.forEach(function (row) {
-      var chip = document.createElement('span');
-      chip.className = 'set-dashboard-variable-chip';
-      chip.textContent = row.group ? row.group + ': ' + row.terms.join(', ') : row.terms[0];
-      summary.appendChild(chip);
-    });
-    el('set-dashboard-configure-variables').textContent = variables.length ? 'Edit Set Variables' : 'Define Set Variables';
     if (!templateDirty) el('set-dashboard-template-draft').value = String(statsGetPrimerOptionsFromDom().template || '');
     if (!window.isSetIntelligenceOpen()) window.openSetIntelligence();
     else window.refreshSetIntelligenceScope();
@@ -449,7 +452,6 @@
   function closeDashboard(options) {
     if (!open) return;
     open = false;
-    setHidden(el('set-dashboard-variable-editor'), true);
     if (window.isSetIntelligenceOpen()) window.closeSetIntelligence();
     syncQaSection();
     setHidden(el('set-dashboard-modal'), true);
@@ -476,17 +478,11 @@
       focusMigrationStatus = '';
       renderStage();
     });
-    el('set-dashboard-configure-variables').onclick = function () {
-      if (el('set-dashboard-variable-editor').classList.contains('hidden')) openVariableEditor();
-      el('set-dashboard-variable-term').focus();
-    };
     el('set-dashboard-group-add').onclick = addVocabularyGroup;
     el('set-dashboard-group-settings').onclick = openChecklistKeywordsModal;
     el('set-dashboard-group-name').addEventListener('keydown', function (event) {
       if (event.key === 'Enter') { event.preventDefault(); addVocabularyGroup(); }
     });
-    el('set-dashboard-variable-apply').onclick = applyVariableEditor;
-    el('set-dashboard-variable-cancel').onclick = function () { setHidden(el('set-dashboard-variable-editor'), true); };
     var destinations = {
       'set-dashboard-tags-primary': 'annotation',
       'set-dashboard-tags-guided': 'guided', 'set-dashboard-train': 'train',
@@ -507,9 +503,11 @@
     };
     window.addEventListener('webcap:media-metadata-updated', function () { if (open) renderStage(); });
     el('stats-required-phrase').addEventListener('change', function () { if (open) renderStage(); });
-    el('set-dashboard-variable-add-term').onclick = addStandaloneVariable;
-    el('set-dashboard-variable-term').addEventListener('keydown', function (event) { if (event.key === 'Enter') { event.preventDefault(); addStandaloneVariable(); } });
-    el('set-dashboard-variable-empty-action').onclick = function () { el('set-dashboard-definition').open = true; el('set-dashboard-configure-variables').onclick(); el('set-dashboard-variable-editor').scrollIntoView({block:'nearest'}); };
+    el('set-dashboard-variable-empty-action').onclick = function () {
+      el('set-dashboard-definition').open = true;
+      renderStage();
+      el('set-dashboard-group-list').scrollIntoView({block:'nearest'});
+    };
   }
 
   window.getSetVariableWarnings = variableWarnings;

@@ -1177,7 +1177,7 @@
             </div>
             <p id="set-dashboard-focus-migration" class="set-dashboard-distribution-note hidden" role="status"></p>
 
-            <details class="set-dashboard-template-disclosure" open><summary>Caption Template</summary><textarea id="set-dashboard-template-draft" rows="5" aria-label="Caption template"></textarea><div class="set-dashboard-section-actions"><button id="set-dashboard-template-save" type="button" class="set-dashboard-primary">Save Template</button><button id="set-dashboard-template-reset" type="button" class="set-dashboard-quiet">Reset draft</button></div></details>
+            <details class="set-dashboard-template-disclosure" open><summary>Caption Template</summary><textarea id="set-dashboard-template-draft" rows="5" aria-label="Caption template"></textarea><div id="set-dashboard-template-placeholders" class="primer-template-placeholder-list" aria-label="Insert unused group placeholders"></div><div class="set-dashboard-section-actions"><button id="set-dashboard-template-save" type="button" class="set-dashboard-primary">Save Template</button><button id="set-dashboard-template-reset" type="button" class="set-dashboard-quiet">Reset draft</button></div></details>
               </section>
           </details>
           <section class="set-dashboard-section set-dashboard-intelligence-panel" aria-label="Set Intelligence">
@@ -1280,14 +1280,6 @@
             </div>
           </div>
         </div>
-
-          </section>
-        </div>
-        <aside id="set-dashboard-groups-panel" class="set-dashboard-tags-panel set-dashboard-section" aria-label="Vocabulary and annotation">
-          <div class="set-dashboard-section-heading"><h4>Manage Groups &amp; Set Variables</h4><button type="button" id="set-dashboard-group-settings" class="set-dashboard-quiet" title="Configure requirement keywords">Configure</button></div>
-          <div class="set-dashboard-add-group"><input id="set-dashboard-group-name" type="text" aria-label="New group name" placeholder="New vocabulary group"><button type="button" id="set-dashboard-group-add" class="set-dashboard-quiet">Add group</button></div>
-          <p class="set-dashboard-group-hint">Expand a group to select training terms and define its coverage expectations.</p>
-          <div id="set-dashboard-group-list" class="checklist-group-list" aria-label="Manage vocabulary groups and Set Variables"></div>
           <p id="set-dashboard-tags-status" class="set-dashboard-section-copy"></p>
           <div class="set-dashboard-section-actions set-dashboard-vocabulary-actions">
             <button type="button" id="set-intelligence-primary-btn" class="set-dashboard-quiet">Discover Vocabulary</button>
@@ -1297,6 +1289,14 @@
             <button type="button" id="set-dashboard-tags-primary" class="set-dashboard-secondary">Focused Annotation</button>
             
           </div>
+
+          </section>
+        </div>
+        <aside id="set-dashboard-groups-panel" class="set-dashboard-tags-panel set-dashboard-section" aria-label="Vocabulary and annotation">
+          <div class="set-dashboard-section-heading"><h4>Manage Groups &amp; Set Variables</h4><button type="button" id="set-dashboard-group-settings" class="set-dashboard-quiet" title="Configure requirement keywords">Configure</button></div>
+          <div class="set-dashboard-add-group"><input id="set-dashboard-group-name" type="text" aria-label="New group name" placeholder="New vocabulary group"><button type="button" id="set-dashboard-group-add" class="set-dashboard-quiet">Add group</button></div>
+          <p class="set-dashboard-group-hint">Expand a group to select training terms and define its coverage expectations.</p>
+          <div id="set-dashboard-group-list" class="checklist-group-list" aria-label="Manage vocabulary groups and Set Variables"></div>
         </aside>
         <div class="set-dashboard-stack set-dashboard-balance-stack">
           <details class="set-dashboard-guidance-panel set-dashboard-section" id="set-dashboard-balance-section" open><summary><span class="set-dashboard-section-title">Distribution &amp; Balance</span><span id="set-dashboard-balance-summary"></span><button type="button" id="set-dashboard-curate" class="set-dashboard-primary">Curate Training Set</button></summary>

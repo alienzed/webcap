@@ -174,3 +174,54 @@ def test_blind_review_hides_package_and_report_requires_human_scores(tmp_path, m
     assert all(row["reviewed"] == 1 and row["first_pass_usable_rate"] == 1 for row in report["categories"])
     assert all(row["avg_estimated_correction_rounds"] == 1 for row in report["categories"])
     assert all(row["responses_ok"] == 1 for row in report["categories"])  # fixture receipts only
+
+
+def test_structured_candidate_offline_contract(tmp_path, monkeypatch):
+    import xml.etree.ElementTree as ET
+
+    folder = evaluation.DESIGN_DIR / "structured_director"
+    packages, cases = evaluation.load_design(folder)
+    resolved = evaluation.resolve_packages(packages)
+    frozen = evaluation.resolve_packages(
+        evaluation.load_design(evaluation.DESIGN_DIR / "unified_final")[0])
+    assert list(resolved) == ["classic-v3", "structured-v1"]
+    assert resolved["classic-v3"] == frozen["classic-v3"]
+    candidate = resolved["structured-v1"]
+    root = ET.fromstring(candidate["role"])
+    assert root.tag == "director_guidance"
+    assert [node.tag for node in root] == [
+        "role", "criteria", "response_guidance", "project_parameters", "scene_definition"
+    ]
+    assert [field.attrib["name"] for field in root.findall("project_parameters/fields/field")] == [
+        "Title", "Concept / overview", "Visual / atmosphere", "Invariants"
+    ]
+    for field in root.findall(".//field"):
+        assert all(field.find(name) is not None for name in ("purpose", "contents", "quality_criteria"))
+    assert ET.fromstring(candidate["expertise"]).find("prompt_knowledge/example") is not None
+    assert len(cases) == 11
+    for case in cases:
+        for invariant in case.get("project", {}).get("invariants", []):
+            assert set(invariant) == {"kind", "title", "text"}
+            assert invariant["kind"] in {"visual", "character", "location", "world", "sound", "custom"}
+            assert invariant["title"] and invariant["text"]
+        technical = evaluation.repo_default("h3.authoring")
+        control, treatment = (evaluation.make_messages(case, resolved[key], technical)
+                              for key in resolved)
+        assert control[1:] == treatment[1:]
+        for messages in (control, treatment):
+            assert ("H3 PROMPT AUTHORING REFERENCE:" in messages[0]["content"]) == (
+                case["operation"] == "studio_scenes_draft"
+            )
+
+    def deny(*args, **kwargs):
+        raise AssertionError("Offline planning made an LLM call")
+    monkeypatch.setattr(evaluation, "job_api", deny)
+    output = tmp_path / "structured-plan"
+    assert evaluation.main(["plan", "--design-dir", str(folder), "--model", "test::offline",
+                            "--split", "all", "--repeats", "2", "--seed", "327",
+                            "--output", str(output)]) == 0
+    assert len(evaluation.read_json(output / "manifest.json")["trials"]) == 44
+    assert all(row["status"] == "planned" for row in evaluation.read_jsonl(output / "trials.jsonl"))
+    chains = evaluation.read_json(folder / "chains.json")["chains"]
+    assert len(chains) == 2 and all(len(chain["turns"]) == 4 for chain in chains)
+    compile((folder / "run_chains.py").read_text(encoding="utf-8"), "run_chains.py", "exec")

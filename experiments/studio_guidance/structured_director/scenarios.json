@@ -242,16 +242,14 @@
         "style": "Naturalistic workshop documentary, clear neutral lighting, restrained camera and real physical sounds.",
         "invariants": [
           {
-            "id": "mechanic",
             "kind": "character",
-            "name": "Mechanic",
-            "description": "Adult woman, short dark hair, navy work shirt."
+            "title": "Mechanic",
+            "text": "Adult woman, short dark hair, navy work shirt."
           },
           {
-            "id": "bicycle",
-            "kind": "object",
-            "name": "Bicycle",
-            "description": "Red city bicycle with black saddle."
+            "kind": "visual",
+            "title": "Bicycle",
+            "text": "Red city bicycle with black saddle."
           }
         ]
       }

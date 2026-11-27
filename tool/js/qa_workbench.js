@@ -94,6 +94,7 @@
     deepScanScope: null, // Frozen run inputs; never derived again from active filters.
     deepScanScopeFiles: [],
     deepScanTrainingFocus: '',
+    deepScanVariableSignature: '',
     deepScanDiscoveryComplete: false,
     deepScanStage: '',
     deepScanSkipped: {},
@@ -288,8 +289,13 @@
     return curated;
   }
 
+  function qaSetVariableSignature(variables) {
+    var rows = normalizeSetVariables(variables === undefined ? state.setVariables : variables);
+    return rows.length ? JSON.stringify(rows) : '';
+  }
+
   function qaBuildDeepScanSignature(items) {
-    return JSON.stringify({
+    var context = {
       folder: String(state.folder || ''),
       trainingFocus: qaWorkbenchState.trainingFocus,
       vocabulary: checklistItems.map(function (group) {
@@ -297,7 +303,10 @@
       }),
       primer: String(statsGetPrimerOptionsFromDom().template || ''),
       items: qaBuildDeepScanItems(items)
-    });
+    };
+    var variables = qaSetVariableSignature();
+    if (variables) context.setVariables = variables;
+    return JSON.stringify(context);
   }
 
   function qaCurationIntent() {
@@ -402,6 +411,7 @@
       aiModel: qaWorkbenchState.aiModel,
       deepScanScopeFiles: qaWorkbenchState.deepScanScopeFiles.slice(),
       deepScanTrainingFocus: qaWorkbenchState.deepScanTrainingFocus,
+      deepScanVariableSignature: qaWorkbenchState.deepScanVariableSignature,
       deepScanDiscoveryComplete: qaWorkbenchState.deepScanDiscoveryComplete,
       deepScanStage: qaWorkbenchState.deepScanStage,
       deepScanSkipped: Object.assign({}, qaWorkbenchState.deepScanSkipped),
@@ -446,6 +456,7 @@
     qaWorkbenchState.dispositions = {};
     qaWorkbenchState.deepScanScopeFiles = [];
     qaWorkbenchState.deepScanTrainingFocus = '';
+    qaWorkbenchState.deepScanVariableSignature = '';
     qaWorkbenchState.deepScanDiscoveryComplete = false;
     qaWorkbenchState.deepScanStage = '';
     qaWorkbenchState.deepScanSkipped = {};
@@ -465,7 +476,8 @@
       }
       var focusMatches = saved.trainingFocus === qaWorkbenchState.trainingFocus;
       var legacyReview = !saved.qaReviewMode || saved.qaReviewMode === 'legacy-per-item';
-      var deepReviewCurrent = (focusMatches || (saved.qaReviewMode === 'progressive-v1' &&
+      var variablesMatch = String(saved.deepScanVariableSignature || '') === qaSetVariableSignature();
+      var deepReviewCurrent = variablesMatch && (focusMatches || (saved.qaReviewMode === 'progressive-v1' &&
         saved.deepScanTrainingFocus === qaWorkbenchState.trainingFocus)) &&
         (legacyReview ||
           (saved.qaReviewMode === 'set-review-v1' && saved.aiScopeSignature === signature) ||
@@ -515,15 +527,17 @@
       qaWorkbenchState.aiSummary = deepReviewCurrent ? String(saved.aiSummary || '') : '';
       qaWorkbenchState.aiModel = deepReviewCurrent ? String(saved.aiModel || '') : '';
       qaWorkbenchState.aiScopeSignature = deepReviewCurrent ? (legacyReview ? signature : saved.aiScopeSignature) : '';
-      qaWorkbenchState.aiItemSignatures = Object.assign({}, before);
+      qaWorkbenchState.aiItemSignatures = deepReviewCurrent ? Object.assign({}, before) : {};
       qaWorkbenchState.deepScanScopeFiles = deepReviewCurrent && saved.qaReviewMode === 'progressive-v1' && Array.isArray(saved.deepScanScopeFiles)
         ? saved.deepScanScopeFiles.slice() : [];
       qaWorkbenchState.deepScanTrainingFocus = deepReviewCurrent ? String(saved.deepScanTrainingFocus || saved.trainingFocus || '') : '';
+      qaWorkbenchState.deepScanVariableSignature = deepReviewCurrent ? String(saved.deepScanVariableSignature || '') : '';
+      if (!variablesMatch) qaWorkbenchState.deepScanStatus = 'Set Variables changed; run Deep QA for the current definition.';
       qaWorkbenchState.deepScanDiscoveryComplete = !!(deepReviewCurrent && saved.deepScanDiscoveryComplete);
       qaWorkbenchState.deepScanStage = deepReviewCurrent ? String(saved.deepScanStage || '') : '';
       qaWorkbenchState.deepScanSkipped = deepReviewCurrent && saved.deepScanSkipped && typeof saved.deepScanSkipped === 'object'
         ? Object.assign({}, saved.deepScanSkipped) : {};
-      qaWorkbenchState.aiCoverageValid = validCount;
+      qaWorkbenchState.aiCoverageValid = deepReviewCurrent ? validCount : 0;
       qaWorkbenchState.aiCoverageTotal = Object.keys(current).length;
       qaWorkbenchState.dispositions = saved.dispositions && typeof saved.dispositions === 'object'
         ? saved.dispositions : {};
@@ -543,7 +557,8 @@
     items.forEach(function (item) { byFile[item.fileName] = item; });
     // Progressive item checks are independently fresh; a single caption edit or
     // a changed Media List filter must not hide unrelated completed corrections.
-    var fresh = qaWorkbenchState.qaReviewMode === 'progressive-v1' ||
+    var fresh = (qaWorkbenchState.qaReviewMode === 'progressive-v1' &&
+      (qaWorkbenchState.deepScanVariableSignature || '') === qaSetVariableSignature()) ||
       qaWorkbenchState.aiScopeSignature === qaBuildDeepScanSignature(items);
     var visibleAi = fresh ? qaWorkbenchState.aiFindings.map(function (finding) {
       if (finding.concept) return finding; // hypothesis, not a verified edit
@@ -584,6 +599,12 @@
   }
 
   function qaReconcileAiFindingsToCurrentInputs() {
+    // Keep the previous review intact until the user explicitly analyzes the new intent.
+    if (qaWorkbenchState.qaReviewMode === 'progressive-v1' &&
+        (qaWorkbenchState.deepScanVariableSignature || '') !== qaSetVariableSignature()) {
+      qaRefreshAiCoverage();
+      return;
+    }
     var current = qaItemInputSignatures();
     var invalid = {};
     Object.keys(current).forEach(function (file) {
@@ -675,10 +696,11 @@
     });
   }
 
-  function qaCurrentItemSignatureMap(items) {
+  function qaCurrentItemSignatureMap(items, variableSignature) {
     var signatures = {};
+    var intent = variableSignature === undefined ? qaSetVariableSignature() : variableSignature;
     qaBuildDeepScanItems(items).forEach(function (item) {
-      var source = JSON.stringify([item, getCaptionVisionModelId() || '']);
+      var source = JSON.stringify(intent ? [item, getCaptionVisionModelId() || '', intent] : [item, getCaptionVisionModelId() || '']);
       var hash = 2166136261;
       for (var i = 0; i < source.length; i += 1) {
         hash = Math.imul(hash ^ source.charCodeAt(i), 16777619);
@@ -797,7 +819,7 @@
   }
 
   function qaDeepScanProgress(scan, phase) {
-    var current = qaCurrentItemSignatureMap(qaDeepScanScopeItems());
+    var current = qaCurrentItemSignatureMap(qaDeepScanScopeItems(), scan.variableSignature);
     var checked = scan.files.filter(function (file) {
       return !!current[file] && qaWorkbenchState.aiItemSignatures[file] === current[file];
     }).length;
@@ -844,7 +866,7 @@
       throw new Error('Deep QA did not assess caption quality for: ' + missingQuality.join(', '));
     }
     var currentItems = qaDeepScanScopeItems();
-    var currentSignatures = qaCurrentItemSignatureMap(currentItems);
+    var currentSignatures = qaCurrentItemSignatureMap(currentItems, scan.variableSignature);
     var currentByName = {};
     currentItems.forEach(function (item) { currentByName[item.fileName] = item; });
     var valid = names.filter(function (file) {
@@ -913,7 +935,18 @@
   function qaDeepScanNextItemBatch(scan, token) {
     if (!qaDeepScanCurrent(scan, token)) return Promise.resolve();
     var currentItems = qaDeepScanScopeItems();
-    var current = qaCurrentItemSignatureMap(currentItems);
+    // Finish the submitted batch using its captured intent, then pause before
+    // submitting another one if the definition changed. Keep completed receipts.
+    if ((scan.variableSignature || '') !== qaSetVariableSignature()) {
+      qaWorkbenchState.deepScanStage = 'paused';
+      qaWorkbenchState.deepScanSessionActive = false;
+      qaWorkbenchState.deepScanStatus = 'Set Variables changed; run Deep QA for the current definition.';
+      qaFinishDeepScanActivity('stopped');
+      qaSyncDeepScanLiveUi();
+      renderQaWorkbench();
+      return Promise.resolve();
+    }
+    var current = qaCurrentItemSignatureMap(currentItems, scan.variableSignature);
     var missingMedia = scan.files.filter(function (file) { return !current[file]; });
     if (missingMedia.length) throw new Error('Deep QA scope media is unavailable: ' + missingMedia[0]);
     var pending = scan.orderedFiles.filter(function (file) {
@@ -956,7 +989,7 @@
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         itemReview: true, folder: scan.folder, model: scan.model,
-        trainingFocus: scan.trainingFocus,
+        trainingFocus: scan.trainingFocus, setVariables: scan.setVariables,
         items: batch,
         deterministicFindings: scan.supportingFindings.map(function (finding) {
           return Object.assign({}, finding, {
@@ -1027,7 +1060,7 @@
     var folder = scan.folder, model = scan.model;
     var reviewRequest = {
       setReview: true, folder: folder, model: model, trainingFocus: scan.trainingFocus,
-      primer: scan.primer, vocabulary: scan.vocabulary,
+      primer: scan.primer, vocabulary: scan.vocabulary, setVariables: scan.setVariables,
       items: scan.inputs.map(function (item) {
         return {
           fileName: item.fileName,
@@ -1145,7 +1178,9 @@
     if (qaWorkbenchState.qaReviewMode === 'progressive-v1') items = qaDeepScanScopeItems();
     var signatures = qaCurrentItemSignatureMap(items);
     var counts = { actionable: 0, clean: 0, withoutSight: 0, failed: 0, unchecked: 0 };
-    if (qaWorkbenchState.qaReviewMode === 'set-review-v1') {
+    if (qaWorkbenchState.qaReviewMode === 'set-review-v1' ||
+        (qaWorkbenchState.qaReviewMode === 'progressive-v1' &&
+         (qaWorkbenchState.deepScanVariableSignature || '') !== qaSetVariableSignature())) {
       counts.unchecked = items.length; // Set-level review does not certify individual media.
       return counts;
     }
@@ -1524,7 +1559,8 @@
       qaWorkbenchState.deepScanStage !== 'complete' &&
       !qaWorkbenchState.deepScanSessionActive &&
       qaWorkbenchState.aiModel === String(getDirectorModelPreference() || '').trim() &&
-      qaWorkbenchState.deepScanTrainingFocus === qaWorkbenchState.trainingFocus;
+      qaWorkbenchState.deepScanTrainingFocus === qaWorkbenchState.trainingFocus &&
+      (qaWorkbenchState.deepScanVariableSignature || '') === qaSetVariableSignature();
   }
 
   function qaRunDeepScan() {
@@ -1559,15 +1595,18 @@
       }
     });
     var scopeFiles = items.map(function (item) { return item.fileName; });
+    var setVariables = normalizeSetVariables(state.setVariables);
+    var variableSignature = qaSetVariableSignature(setVariables);
     var scan = {
       folder: folder, scopeKey: scopeKey, model: model,
       trainingFocus: qaWorkbenchState.trainingFocus,
+      setVariables: setVariables, variableSignature: variableSignature,
       primer: String(statsGetPrimerOptionsFromDom().template || ''),
       vocabulary: checklistItems.map(function (group) {
         return { group: group, alias: getRequirementGroupAlias(group), terms: getChecklistKeywordTermsForRequirement(group).slice() };
       }),
       files: scopeFiles, inputs: inputs, inputsByFile: byFile,
-      signatures: qaCurrentItemSignatureMap(items),
+      signatures: qaCurrentItemSignatureMap(items, variableSignature),
       // Supporting context is also frozen: later Media List filters must not
       // silently change the interpretation of an already-started scan.
       supportingFindings: qaDeepScanFindingPayload(items),
@@ -1579,6 +1618,7 @@
     qaWorkbenchState.deepScanScope = scan;
     qaWorkbenchState.deepScanScopeFiles = scopeFiles.slice();
     qaWorkbenchState.deepScanTrainingFocus = scan.trainingFocus;
+    qaWorkbenchState.deepScanVariableSignature = variableSignature;
     qaWorkbenchState.deepScanSessionToken += 1;
     qaWorkbenchState.deepScanSessionActive = true;
     qaWorkbenchState.deepScanStopRequested = false;
@@ -2974,6 +3014,11 @@
     } else if (folderChanged) {
       qaWorkbenchState.trainingFocus = '';
       qaWorkbenchState.focusExplicitlyEdited = false;
+    }
+    if (qaWorkbenchState.qaReviewMode === 'progressive-v1' &&
+        (qaWorkbenchState.deepScanVariableSignature || '') !== qaSetVariableSignature() &&
+        !qaWorkbenchState.deepScanSessionActive) {
+      qaWorkbenchState.deepScanStatus = 'Set Variables changed; run Deep QA for the current definition.';
     }
     var inputSignature = qaBuildDeepScanSignature(items);
     var inputsChanged = !!qaWorkbenchState.deepScanInputSignature

@@ -48,7 +48,8 @@ function dashboard(options = {}) {
   let sightOpen = false;
   const context = {
     document, state,
-    statsGetPrimerOptionsFromDom: () => ({ template: 'example template' }),
+    statsGetPrimerOptionsFromDom: () => ({ template: options.template || 'example template' }),
+    getPrimerTemplatePlaceholderItems: () => (options.groups || []).map(label => ({label, placeholder:'{'+label.toLowerCase()+'}'})),
     window: {
       addEventListener() {},
       getQaTrainingFocus: () => state.setTrainingFocus,
@@ -107,6 +108,22 @@ test('Dashboard is a native workspace; grouped work is independently accessible'
   assert.deepEqual(app.actions, ['workspace', 'prepare']);
   app.elements['set-dashboard-tags-guided'].onclick();
   assert.deepEqual(app.actions, ['workspace', 'prepare', 'hide-prepare', 'workspace', 'guided']);
+});
+test('unused template placeholders insert into the draft, never the saved template', () => {
+  const app = dashboard({ groups:['Viewpoint','Lighting'], template:'subject, {viewpoint}, ' });
+  const draft = app.elements['set-dashboard-template-draft'];
+  const host = app.elements['set-dashboard-template-placeholders'];
+  assert.deepEqual(host.children.map(button => button.textContent),['Lighting']);
+  draft.selectionStart = draft.selectionEnd = draft.value.length;
+  draft.setRangeText = (text,start,end) => { draft.value = draft.value.slice(0,start)+text+draft.value.slice(end); };
+  host.children[0].onclick();
+  assert.equal(draft.value,'subject, {viewpoint}, {lighting}');
+  assert.equal(host.children.length,0);
+  app.context.window.refreshSetDashboard();
+  assert.equal(draft.value,'subject, {viewpoint}, {lighting}');
+  app.elements['set-dashboard-template-reset'].onclick();
+  assert.equal(draft.value,'subject, {viewpoint}, ');
+  assert.deepEqual(host.children.map(button => button.textContent),['Lighting']);
 });
 test('QA is opened explicitly and reports retain direct handoffs', () => {
   const app = dashboard();
@@ -270,7 +287,7 @@ test('Set Intelligence remains open when definition is collapsed', () => {
   assert.deepEqual(app.actions,['workspace','prepare']);
 });
 
-test('Set Definition reuses Manage Groups rows in a bounded two-column layout', () => {
+test('Set Dashboard reuses Manage Groups rows in a workspace-width two-column layout', () => {
   const html=fs.readFileSync(path.join(__dirname,'../tool/tool.html'),'utf8');
   const css=fs.readFileSync(path.join(__dirname,'../tool/css/set_dashboard.css'),'utf8');
   const manager=fs.readFileSync(path.join(__dirname,'../tool/js/checklist_panel.js'),'utf8');
@@ -278,8 +295,11 @@ test('Set Definition reuses Manage Groups rows in a bounded two-column layout', 
   assert.doesNotMatch(html,/id="set-dashboard-group-workbench"/);
   assert.match(source,/renderChecklistGroupRows\(el\('set-dashboard-group-list'\)/);
   assert.match(manager,/renderChecklistGroupRows\(itemsDiv, \{mediaKey:state.currentItem.key\}\)/);
-  assert.match(css,/grid-template-columns:minmax\(0,2fr\) minmax\(0,1fr\)/);
-  assert.match(css,/max-width:1180px; margin:0 auto/);
+  assert.match(html,/id="set-dashboard-groups-panel" class="set-dashboard-tags-panel set-dashboard-section"/);
+  assert.match(html,/class="set-dashboard-stack set-dashboard-balance-stack"/);
+  assert.match(css,/#set-dashboard-analyze > \.set-dashboard-balance-stack \{ grid-column:1\/-1; \}/);
+  assert.match(css,/repeat\(auto-fit,minmax\(min\(100%,max\(420px,calc\(\(100% - 20px\) \/ 2\)\)\),1fr\)\)/);
+  assert.doesNotMatch(css,/max-width:1180px; margin:0 auto/);
   assert.doesNotMatch(css,/#set-dashboard-group-list[^\n]*max-height/);
 });
 

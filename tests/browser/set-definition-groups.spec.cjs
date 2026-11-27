@@ -48,7 +48,7 @@ test('Set Definition renders group-only intent and persists a scoped change in t
   const saved=JSON.parse(fs.readFileSync(path.join(root,'.webcap_state.json'),'utf8'));
   expect(saved.set_variables).toEqual([shape,{group:'Viewpoint',terms:['front','rear'],exclusive:true,expected:true}]);
   expect(saved.stats).not.toHaveProperty('phrases');
-  const intelligence=page.getByRole('region',{name:'Set Intelligence',exact:true});
+  const intelligence=page.locator('#set-scan-modal');
   const intelligencePanel=page.locator('.set-dashboard-intelligence-panel');
   const groupsPanel=page.locator('#set-dashboard-groups-panel');
   const template=page.locator('#set-dashboard-template-draft');

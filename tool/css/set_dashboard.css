@@ -782,6 +782,12 @@
 #set-dashboard-definition .set-dashboard-template-disclosure > summary { font-size:18px; font-weight:650; cursor:pointer; }
 #set-dashboard-definition .set-dashboard-template-disclosure[open] > summary { margin-bottom:12px; }
 #set-dashboard-definition #set-dashboard-template-draft { min-height:150px; resize:vertical; }
+#set-dashboard-template-placeholders { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+#set-dashboard-template-placeholders:empty { display:none; }
+#set-dashboard-template-placeholders .primer-template-placeholder-btn {
+  font-size:16px; min-height:36px; padding:6px 10px; white-space:normal; overflow-wrap:anywhere;
+}
+
 #set-dashboard-modal .set-dashboard-intelligence-panel { padding:16px 20px; }
 #set-dashboard-modal .set-dashboard-intelligence-panel > .set-dashboard-sight-panel {
   min-width:0; padding:0; margin:0; border:0; background:transparent !important;

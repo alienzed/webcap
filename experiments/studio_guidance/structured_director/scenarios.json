@@ -1,0 +1,260 @@
+{
+  "version": 1,
+  "experiment": "structured-director-v1",
+  "cases": [
+    {
+      "id": "final-chat-pool",
+      "split": "development",
+      "category": "natural-conversational-judgment",
+      "operation": "studio_chat",
+      "focus": "A proportionate concrete recommendation that serves understated optimism without prematurely drafting a Project or Scene.",
+      "fidelity_checks": [
+        "Chooses a direction between lighting and human action with a reason.",
+        "Preserves understated optimism rather than a grand reveal.",
+        "A few natural conversational sentences; the current task is choosing a direction."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "I am planning a short film about a municipal caretaker opening an empty outdoor swimming pool at dawn. I want understated optimism rather than a grand reveal. Would you put the feeling in the light or in a small human action? Give me one recommendation and why, in a few sentences; we are choosing a direction."
+        }
+      ]
+    },
+    {
+      "id": "final-project-balance",
+      "split": "development",
+      "category": "project-versatility",
+      "operation": "studio_project_draft",
+      "focus": "A complete distinctive collection that supports documentary precision, dry comedy and spectacular imagination without imposing a single narrative or mood.",
+      "fidelity_checks": [
+        "Meaningful title, concept, developed style and relevant invariant values.",
+        "Same clear glass sphere with a cobalt-blue equatorial band across films.",
+        "Independent films retain observational/documentary, dry-comic and spectacular possibilities; people, settings and techniques vary."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "A collection of independent short films about balance. The same clear glass sphere with a cobalt-blue equatorial band appears in every film. People, settings and techniques vary freely. Some films should be precise and observational, others dryly comic or spectacularly imaginative. There is no overall plot. Give the collection a recognizable identity while retaining that range."
+        }
+      ],
+      "instruction": "Create one complete Project with a distinctive title, an inspiring Concept, developed Visual / atmosphere and genuinely enduring Invariants."
+    },
+    {
+      "id": "final-scene-gauge",
+      "split": "development",
+      "category": "clinical-precision-and-restraint",
+      "operation": "studio_scenes_draft",
+      "focus": "Neutral, clinically clear observation of a specified physical operation; precision and restraint are the creative goal.",
+      "fidelity_checks": [
+        "One 10-second Scene in one continuous fixed close-up.",
+        "Sky-blue gloved hands place a stainless-steel gauge block beneath a dial indicator; right hand lowers probe to contact block, needle moves once and settles, then both hands withdraw.",
+        "Probe contact and dial needle remain in frame; block and instrument remain after hands leave.",
+        "Uniform neutral illumination, real-time depiction, quiet physical sounds, no dialogue or music."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "This is a clinically clear observational demonstration. Its value is seeing the physical contact and the needle settle, with a patient camera and neutral presentation."
+        }
+      ],
+      "instruction": "Write one complete 10-second H3 Scene in one continuous fixed close-up. On a clean white laboratory bench, sky-blue gloved hands place a stainless-steel gauge block beneath a dial indicator. The right hand lowers the probe until it contacts the block; the dial needle moves once and settles. Both hands then withdraw, leaving the block and instrument still. Keep the probe contact and dial needle in frame throughout. Use uniform neutral illumination, real-time movement and only quiet physical sounds. No dialogue or music.",
+      "project": {
+        "title": "Contact and Measure",
+        "concept": "Precise observational demonstrations of simple mechanical measurements.",
+        "style": "Clinical clarity, neutral light and faithful real-time physical action.",
+        "invariants": []
+      }
+    },
+    {
+      "id": "final-scene-wooden-sea",
+      "split": "development",
+      "category": "ambitious-imaginative-authoring",
+      "operation": "studio_scenes_draft",
+      "focus": "An ambitious tactile transformation with coherent material identity, full intended scale, expressive sound and clear audiovisual progression.",
+      "fidelity_checks": [
+        "One 15-second Scene with three consecutive authored shots covering the duration.",
+        "Small teal ceramic whale with a gold stripe swims through a wooden worktable; table becomes rolling wooden waves filling the workshop while walls remain intact.",
+        "Whale leaps from the wooden sea, becomes solid ceramic again and lands in a craftswoman's waiting hands; identity is consistent.",
+        "Craftswoman says exactly: Easy, now. Appropriate H3 dialogue/speaker notation.",
+        "Preserves the full workshop-scale transformation, tangible wood/ceramic materials and exhilarating imaginative intent."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Make an impossible material transformation feel tangible and exhilarating. The pleasure is the whole workshop becoming a wooden sea, then a tiny object returning safely to human hands."
+        }
+      ],
+      "instruction": "Write one complete 15-second H3 Scene in three consecutive shots. A small teal ceramic whale with one gold stripe starts swimming through the solid surface of a wooden worktable as though it were water. The table becomes rolling wooden waves that fill the workshop while its walls remain intact. The whale leaps from the wooden sea, becomes solid ceramic again, and lands in a craftswoman's waiting hands. She says exactly \"Easy, now.\" Choose her appearance and clothing consistently. Preserve the full workshop-scale transformation, the whale's identity, tangible wood and ceramic textures, and purposeful sound.",
+      "project": {
+        "title": "Materials Otherwise",
+        "concept": "Impossible behavior realized through the tactile identities of familiar materials.",
+        "style": "Ambitious handmade audiovisual conception with coherent physical relationships.",
+        "invariants": []
+      }
+    },
+    {
+      "id": "chat-overview-gap",
+      "split": "development",
+      "category": "overview-assessment",
+      "operation": "studio_chat",
+      "focus": "Identify consequential missing structure without a questionnaire or unsolicited draft.",
+      "fidelity_checks": [
+        "Recognizes intended contrast and asks or proposes how the six clips distribute it.",
+        "Keeps discussion focused and concrete.",
+        "No full Project or Scene prompt."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "I want six short independent clips showing how ordinary people react to unexpected small kindnesses. Some should be awkward, some genuinely moving. I'm still figuring out the concept. What should we resolve next?"
+        }
+      ]
+    },
+    {
+      "id": "chat-situational-plausibility",
+      "split": "development",
+      "category": "situational-coherence",
+      "operation": "studio_chat",
+      "focus": "Recognize common-sense mismatch and offer a proportionate fix.",
+      "fidelity_checks": [
+        "Notices that ordering ice cream from a shoe salesperson is unexplained in an ordinary realistic shop.",
+        "Offers a coherent fix or asks if the mismatch is intentional.",
+        "Preserves the ordinary conversation and avoids gratuitous embellishment."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "A straightforward realistic conversation: a woman walks into a normal shoe shop, asks the shoe salesperson for a scoop of vanilla ice cream, pays, and leaves. No surrealism. Does that make sense as the setup?"
+        }
+      ]
+    },
+    {
+      "id": "chat-discuss-scene",
+      "split": "development",
+      "category": "discussion-scope",
+      "operation": "studio_chat",
+      "focus": "Discussion after a supplied Scene description without premature authorship.",
+      "fidelity_checks": [
+        "Addresses the camera choice with a useful reason.",
+        "Preserves fixed action and understated tone.",
+        "Does not return a complete H3 prompt."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Scene 1 is a quiet conversation between a bus driver and a passenger about a lost glove. They are seated, talking, no big reveal."
+        },
+        {
+          "role": "assistant",
+          "content": "The appeal is the everyday interaction and their understated reactions."
+        },
+        {
+          "role": "user",
+          "content": "Let's talk about Scene 1. Would a two-shot or alternating close-ups be more effective?"
+        }
+      ]
+    },
+    {
+      "id": "chat-explicit-scene",
+      "split": "development",
+      "category": "chat-authorship",
+      "operation": "studio_chat",
+      "focus": "Explicit request for complete Scene in ordinary Chat.",
+      "fidelity_checks": [
+        "Actually returns a usable complete 10-second Scene rather than another discussion.",
+        "Includes two distinct speakers, exact lines and a continuous two-shot.",
+        "Uses H3 timed structure and coherent sounds without imposing drama."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Scene 1: ordinary ten-second conversation at a cafe table, continuous fixed two-shot. A dark-haired woman in a navy sweater asks, 'Is this seat taken?' A gray-haired man in a beige cardigan says, 'No, please sit.' She sits. Quiet cafe ambience, no score."
+        },
+        {
+          "role": "assistant",
+          "content": "A fixed two-shot should work well for this ordinary exchange."
+        },
+        {
+          "role": "user",
+          "content": "Write Scene 1 into this chat!"
+        }
+      ]
+    },
+    {
+      "id": "project-blueprint",
+      "split": "development",
+      "category": "overview-blueprint",
+      "operation": "studio_project_draft",
+      "focus": "Turn a defined production into a scene-development map with correct distribution.",
+      "fidelity_checks": [
+        "Overview makes the exact 8-Scene distribution and sequence recoverable: 2 arrival, 3 demonstration, 2 failures, 1 resolution.",
+        "Maintains the specified pacing and focus on the repair rather than inventing a new plot.",
+        "Title, concept, style and appropriate invariants present."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "A short instructional film about a bicycle mechanic repairing a puncture, exactly eight Scenes: two arrival/diagnosis, three distinct repair steps, two small failed attempts at reinflation, and one successful test ride. Unhurried opening, brisk repair, brief comic frustration, satisfying finish. The mechanic and red bicycle recur; focus on hands and observable physical steps."
+        }
+      ],
+      "instruction": "Create the Project Parameters for this production. Make the Overview useful as a blueprint for an LLM to author all eight Scenes."
+    },
+    {
+      "id": "project-rotating-cast",
+      "split": "development",
+      "category": "invariant-scope",
+      "operation": "studio_project_draft",
+      "focus": "Preserve fixed format and recurring object without freezing rotating subjects.",
+      "fidelity_checks": [
+        "Overview specifies 2 street, 2 workplace, 2 home clips, all independent.",
+        "People, outfits and specific locations vary; no global recurring cast identities are invented.",
+        "The recurring yellow umbrella and enduring features are invariants; shared aesthetic belongs in style."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "Six independent realistic clips about strangers sheltering from rain: two on streets, two at workplaces and two at homes. A yellow umbrella with a black curved handle appears in every clip, but every clip uses a different person, wardrobe and location. Warm documentary tone. No continuing story."
+        }
+      ],
+      "instruction": "Create one Project with title, concept, style and genuinely enduring invariants."
+    },
+    {
+      "id": "scene-blueprint-execution",
+      "split": "development",
+      "category": "overview-to-scenes",
+      "operation": "studio_scenes_draft",
+      "focus": "Realize a small structured Overview with distinct Scenes and relevant anchors.",
+      "fidelity_checks": [
+        "Returns three distinct Scenes in specified order: arrival, repair, test.",
+        "Each complete prompt stands alone, describes the red bicycle and relevant mechanic identity.",
+        "Supported durations, complete timing, physical causal progression and no redundant scenes."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "The value is a legible repair sequence, not a dramatic story."
+        }
+      ],
+      "instruction": "Write all three Scenes in the order specified in the Project. Each is independently renderable, 4–15 seconds.",
+      "project": {
+        "title": "Flat to Rolling",
+        "concept": "Exactly three clips: arrival and diagnosis (squeeze flat rear tire), repair (install patched tube and inflate), successful test (slow roll in the courtyard). Calm opening, brisk repair, satisfying finish. Focus on clear hands and physical actions.",
+        "style": "Naturalistic workshop documentary, clear neutral lighting, restrained camera and real physical sounds.",
+        "invariants": [
+          {
+            "id": "mechanic",
+            "kind": "character",
+            "name": "Mechanic",
+            "description": "Adult woman, short dark hair, navy work shirt."
+          },
+          {
+            "id": "bicycle",
+            "kind": "object",
+            "name": "Bicycle",
+            "description": "Red city bicycle with black saddle."
+          }
+        ]
+      }
+    }
+  ]
+}

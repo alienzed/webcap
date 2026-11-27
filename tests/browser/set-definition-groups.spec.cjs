@@ -38,13 +38,23 @@ test('Set Definition renders group-only intent and persists a scoped change in t
   const edit=row.locator('.checklist-definition-terms');
   await expect(edit).toBeVisible();
   await expect(edit.getByRole('checkbox',{name:'front',exact:true})).toBeChecked();
+  await expect(edit.getByRole('button',{name:'Apply',exact:true})).toHaveCount(0);
+  await expect(edit.getByRole('button',{name:'Reset',exact:true})).toHaveCount(0);
+  const waitForVariableSave=predicate=>page.waitForResponse(response=>
+    response.url().endsWith('/fs/folder_state/save')&&response.request().method()==='POST'&&
+    predicate(response.request().postDataJSON()?.state?.set_variables||[]));
+  const saveRear=waitForVariableSave(rows=>rows.some(variable=>variable.group==='Viewpoint'&&variable.terms.includes('rear')));
   await edit.getByRole('checkbox',{name:'rear',exact:true}).check();
-  await edit.getByRole('checkbox',{name:'Expected on most media'}).check();
-  const save=page.waitForResponse(response=>response.url().endsWith('/fs/folder_state/save')&&response.request().method()==='POST'&&response.request().postDataJSON()?.state?.set_variables?.some(variable=>variable.group==='Viewpoint'&&variable.terms.includes('rear')));
-  await edit.getByRole('button',{name:'Apply',exact:true}).click();
-  expect((await save).ok()).toBeTruthy();
+  expect((await saveRear).ok()).toBeTruthy();
   await expect(row).toContainText('2 selected');
+  const saveExpected=waitForVariableSave(rows=>rows.some(variable=>variable.group==='Viewpoint'&&variable.expected));
+  await edit.getByRole('checkbox',{name:'Expected on most media'}).check();
+  expect((await saveExpected).ok()).toBeTruthy();
   await expect(row).toContainText('Expected');
+  // Opening a different group must not lose the immediately saved choices.
+  await list.locator('.checklist-row-block').filter({hasText:'Lighting'}).locator('.checklist-row-toggle-btn').click();
+  await expect(edit.getByRole('checkbox',{name:'rear',exact:true})).toBeChecked();
+  await expect(edit.getByRole('checkbox',{name:'Expected on most media'})).toBeChecked();
   const saved=JSON.parse(fs.readFileSync(path.join(root,'.webcap_state.json'),'utf8'));
   expect(saved.set_variables).toEqual([shape,{group:'Viewpoint',terms:['front','rear'],exclusive:true,expected:true}]);
   expect(saved.stats).not.toHaveProperty('phrases');

@@ -82,7 +82,7 @@
         rows:session.rows.map(function(row) {
           return [row.fileName, row.inventoryIds || [], row.analysis && row.analysis.sceneComplexity
             ? row.analysis.sceneComplexity.score : null, row.resolution || '',
-            row.captionIds || [], row.captionEvidence || {}];
+            row.captionIds || [], row.captionEvidence || {}, row.conflictIds || []];
         }),
         order:session.order.slice(), sizes:Object.assign({},session.sizes), rankingPolicy:'caption-aware-v1',
         captionConcepts:session.captionConcepts,
@@ -116,6 +116,7 @@
         return {fileName:parts[0], ids:[],
           inventoryIds:(parts[1] || []).filter(function(id) {return approvedIds.has(id);}),
           resolution:parts[3] || '', captionIds:parts[4] || [], captionEvidence:parts[5] || {},
+          conflictIds:parts[6] || [],
           analysis:parts[2] === null ? {} : {sceneComplexity:{score:parts[2]}}};
       });
       session.sourceFiles = session.rows.map(function(row) {return row.fileName;});
@@ -244,6 +245,17 @@
     rows.forEach(function (row) {
       row.ids = Array.from(row.keys).map(function (key) { return byKey.get(key); }).filter(Boolean);
       row.inventoryIds = row.ids.slice();
+      // Keep raw assignments for inspection/distribution; conflicting selected
+      // alternatives provide no reliable balance evidence for that group.
+      row.conflictIds = [];
+      (intent ? intent.variables : []).filter(function (variable) { return variable.exclusive; }).forEach(function (variable) {
+        var matches = variable.terms.map(function (term) {
+          return normalize(variable.group).toLowerCase() + '\u001f' + normalize(term).toLowerCase();
+        }).filter(function (key) { return row.keys.has(key); });
+        if (matches.length > 1) matches.forEach(function (key) {
+          if (byKey.has(key)) row.conflictIds.push(byKey.get(key));
+        });
+      });
       delete row.keys;
     });
     return {
@@ -336,8 +348,16 @@
       if ((balanceGroups.has(row.group) && overriddenGroups.has(row.group)) || conceptRoles.has(row.id)) include(row.id);
     });
     rows.forEach(function (row) {
-      row.ids = row.inventoryIds.filter(function (id) { return selected.has(id); });
+      row.ids = row.inventoryIds.filter(function (id) {
+        return selected.has(id) && !(row.conflictIds || []).includes(id);
+      });
     });
+    // Denominators must describe the same usable memberships as the ranking.
+    var counts = new Map();
+    rows.forEach(function (row) {
+      row.ids.forEach(function (id) { counts.set(id, (counts.get(id) || 0) + 1); });
+    });
+    selected.forEach(function (concept, id) { concept.count = counts.get(id) || 0; });
     return Array.from(selected.values());
   }
 
@@ -1549,7 +1569,7 @@
         operation:'captions', folder:session.folder,
         files:batches[index].map(function(row) {return row.fileName;}),
         captions:batches[index], knownConcepts:known,
-        trainingFocus:session.focus,model:model
+        trainingFocus:session.focus,setVariables:session.intent.variables,model:model
       },token).then(function(job) {
         if (!job || token !== session.token) return null;
         if (!job.result || !Array.isArray(job.result.captionObservations))
@@ -1691,7 +1711,7 @@
     renderCurrent();
     var priorityJob = session.concepts.length ? queueCurateJob({
       folder:session.folder, files:items.map(function(item) {return item.fileName;}),
-      trainingFocus:session.focus, concepts:session.concepts, model:model
+      trainingFocus:session.focus, concepts:session.concepts, setVariables:intent.variables, model:model
     },token).then(function(job) {
       if (!job || token !== session.token) return null;
       var result = job.result && job.result.analysis;
@@ -1719,7 +1739,7 @@
       session.analysis = result;
       var core = new Set(result.coreIds);
       session.balanceGroups = new Set(session.concepts.filter(function (c) {
-        return core.has(c.id);
+        return intent.variables.length ? explicitPriority(c, intent) : core.has(c.id);
       }).map(function (c) { return c.group; }));
       session.overriddenGroups = new Set();
       session.conceptRoles = new Map();
@@ -1727,14 +1747,12 @@
       // Non-selected terms in explicitly prioritized groups remain supporting
       // instead of becoming balance targets merely because their group is checked.
       var declared = session.concepts.filter(function (concept) { return explicitPriority(concept, intent); });
-      var declaredGroups = new Set(declared.map(function (concept) { return concept.group; }));
-      declaredGroups.forEach(function (group) { session.balanceGroups.add(group); });
       var declaredIds = new Set(declared.map(function (concept) { return concept.id; }));
       session.concepts.forEach(function (concept) {
         if (declaredIds.has(concept.id)) session.conceptRoles.set(concept.id, 'core');
-        else if (declaredGroups.has(concept.group) &&
+        else if (intent.variables.length &&
           (result.coreIds.includes(concept.id) || result.supportingIds.includes(concept.id))) {
-          // A declared variable narrows its group's balance terms.
+          // Other Director-selected concepts remain complementary evidence.
           session.conceptRoles.set(concept.id, 'supporting');
         }
       });

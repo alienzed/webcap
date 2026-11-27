@@ -113,8 +113,7 @@
     if (variable.exclusive) rows.push({ key: 'multiple', label: 'Multiple', files: multiple, color: 'warning' });
     rows.push({ key: 'neither', label: 'Neither', files: neither,
       color: 'neutral' });
-    return { rows: rows, neither: neither.length, multiple: multiple.length,
-      missingFiles: neither, multipleFiles: multiple };
+    return { rows: rows, multiple: multiple.length, multipleFiles: multiple };
   }
 
   function variableWarnings(variables, items) {

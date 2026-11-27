@@ -187,3 +187,11 @@ def test_deep_qa_does_not_cancel_other_sight_scan_and_keeps_prior_concept_action
     assert "session.signatures[row.fileName] !== signature ? 'unchecked'" in concept
     assert "conceptPreflightToken" in qa
     assert "check-finding-full" in qa
+
+
+def test_set_review_receives_declared_variables_without_limiting_discovery():
+    variables = [{"group": "View", "terms": ["front", "rear"], "exclusive": True}]
+    prompt = build_set_review_request(_items(), set_variables=variables)["prompt"]
+    assert '"setVariables"' in prompt
+    assert '"exclusive":true' in prompt
+    assert 'Continue discovering important visual dimensions' in prompt

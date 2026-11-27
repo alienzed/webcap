@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "chains": [
+    {
+      "id": "station-pivot",
+      "turns": [
+        "I'm planning a quiet short film set in a closed railway station at dawn. Scene 1 follows a caretaker finding a forgotten umbrella. Scene 2 takes place on the platform. I'd like restrained human warmth rather than melodrama.",
+        "Let's flesh out Scene 1. What could make it emotionally compelling?",
+        "Actually, keep the umbrella closed and avoid any mystery or reveal. Let's focus on an ordinary act of kindness instead. What would you suggest?",
+        "Write Scene 1 into this chat!"
+      ]
+    },
+    {
+      "id": "compass-pivot",
+      "turns": [
+        "I'm developing a collection of independent videos about strange everyday discoveries, with a recurring small brass compass. The first clip takes place in a bakery before opening.",
+        "Let's talk about the first Scene. How could the discovery work?",
+        "I'd rather make the discovery quietly uncanny, with the compass found on the counter and never inside food. How would you develop that?",
+        "Can I see the full Scene right here?"
+      ]
+    }
+  ]
+}

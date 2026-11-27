@@ -6,7 +6,7 @@ Audit basis: main at c7f7d9919c55a789f12424862cd4ed505ab89ae4. Follow AGENTS.md:
 
 Read saved set_variables and set_training_focus with the existing wildcard annotation snapshot. Preserve optional training-run filter and existing fallback. Report selected terms, exclusivity and observed scope coverage separately from inferred inventory. Missing annotations do not establish missing visual content. User focus takes precedence over saved focus. Keep existing wildcard schema, preview, prompt application and Epoch Finder callers. Add contract and route tests.
 
-## Phase 2 — shared temporary conversation surface
+## Phase 2 — shared temporary conversation surface (implemented for Ask QA; browser verification pending)
 
 Use Ask QA as reference: review_assistant.js owns evidence and execute/cancel; director_chat.js owns message rendering, model selection, status, context inspection, stop and temporary session behavior. Extract only UI and lifecycle pieces necessary for a contextual modal; keep persistent drawer and other modes untouched. Avoid new registry or session store. Feature supplies title, captured context, conversation callback and optionally working result panel. Open directly from feature, close back to originating surface; preserve in-flight state and errors, keyboard focus, scroll and drafts. Ask QA remains full-width, read-only, with same captured evidence and explicit updated-context restart. Regression: qa_finding_chat.test.cjs, director_chat_persistence.test.cjs, browser checks for focus, close/reopen, stop, Set changes and Studio isolation.
 

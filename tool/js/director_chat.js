@@ -110,7 +110,24 @@
   function availableModes() {
     return Object.keys(contextualModes).map(function (id) {
       return contextualModes[id];
-    }).filter(modeAvailable);
+    }).filter(function (mode) { return !mode.taskModal && modeAvailable(mode); });
+  }
+
+  // The Assistant owns its conversation DOM. Temporarily host it in a native
+  // modal for bounded tasks, without creating a second chat state or renderer.
+  function syncTaskConversationSurface() {
+    var dialog = el('task-conversation-modal');
+    var drawer = el('director-chat-drawer');
+    var mode = activeContextMode();
+    var modal = !!(state.open && mode && mode.taskModal);
+    if (modal) {
+      if (drawer.parentNode !== dialog) dialog.appendChild(drawer);
+      if (!dialog.open) dialog.showModal();
+    } else if (drawer.parentNode === dialog) {
+      if (dialog.open) dialog.close();
+      dialog.after(drawer);
+    }
+    return modal;
   }
 
   function storyboardContextPresets() {
@@ -525,7 +542,8 @@
       el('director-chat-history-toggle').setAttribute('aria-expanded', 'false');
       if (el('director-chat-history-panel').open) el('director-chat-history-panel').close();
     }
-    var newConversationLabel = context ? 'New QA chat' : studio ? 'New conversation' : 'New chat';
+    var taskModal = !!(active && active.taskModal);
+    var newConversationLabel = taskModal ? 'New chat' : context ? 'New QA chat' : studio ? 'New conversation' : 'New chat';
     el('director-chat-clear').querySelector('.director-header-button-label').textContent = studio ? 'New' : newConversationLabel;
     el('director-chat-clear').setAttribute('aria-label', newConversationLabel);
     el('director-chat-clear').title = newConversationLabel;
@@ -534,7 +552,7 @@
     el('app-frame').classList.toggle('studio-director-active', studio && state.open);
     drawer.setAttribute('aria-label', studio ? 'Projects Director' : 'Assistant');
     el('director-chat-title').textContent = studio ? studioWorkingStoryLabel() :
-      (context ? 'Ask QA' : 'Assistant');
+      (taskModal ? active.label : context ? 'Ask QA' : 'Assistant');
     el('director-chat-close').textContent = '×';
     el('director-chat-close').setAttribute('aria-label', studio ? 'Close Director' : 'Close Assistant');
     el('director-chat-empty-title').textContent = studio ? "Let's make something" :
@@ -543,7 +561,7 @@
       ? 'Start with an idea or question. Approve saved Project details in Context when useful.'
       : (context ? 'Ask why this recommendation matters, challenge its evidence, or discuss a better correction.'
         : 'Start a conversation with the selected model.');
-    if (row) row.classList.toggle('hidden', studio || !modes.length);
+    if (row) row.classList.toggle('hidden', studio || taskModal || !modes.length);
     if (host) {
       host.innerHTML = '<button type="button" class="review-captions-btn' + (state.activeMode === 'chat' ? ' active' : '') + '" data-assistant-mode="chat">Chat</button>' +
         modes.map(function (mode) {
@@ -596,6 +614,8 @@
     syncStudioRevisionUi();
     renderMessages();
     syncControls();
+    syncTaskConversationSurface();
+    syncPinnedUi();
   }
 
   function studioWorkspaceVisible() {
@@ -3849,7 +3869,8 @@
     var pin = el('director-chat-pin');
     if (!frame || !pin) return;
 
-    frame.classList.toggle('director-chat-pinned', state.pinned && state.open);
+    var mode = activeContextMode();
+    frame.classList.toggle('director-chat-pinned', state.pinned && state.open && !(mode && mode.taskModal));
     pin.classList.toggle('active', state.pinned);
     pin.setAttribute('aria-pressed', state.pinned ? 'true' : 'false');
     pin.setAttribute('aria-label', state.pinned ? 'Unpin Assistant' : 'Pin Assistant');
@@ -3886,6 +3907,7 @@
     drawer.setAttribute('aria-hidden', state.open ? 'false' : 'true');
     toggle.classList.toggle('active', state.open);
     toggle.setAttribute('aria-expanded', state.open ? 'true' : 'false');
+    syncTaskConversationSurface();
     syncPinnedUi();
 
     if (state.open) {
@@ -4083,6 +4105,10 @@
       setOpen(false);
       if (studio) toggle.focus();
     };
+    el('task-conversation-modal').addEventListener('cancel', function (event) {
+      event.preventDefault();
+      setOpen(false);
+    });
     clear.onclick = newChat;
     contextRefresh.onclick = function () {
       var mode = activeContextMode();

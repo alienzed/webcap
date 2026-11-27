@@ -140,7 +140,7 @@
     cancel: cancelReview
   });
 
-  // QA recommendation chat reuses the Assistant drawer and the existing
+  // QA recommendation chat reuses the temporary conversation surface and the existing
   // Director job contract. The captured evidence is read-only and no Sight
   // request or separate conversation store is introduced.
   var qaFindingContext = null;
@@ -148,6 +148,7 @@
   var qaFindingMode = {
     id: 'qa-finding',
     label: 'Ask QA',
+    taskModal: true,
     description: 'Discuss a saved QA recommendation and its evidence.',
     placeholder: 'What would you like to clarify about this finding?',
     available: function () { return !!qaFindingContext; },

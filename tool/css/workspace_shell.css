@@ -4665,3 +4665,41 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
     display: none;
   }
 }
+
+/* Bounded conversations reuse the Assistant-owned controls in a native modal. */
+.task-conversation-modal {
+  width: min(1100px, calc(100vw - 48px));
+  height: min(860px, calc(100dvh - 48px));
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  margin: auto;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: inherit;
+  background: var(--panel);
+}
+.task-conversation-modal::backdrop { background: rgba(0,0,0,.55); }
+.task-conversation-modal > .director-chat-drawer {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: inherit;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.task-conversation-modal #director-chat-pin,
+.task-conversation-modal #studio-director-resizer { display: none; }
+.task-conversation-modal .director-chat-header-copy strong { font-size: 26px; }
+.task-conversation-modal .director-chat-header-copy span { font-size: 14px; white-space: normal; }
+.task-conversation-modal .director-chat-message-body,
+.task-conversation-modal #director-chat-input,
+.task-conversation-modal .director-chat-model-row select,
+.task-conversation-modal .review-captions-btn { font-size: 16px; }
+.task-conversation-modal .director-chat-context-summary,
+.task-conversation-modal .director-chat-context-status,
+.task-conversation-modal .director-chat-temporary-note { font-size: 14px; }
+.task-conversation-modal #director-chat-send { font-size: 18px; }

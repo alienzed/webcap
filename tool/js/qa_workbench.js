@@ -307,7 +307,9 @@
   function qaCurationSignature(items, intent) {
     var signature = qaBuildDeepScanSignature(items);
     if (!intent.variables.length) return signature;
-    return JSON.stringify([signature, intent]);
+    // Preserve saved grouped-only draft identities from the previous format.
+    // The empty array is signature encoding only, not a second intent source.
+    return JSON.stringify([signature, {variables:intent.variables, phrases:[]}]);
   }
 
   function qaDeepScanFindingPayload(items) {

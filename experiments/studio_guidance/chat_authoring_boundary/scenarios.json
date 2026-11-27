@@ -1,0 +1,274 @@
+{
+  "version": 1,
+  "experiment": "chat-authoring-boundary-v1",
+  "cases": [
+    {
+      "id": "talk-scene",
+      "split": "development",
+      "category": "chat-authoring-boundary",
+      "operation": "studio_chat",
+      "focus": "Explore Scene 1 without writing it.",
+      "fidelity_checks": [
+        "Offers useful concrete creative direction or a meaningful choice.",
+        "Stops at discussion-level development; no unsolicited complete overview, structured Scene record, or production-ready prompt."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "I'm planning a quiet short film set in a closed railway station at dawn. Scene 1 follows a caretaker finding a forgotten umbrella. Scene 2 takes place on the platform. I'd like restrained human warmth rather than melodrama."
+        },
+        {
+          "role": "user",
+          "content": "Let's talk about Scene 1."
+        }
+      ]
+    },
+    {
+      "id": "flesh-scenes",
+      "split": "development",
+      "category": "chat-authoring-boundary",
+      "operation": "studio_chat",
+      "focus": "Develop the relationship rather than writing complete Scenes.",
+      "fidelity_checks": [
+        "Offers useful concrete creative direction or a meaningful choice.",
+        "Stops at discussion-level development; no unsolicited complete overview, structured Scene record, or production-ready prompt."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "I'm planning a quiet short film set in a closed railway station at dawn. Scene 1 follows a caretaker finding a forgotten umbrella. Scene 2 takes place on the platform. I'd like restrained human warmth rather than melodrama."
+        },
+        {
+          "role": "user",
+          "content": "Let's flesh out these scenes. I'm not sure how to connect them."
+        }
+      ]
+    },
+    {
+      "id": "write-chat",
+      "split": "development",
+      "category": "chat-authoring-boundary",
+      "operation": "studio_chat",
+      "focus": "Direct drafting cue must work.",
+      "fidelity_checks": [
+        "Actually supplies the requested complete Scene in chat; no refusal, deferral to Write, or unnecessary permission request.",
+        "Includes title, a usable 4–15 second duration, and a self-contained audiovisual prompt.",
+        "Preserves the supplied premise and deliberate constraints."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "I'm planning a quiet short film set in a closed railway station at dawn. Scene 1 follows a caretaker finding a forgotten umbrella. Scene 2 takes place on the platform. I'd like restrained human warmth rather than melodrama."
+        },
+        {
+          "role": "user",
+          "content": "Write Scene 1 into this chat!"
+        }
+      ]
+    },
+    {
+      "id": "give-scene",
+      "split": "development",
+      "category": "chat-authoring-boundary",
+      "operation": "studio_chat",
+      "focus": "Natural give-me cue must work.",
+      "fidelity_checks": [
+        "Actually supplies the requested complete Scene in chat; no refusal, deferral to Write, or unnecessary permission request.",
+        "Includes title, a usable 4–15 second duration, and a self-contained audiovisual prompt.",
+        "Preserves the supplied premise and deliberate constraints."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "I'm planning a quiet short film set in a closed railway station at dawn. Scene 1 follows a caretaker finding a forgotten umbrella. Scene 2 takes place on the platform. I'd like restrained human warmth rather than melodrama."
+        },
+        {
+          "role": "user",
+          "content": "Give me Scene 1, with a title, duration and complete prompt."
+        }
+      ]
+    },
+    {
+      "id": "give-opinion",
+      "split": "development",
+      "category": "chat-authoring-boundary",
+      "operation": "studio_chat",
+      "focus": "Give me is not a keyword trigger; the requested object matters.",
+      "fidelity_checks": [
+        "Offers useful concrete creative direction or a meaningful choice.",
+        "Stops at discussion-level development; no unsolicited complete overview, structured Scene record, or production-ready prompt."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "I'm planning a quiet short film set in a closed railway station at dawn. Scene 1 follows a caretaker finding a forgotten umbrella. Scene 2 takes place on the platform. I'd like restrained human warmth rather than melodrama."
+        },
+        {
+          "role": "user",
+          "content": "Give me your opinion on Scene 1."
+        }
+      ]
+    },
+    {
+      "id": "rethink-overview",
+      "split": "development",
+      "category": "chat-authoring-boundary",
+      "operation": "studio_chat",
+      "focus": "Discuss Project direction rather than unsolicited complete Project fields.",
+      "fidelity_checks": [
+        "Offers useful concrete creative direction or a meaningful choice.",
+        "Stops at discussion-level development; no unsolicited complete overview, structured Scene record, or production-ready prompt."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "I'm developing a collection of independent videos about strange everyday discoveries, with a recurring small brass compass. The first clip takes place in a bakery before opening."
+        },
+        {
+          "role": "user",
+          "content": "Let's rethink the overall concept. I wonder whether the discoveries should be funny or uncanny."
+        }
+      ]
+    },
+    {
+      "id": "natural-draft",
+      "split": "holdout",
+      "category": "chat-authoring-boundary",
+      "operation": "studio_chat",
+      "focus": "Equivalent natural request with neither exact cue.",
+      "fidelity_checks": [
+        "Actually supplies the requested complete Scene in chat; no refusal, deferral to Write, or unnecessary permission request.",
+        "Includes title, a usable 4–15 second duration, and a self-contained audiovisual prompt.",
+        "Preserves the supplied premise and deliberate constraints."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "I'm developing a collection of independent videos about strange everyday discoveries, with a recurring small brass compass. The first clip takes place in a bakery before opening."
+        },
+        {
+          "role": "user",
+          "content": "Can I see a complete draft of that first clip right here?"
+        }
+      ]
+    },
+    {
+      "id": "detailed-discussion",
+      "split": "holdout",
+      "category": "chat-authoring-boundary",
+      "operation": "studio_chat",
+      "focus": "Concrete visual exploration without premature full draft.",
+      "fidelity_checks": [
+        "Offers useful concrete creative direction or a meaningful choice.",
+        "Stops at discussion-level development; no unsolicited complete overview, structured Scene record, or production-ready prompt."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "I'm developing a collection of independent videos about strange everyday discoveries, with a recurring small brass compass. The first clip takes place in a bakery before opening."
+        },
+        {
+          "role": "user",
+          "content": "What if the baker finds the compass inside an unbaked loaf? Help me make that moment feel strange."
+        }
+      ]
+    },
+    {
+      "id": "reverse-direction",
+      "split": "holdout",
+      "category": "chat-authoring-boundary",
+      "operation": "studio_chat",
+      "focus": "Latest user direction supersedes provisional suggestions.",
+      "fidelity_checks": [
+        "Offers useful concrete creative direction or a meaningful choice.",
+        "Stops at discussion-level development; no unsolicited complete overview, structured Scene record, or production-ready prompt.",
+        "Drops rejected note and opening; develops the newer direction."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "I'm planning a quiet short film set in a closed railway station at dawn. Scene 1 follows a caretaker finding a forgotten umbrella. Scene 2 takes place on the platform. I'd like restrained human warmth rather than melodrama."
+        },
+        {
+          "role": "assistant",
+          "content": "One possibility is that the caretaker opens the umbrella and finds a handwritten note, creating a little mystery."
+        },
+        {
+          "role": "user",
+          "content": "No note, and I don't want the umbrella opened. I want this to be about an ordinary act of kindness. Let's work through how that might look."
+        }
+      ]
+    },
+    {
+      "id": "write-overview",
+      "split": "holdout",
+      "category": "chat-authoring-boundary",
+      "operation": "studio_chat",
+      "focus": "Explicit Project-field drafting is also welcome.",
+      "fidelity_checks": [
+        "Provides a complete overview directly.",
+        "Preserves the recurring compass and independent-video structure; centers uncanny discoveries."
+      ],
+      "history": [
+        {
+          "role": "user",
+          "content": "I'm developing a collection of independent videos about strange everyday discoveries, with a recurring small brass compass. The first clip takes place in a bakery before opening."
+        },
+        {
+          "role": "user",
+          "content": "Write the Project overview in this chat. I want the complete concept, centered on uncanny discoveries rather than comedy."
+        }
+      ]
+    },
+    {
+      "id": "write-project-control",
+      "split": "holdout",
+      "category": "write-regression-control",
+      "operation": "studio_project_draft",
+      "history": [
+        {
+          "role": "user",
+          "content": "I'm developing a collection of independent videos about strange everyday discoveries, with a recurring small brass compass. The first clip takes place in a bakery before opening."
+        },
+        {
+          "role": "user",
+          "content": "Uncanny, not comedic. The compass is always brass and small."
+        }
+      ],
+      "instruction": "Write the complete Project: title, concept, visual / atmosphere and relevant invariants.",
+      "focus": "Unchanged production Write baseline; meaningful values for each required field.",
+      "fidelity_checks": [
+        "Title, concept, visual / atmosphere and relevant invariants are meaningfully populated.",
+        "Keeps the recurring compass, independent clips and uncanny tone."
+      ]
+    },
+    {
+      "id": "write-scene-control",
+      "split": "holdout",
+      "category": "write-regression-control",
+      "operation": "studio_scenes_draft",
+      "history": [
+        {
+          "role": "user",
+          "content": "I'm planning a quiet short film set in a closed railway station at dawn. Scene 1 follows a caretaker finding a forgotten umbrella. Scene 2 takes place on the platform. I'd like restrained human warmth rather than melodrama."
+        },
+        {
+          "role": "user",
+          "content": "The umbrella stays closed; the caretaker leaves it where its owner will find it."
+        }
+      ],
+      "instruction": "Write one complete 12-second Scene 1. The caretaker finds a closed umbrella and places it by the lost-property window. The umbrella stays closed. Quiet dawn, restrained human warmth, no dialogue.",
+      "project": {
+        "title": "Lost and Found",
+        "concept": "Quiet acts of kindness in an empty railway station.",
+        "style": "Naturalistic, restrained warmth.",
+        "invariants": []
+      },
+      "focus": "Unchanged production Write baseline; complete structured Scene.",
+      "fidelity_checks": [
+        "One Scene with meaningful title, durationSeconds=12 and complete self-contained H3 prompt.",
+        "Preserves closed umbrella, lost-property window and intended quiet tone."
+      ]
+    }
+  ]
+}

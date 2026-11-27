@@ -16,18 +16,29 @@ function getBalanceWheelStats() {
   var variables = normalizeSetVariables(state.setVariables);
   var items = getBalanceWheelVisibleItems();
   var currentItem = state.currentItem && state.currentItem.key ? state.currentItem : null;
-  var rows = [];
+  var rows = [], groups = [];
   variables.forEach(function (variable) {
-    var assignments = items.map(function (item) { return setVariableAssignedTerms(item, variable.group); });
+    var coverage = setVariableCoverage(variable, items);
     var current = currentItem ? setVariableAssignedTerms(currentItem, variable.group) : new Set();
-    variable.terms.forEach(function (term) {
-      var key = normalizeChecklistTerm(term).toLowerCase();
-      rows.push({group:variable.group, term:term, index:rows.length,
-        count:assignments.filter(function (assigned) { return assigned.has(key); }).length,
-        currentMatch:current.has(key)});
+    var termRows = coverage.terms.map(function (term) {
+      var key = normalizeChecklistTerm(term.label).toLowerCase();
+      var row = {group:variable.group, term:term.label, index:rows.length,
+        count:term.files.length, currentMatch:current.has(key)};
+      row.color = balanceWheelColor(row.index);
+      rows.push(row);
+      return row;
     });
+    var currentCount = termRows.filter(function (row) { return row.currentMatch; }).length;
+    var groupRows = coverage.rows.map(function (entry, index) {
+      var term = index < termRows.length ? termRows[index] : null;
+      return {term:entry.label, index:index, count:entry.files.length,
+        color:term ? term.color : entry.key === 'multiple' ? '#b45309' : '#94a3b8',
+        currentMatch:!!currentItem && (term ? term.currentMatch && (!variable.exclusive || currentCount === 1) :
+          entry.key === 'multiple' ? currentCount > 1 : currentCount === 0)};
+    });
+    groups.push({group:variable.group, partition:variable.exclusive, rows:groupRows, total:items.length});
   });
-  return {rows:rows, total:items.length, currentItem:currentItem};
+  return {rows:rows, groups:groups, total:items.length, currentItem:currentItem};
 }
 
 function balanceWheelColor(index) {
@@ -85,18 +96,23 @@ function renderBalanceWheelSvg(stats) {
     '<circle cx="50" cy="50" r="' + radius + '" class="balance-wheel-bg"></circle>'
   ];
 
+  var angle = 0;
   stats.rows.forEach(function (row) {
     if (!row.count || !stats.total) return;
-    var sweep = Math.min(sector - Math.min(1, sector / 10), (row.count / stats.total) * sector);
+    var sweep = stats.partition ? (row.count / stats.total) * 360 :
+      Math.min(sector - Math.min(1, sector / 10), (row.count / stats.total) * sector);
     if (sweep <= 0) return;
-    var start = row.index * sector;
+    var start = stats.partition ? angle : row.index * sector;
     var end = start + sweep;
+    if (stats.partition) angle = end;
     var classes = 'balance-wheel-slice' + (row.currentMatch ? ' is-current' : '');
-    parts.push(
-      '<path class="' + classes + '" d="' + balanceWheelArcPath(cx, cy, radius, start, end) + '"' +
-      ' stroke="' + balanceWheelColor(row.index) + '" stroke-width="' + strokeWidth + '"' +
-      ' fill="none" stroke-linecap="butt"></path>'
-    );
+    var style = ' class="' + classes + '" stroke="' + row.color + '" stroke-width="' +
+      strokeWidth + '" fill="none" stroke-linecap="butt"';
+    if (sweep >= 359.999999) {
+      parts.push('<circle cx="50" cy="50" r="' + radius + '"' + style + '></circle>');
+    } else {
+      parts.push('<path d="' + balanceWheelArcPath(cx, cy, radius, start, end) + '"' + style + '></path>');
+    }
   });
 
   if (!stats.rows.some(function (row) { return row.count > 0; })) {
@@ -105,6 +121,21 @@ function renderBalanceWheelSvg(stats) {
 
   parts.push('</svg>');
   return parts.join('');
+}
+
+function renderBalanceWheelGroups(stats) {
+  return '<div class="balance-wheel-groups">' + stats.groups.map(function (group) {
+    return '<section class="balance-wheel-group"><h3>' + escapeHtml(group.group) + '</h3>' +
+      renderBalanceWheelSvg(group) +
+      '<div class="balance-wheel-kind">' + (group.partition ? 'Share of media' : 'Independent coverage') + '</div>' +
+      '<div class="balance-wheel-legend">' + group.rows.map(function (row) {
+        return '<div class="balance-wheel-legend-row' + (row.currentMatch ? ' is-current' : '') + '">' +
+          '<span class="balance-wheel-swatch" style="background-color:' + row.color + '"></span>' +
+          '<span class="balance-wheel-term">' + escapeHtml(row.term) + '</span>' +
+          '<span class="balance-wheel-count">' + row.count + '/' + group.total +
+          ' (' + balanceWheelPercent(row.count, group.total) + ')</span></div>';
+      }).join('') + '</div></section>';
+  }).join('') + '</div>';
 }
 
 function updateBalanceDistributionWheel() {
@@ -117,8 +148,12 @@ function updateBalanceDistributionWheel() {
     return;
   }
 
-  el.innerHTML = renderBalanceWheelSvg(stats);
-  el.title = buildBalanceWheelTitle(stats);
+  var previousPanel = el.querySelector('.balance-wheel-groups');
+  var scrollTop = previousPanel ? previousPanel.scrollTop : 0;
+  el.innerHTML = '<div class="balance-wheel-trigger">' + renderBalanceWheelSvg(stats) + '</div>' +
+    renderBalanceWheelGroups(stats);
+  el.querySelector('.balance-wheel-trigger').title = buildBalanceWheelTitle(stats);
+  el.querySelector('.balance-wheel-groups').scrollTop = scrollTop;
   el.classList.remove('hidden');
 }
 

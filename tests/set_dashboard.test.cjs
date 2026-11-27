@@ -5,6 +5,9 @@ const vm = require('node:vm');
 const path = require('node:path');
 
 const source = fs.readFileSync(path.join(__dirname, '../tool/js/set_dashboard.js'), 'utf8');
+const folderSource = fs.readFileSync(path.join(__dirname, '../tool/js/folder_state.js'), 'utf8');
+const coverageSource = folderSource.slice(folderSource.indexOf('function setVariableCoverage('),
+  folderSource.indexOf('function scheduleSetDefinitionSave()'));
 
 function dashboard(options = {}) {
   const elements = {};
@@ -164,7 +167,7 @@ test('exclusive coverage partitions overlap; independent terms keep full members
     normalizeChecklistTerm: term => String(term).trim(),
     setVariableKey: row => row.group
   };
-  vm.runInNewContext(source.slice(start,end) + '\nthis.coverage = variableCoverage; this.warnings = variableWarnings;',sandbox);
+  vm.runInNewContext(coverageSource + source.slice(start,end) + '\nthis.coverage = variableCoverage; this.warnings = variableWarnings;',sandbox);
   const items = Object.keys(assigned).map(key=>({key,fileName:key+'.jpg'}));
   const variable = {group:'Position',terms:['kneeling','squatting'],exclusive:true,expected:true};
   const count = r => Array.from(r.rows, row=>row.files.length);
@@ -273,7 +276,7 @@ test('coverage does not count matching unscoped tags, caption text or other grou
     setVariableAssignedTerms:(item,group)=>new Set(assigned[item.key][group]||[]),
     normalizeChecklistTerm:term=>term
   };
-  vm.runInNewContext(source.slice(start,end)+'\nthis.coverage=variableCoverage;this.warnings=variableWarnings;',context);
+  vm.runInNewContext(coverageSource + source.slice(start,end)+'\nthis.coverage=variableCoverage;this.warnings=variableWarnings;',context);
   const v={group:'View',terms:['rear'],expected:true,exclusive:false};
   const items=[{key:'a',fileName:'a',caption:'rear'},{key:'b',fileName:'b',caption:'rear'},{key:'c',fileName:'c',tags:['rear']}];
   assert.deepEqual(Array.from(context.coverage(v,items).rows,row=>row.files.length),[1,2]);
@@ -386,4 +389,51 @@ test('group checkboxes save each scoped selection immediately and preserve other
   assert.equal(editor().exclusive.disabled,true);
   assert.equal(editor().reset.disabled,true);
   assert.equal(saves,3);assert.equal(refreshes,3);
+});
+
+test('preview wheel retains aggregate coverage and expands into honest group distributions', () => {
+  const wheelSource = fs.readFileSync(path.join(__dirname, '../tool/js/balance_distribution_wheel.js'), 'utf8');
+  const items = ['a','b','c','d'].map(key => ({key,fileName:key+'.jpg'}));
+  const tags = {
+    a:{View:['front'],Style:['striped','blue']},
+    b:{View:['rear'],Style:['blue']},
+    c:{View:['front','rear'],Style:['striped']},
+    d:{View:[],Style:[]},
+    excluded:{View:['front'],Style:['blue']}
+  };
+  const variables = [
+    {group:'View',terms:['front','rear'],exclusive:true},
+    {group:'Style',terms:['striped','blue'],exclusive:false}
+  ];
+  const context = {
+    state:{setVariables:variables,currentItem:items[2]},
+    normalizeSetVariables:rows=>rows,
+    normalizeChecklistTerm:term=>term.trim(),
+    getFilteredMediaItems:ignore=>{assert.equal(ignore,false);return items;},
+    setVariableAssignedTerms:(item,group)=>new Set(tags[item.key][group]),
+    escapeHtml:value=>String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  };
+  vm.runInNewContext(coverageSource + wheelSource, context);
+  const stats = context.getBalanceWheelStats();
+  assert.equal(stats.total,4);
+  assert.deepEqual(Array.from(stats.rows,row=>row.count),[2,2,2,2]);
+  const [view,style] = stats.groups;
+  assert.equal(view.partition,true);
+  assert.deepEqual(Array.from(view.rows,row=>row.count),[1,1,1,1]);
+  assert.deepEqual(Array.from(view.rows,row=>row.currentMatch),[false,false,true,false]);
+  assert.equal(style.partition,false);
+  assert.deepEqual(Array.from(style.rows,row=>row.count),[2,2,1]);
+  assert.deepEqual(Array.from(style.rows,row=>row.currentMatch),[true,false,false]);
+  assert.equal(style.rows[0].color,stats.rows[2].color);
+  assert.match(context.renderBalanceWheelGroups(stats),/Share of media/);
+  assert.match(context.renderBalanceWheelGroups(stats),/Independent coverage/);
+  assert.match(context.renderBalanceWheelGroups(stats),/2\/4 \(50%\)/);
+  assert.equal((context.renderBalanceWheelGroups(stats).match(/class="balance-wheel-group"/g)||[]).length,2);
+  const full = {partition:true,total:4,rows:[{count:4,index:0,color:'#123456',currentMatch:true}]};
+  assert.match(context.renderBalanceWheelSvg(full),/<circle[^>]+class="balance-wheel-slice is-current"/);
+  assert.doesNotMatch(context.renderBalanceWheelSvg(full),/<path/);
+  const css = fs.readFileSync(path.join(__dirname,'../tool/css/styles.css'),'utf8');
+  assert.match(css,/\.balance-distribution-wheel:hover \.balance-wheel-groups/);
+  assert.match(css,/\.balance-distribution-wheel:focus-visible \.balance-wheel-groups/);
+  assert.doesNotMatch(wheelSource,/onclick|addEventListener\(['"]click/);
 });

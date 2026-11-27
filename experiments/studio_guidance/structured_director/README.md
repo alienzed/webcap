@@ -1,7 +1,7 @@
 # Structured Director guidance — adoption candidate
 
 ## Phase 1: freeze and audit (this draft)
-The control is the verbatim Classic v3 role/toolkit from unified_final. The single candidate implements the agreed XML role, responsibilities, protocol, short response guidance, field purpose/contents/quality criteria, and H3 knowledge with a delimited example. Existing H3 authoring reference remains identical for Scene Write in the runner. No storage, context, schema, profile settings, queue or UI changes. The field labels follow production (Concept / overview, Visual / atmosphere); no data rename. The shape example is illustrative and the active H3 reference remains authoritative. No new validation gates. Preserve AGENTS.md principles.
+The control is the verbatim Classic v3 role/toolkit from unified_final. The single candidate implements the agreed XML role, creative development criteria, short response guidance, field purpose/contents/quality criteria, and H3 knowledge with a delimited example. Existing H3 authoring reference remains identical for Scene Write in the runner. No storage, context, schema, profile settings, queue or UI changes. The field labels follow production (Concept / overview, Visual / atmosphere); no data rename. The shape example is illustrative and the active H3 reference remains authoritative. No new validation gates. Preserve AGENTS.md principles.
 
 ## Guidance authoring review gate (agreed)
 
@@ -10,15 +10,14 @@ Every subsequent guidance revision must respect these exclusive section purposes
 | Section | Exclusive purpose |
 | --- | --- |
 | Role | Define the fundamental function of the Director. |
-| Responsibilities | Define the outcomes the Director is expected to achieve. |
-| Collaboration | Define the methods by which the Director develops the production with the user. |
+| Criteria | Define the production variables to develop through conversation and the method for developing their values. |
 | Response guidance | Define when to provide particular responses and their appropriate scope, form and level of detail. |
 | Project Parameters | Define the purpose, required information and quality criteria of each Project field. |
 | Scene definition | Define the required information and quality criteria of a Scene specification. |
 | H3 guidebook | Provide model-specific technical knowledge, prompting techniques and generation considerations. |
 
-- Responsibilities vs. Collaboration: outcomes versus methods. Identifying unresolved decisions belongs in Collaboration; developing a coherent production belongs in Responsibilities.
-- Collaboration vs. Response guidance: how the Director advances the work versus what it actually returns to the user.
+- Criteria vs. Response guidance: how the Director develops the relevant production variables versus what it actually returns to the user.
+- Criteria vs. field definitions: the creative decisions to develop versus the information each specification field must express. Criteria replace the former Responsibilities and Collaboration sections to avoid redundant generic instructions.
 - Scene definition vs. H3 guidebook: what must be audiovisually specified versus how to express that specification effectively for a particular generation model.
 
 Review each instruction against these boundaries before approval. Correct misplaced or overlapping instructions by assigning their useful substance to the appropriate section; retain the separation of concerns. This is an authoring and review criterion, not a runtime validation gate. Preserve approved wording where it passes the criterion, and review any necessary changes explicitly with the user.

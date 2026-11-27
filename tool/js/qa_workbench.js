@@ -301,12 +301,12 @@
   }
 
   function qaCurationIntent() {
-    return { variables: normalizeSetVariables(state.setVariables), phrases: getBalanceWheelPhrases() };
+    return { variables: normalizeSetVariables(state.setVariables) };
   }
 
   function qaCurationSignature(items, intent) {
     var signature = qaBuildDeepScanSignature(items);
-    return intent.variables.length || intent.phrases.length
+    return intent.variables.length
       ? JSON.stringify([signature, intent]) : signature;
   }
 
@@ -2256,7 +2256,7 @@
     var scope = document.createElement('div');
     scope.className = 'qa-page-scope';
     scope.textContent = subtitle;
-    copy.appendChild(h1);
+    if (!qaDashboardHost || view !== 'overview') copy.appendChild(h1);
     copy.appendChild(scope);
     header.appendChild(copy);
     var actions = document.createElement('div');
@@ -2536,7 +2536,7 @@
         variableActions.className = 'qa-health-row';
         variableWarnings.forEach(function (warning) {
           var action = qaCreateButton(warning.group + ' · ' + warning.files.length + ' ' + warning.label.toLowerCase(),
-            'qa-health-chip', 'inspect-variable', JSON.stringify([warning.group, warning.kind]));
+            'qa-health-chip', 'inspect-variable', JSON.stringify([warning.key, warning.kind]));
           action.title = 'Inspect media (advisory; absence may be legitimate)';
           variableActions.appendChild(action);
         });
@@ -4247,7 +4247,7 @@
     if (action === 'inspect-variable') {
       var target = JSON.parse(value);
       var warning = window.getSetVariableWarnings(state.setVariables || [], qaGetTrainingItems()).find(function (row) {
-        return row.group === target[0] && row.kind === target[1];
+        return row.key === target[0] && row.kind === target[1];
       });
       if (warning) qaSelectFiles(warning.files, warning.group + ' · ' + warning.label, '');
       return;

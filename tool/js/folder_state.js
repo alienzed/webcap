@@ -33,22 +33,39 @@ function setRequirementGroupAlias(label, alias) {
   return true;
 }
 
+// Blank group: standalone term. Named group: assigned vocabulary.
+function setVariableKey(variable) {
+  return JSON.stringify([variable.group || '', variable.group ? '' : String(variable.terms[0] || '').toLowerCase()]);
+}
 function normalizeSetVariables(rows) {
   var seen = new Set();
   return (Array.isArray(rows) ? rows : []).reduce(function (out, row) {
     var group = String(row && row.group || '').trim();
-    if (!group || seen.has(group)) return out;
     var terms = [], termKeys = new Set();
-    (Array.isArray(row.terms) ? row.terms : []).forEach(function (raw) {
+    (Array.isArray(row && row.terms) ? row.terms : []).forEach(function (raw) {
       var term = String(raw || '').trim(), key = term.toLowerCase();
+      if (!group) { term = term.replace(/\s+/g, ' '); key = term.toLowerCase(); }
       if (term && !termKeys.has(key)) { termKeys.add(key); terms.push(term); }
     });
-    if (terms.length) {
-      seen.add(group);
-      out.push({ group: group, terms: terms, exclusive: !!row.exclusive, expected: !!row.expected });
-    }
+    (group ? [terms] : terms.map(function (term) { return [term]; })).forEach(function (values) {
+      if (!values.length) return;
+      var variable = {group:group, terms:values, exclusive:!!group && !!row.exclusive, expected:!!row.expected};
+      var key = setVariableKey(variable);
+      if (!seen.has(key)) { seen.add(key); out.push(variable); }
+    });
     return out;
   }, []);
+}
+function migrateSetVariables(rows, legacyPhrases) {
+  var legacy = String(legacyPhrases || '').split(/\r?\n/).map(function (term) {
+    return {group:'', terms:[term], expected:false};
+  });
+  return normalizeSetVariables((Array.isArray(rows) ? rows : []).concat(legacy));
+}
+function getSetVariablePhrases() {
+  return normalizeSetVariables(state.setVariables).filter(function (variable) {
+    return !variable.group;
+  }).map(function (variable) { return variable.terms[0]; });
 }
 
 function scheduleSetDefinitionSave() {
@@ -266,10 +283,9 @@ function sanitizeFolderState(data) {
   return {
     version: FOLDER_STATE_VERSION,
     set_training_focus: typeof src.set_training_focus === 'string' ? src.set_training_focus.trim().slice(0, 240) : null,
-    set_variables: normalizeSetVariables(src.set_variables),
+    set_variables: migrateSetVariables(src.set_variables, stats.phrases),
     stats: {
       requiredPhrase: String(stats.requiredPhrase || ''),
-      phrases: String(stats.phrases || ''),
       reviewRules: reviewRulesValue
     },
     primer: {
@@ -532,6 +548,8 @@ function snapshotFolderStateFromDom() {
   // IMPORTANT: If you add new fields to the folder state, you MUST include them here
   // so they are persisted. This function must snapshot ALL fields that should be saved.
   var stats = getOptionsFromDom();
+  // Report terms are derived, never persisted as a second configuration.
+  delete stats.phrases;
   var primer = statsGetPrimerOptionsFromDom();
   primer.keyAliases = Object.assign({}, requirementGroupAliasOverrides);
   // Folder state is authoritative. The visible list can be filtered, empty, or
@@ -661,17 +679,11 @@ function applyFolderStateToDom(folderState) {
   });
   // Restore stats and primer fields to DOM
   var requiredPhraseEl = document.getElementById('stats-required-phrase');
-  var phrasesEl = document.getElementById('stats-phrases');
   var templateEl = document.getElementById('primer-template');
 
   if (requiredPhraseEl) {
     requiredPhraseEl.value = clean.stats.requiredPhrase;
   }
-  if (phrasesEl) {
-    phrasesEl.value = clean.stats.phrases;
-  }
-  loadStatsBalancePhrasesFromTextarea();
-  renderStatsBalancePhraseList();
   loadReviewRulesRows(clean.stats.reviewRules);
   
   if (templateEl) {

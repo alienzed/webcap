@@ -199,287 +199,24 @@ function parsePhrases(multiline) {
     .filter(Boolean);
 }
 
-var statsBalancePhrases = [];
-
-function normalizeBalancePhrase(text) {
+function normalizeVariableTerm(text) {
   return String(text || '').trim().replace(/\s+/g, ' ');
 }
 
-function setFilterFromBalancePhrase(phrase) {
-  var text = normalizeBalancePhrase(phrase);
+function setFilterFromVariableTerm(phrase) {
+  var text = normalizeVariableTerm(phrase);
   if (!text || !ui || !ui.filterEl) return;
   ui.filterEl.value = text;
   ui.filterEl.dispatchEvent(new Event('input', { bubbles: true }));
-  setStatus('Filter applied from balance phrase: ' + text);
+  setStatus('Filter applied from Set Variable: ' + text);
 }
 
-function addBalancePhraseTagToCurrentMedia(phrase) {
-  var text = normalizeBalancePhrase(phrase);
-  if (!text) return false;
-  if (!state.currentItem || !state.currentItem.key) {
-    setStatus('Select a media item.');
-    return false;
-  }
-  if (typeof addTagToCurrentMedia !== 'function') {
-    setStatus('Tagging is unavailable.');
-    return false;
-  }
-  return addTagToCurrentMedia(text);
-}
-
-function setStatsBalancePhrases(nextPhrases, triggerAutosave) {
-  var seen = {};
-  statsBalancePhrases = (nextPhrases || [])
-    .map(normalizeBalancePhrase)
-    .filter(function (phrase) {
-      if (!phrase) return false;
-      var low = phrase.toLowerCase();
-      if (seen[low]) return false;
-      seen[low] = true;
-      return true;
-    });
-
-  var phrasesEl = ui && ui.statsPhrasesEl ? ui.statsPhrasesEl : document.getElementById('stats-phrases');
-  if (phrasesEl) {
-    phrasesEl.value = statsBalancePhrases.join('\n');
-    if (triggerAutosave) {
-      phrasesEl.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-  }
-  updateBalanceDistributionWheel();
-}
-
-function moveStatsBalancePhraseByOffset(index, offset) {
-  var idx = Number(index);
-  var step = Number(offset);
-  if (!isFinite(idx) || !isFinite(step)) return false;
-  if (!Array.isArray(statsBalancePhrases) || !statsBalancePhrases.length) return false;
-  if (idx < 0 || idx >= statsBalancePhrases.length) return false;
-  var nextIdx = idx + step;
-  if (nextIdx < 0 || nextIdx >= statsBalancePhrases.length) return false;
-  var next = statsBalancePhrases.slice();
-  var temp = next[idx];
-  next[idx] = next[nextIdx];
-  next[nextIdx] = temp;
-  setStatsBalancePhrases(next, true);
-  renderStatsBalancePhraseList();
-  return true;
-}
-
-function loadStatsBalancePhrasesFromTextarea() {
-  var phrasesEl = ui && ui.statsPhrasesEl ? ui.statsPhrasesEl : document.getElementById('stats-phrases');
-  var parsed = parsePhrases(phrasesEl ? phrasesEl.value : '');
-  setStatsBalancePhrases(parsed, false);
-}
-
-function renderStatsBalancePhraseList() {
-  var listEl = ui && ui.statsPhrasesItemsEl ? ui.statsPhrasesItemsEl : document.getElementById('stats-phrases-items');
-  if (!listEl) return;
-  listEl.innerHTML = '';
-
-  if (!statsBalancePhrases.length) {
-    var empty = document.createElement('div');
-    empty.className = 'small';
-    empty.textContent = 'No balance phrases configured.';
-    listEl.appendChild(empty);
-    return;
-  }
-
-  for (var i = 0; i < statsBalancePhrases.length; i++) {
-    (function (idx) {
-      var phrase = statsBalancePhrases[idx];
-      var row = document.createElement('div');
-      row.className = 'row-inline stats-phrase-row';
-
-      var phraseBtn = document.createElement('button');
-      phraseBtn.type = 'button';
-      phraseBtn.className = 'phrase-copy-item-btn';
-      phraseBtn.title = 'Add as tag to current media';
-      phraseBtn.textContent = phrase;
-      phraseBtn.onclick = function () {
-        addBalancePhraseTagToCurrentMedia(phrase);
-      };
-
-      var actions = document.createElement('div');
-      actions.className = 'stats-phrase-actions';
-
-      var moveUpBtn = document.createElement('button');
-      moveUpBtn.type = 'button';
-      moveUpBtn.className = 'stats-phrase-move-btn';
-      moveUpBtn.title = 'Move up';
-      moveUpBtn.textContent = '\u2191';
-      moveUpBtn.onclick = function () {
-        var moved = moveStatsBalancePhraseByOffset(idx, -1);
-        if (moved) {
-          setStatus('Moved balance phrase up: ' + phrase);
-        }
-      };
-      actions.appendChild(moveUpBtn);
-
-      var removeBtn = document.createElement('button');
-      removeBtn.type = 'button';
-      removeBtn.className = 'stats-phrase-mini-btn';
-      removeBtn.title = 'Remove phrase';
-      removeBtn.textContent = 'x';
-      removeBtn.onclick = function () {
-        var next = statsBalancePhrases.slice();
-        next.splice(idx, 1);
-        setStatsBalancePhrases(next, true);
-        renderStatsBalancePhraseList();
-      };
-      actions.appendChild(removeBtn);
-
-      row.appendChild(phraseBtn);
-      row.appendChild(actions);
-      listEl.appendChild(row);
-    })(i);
-  }
-}
-
-function addStatsBalancePhraseFromInput() {
-  var inputEl = ui && ui.statsPhrasesAddInputEl ? ui.statsPhrasesAddInputEl : document.getElementById('stats-phrases-add-input');
-  var text = normalizeBalancePhrase(inputEl ? inputEl.value : '');
-  if (!text) return;
-  var exists = statsBalancePhrases.some(function (p) { return String(p).toLowerCase() === text.toLowerCase(); });
-  if (exists) {
-    if (inputEl) inputEl.value = '';
-    return;
-  }
-  var next = statsBalancePhrases.slice();
-  next.push(text);
-  setStatsBalancePhrases(next, true);
-  renderStatsBalancePhraseList();
-  if (inputEl) inputEl.value = '';
-  var resultsEl = document.getElementById('stats-phrases-add-results');
-  if (resultsEl) {
-    resultsEl.innerHTML = '';
-    resultsEl.classList.add('hidden');
-  }
-}
-
-function renderStatsBalancePhraseResults(query) {
-  var resultsEl = document.getElementById('stats-phrases-add-results');
-  if (!resultsEl) return;
-  var q = normalizeBalancePhrase(query).toLowerCase();
-  if (!q) {
-    resultsEl.innerHTML = '';
-    resultsEl.classList.add('hidden');
-    return;
-  }
-  var catalog = (typeof getCaptionHelperCatalogTerms === 'function') ? getCaptionHelperCatalogTerms() : [];
-  var exact = [];
-  var startsWith = [];
-  var contains = [];
-  catalog.forEach(function (term) {
-    var clean = normalizeBalancePhrase(term);
-    var low = clean.toLowerCase();
-    if (!clean) return;
-    if (low === q) {
-      exact.push(clean);
-      return;
-    }
-    if (low.indexOf(q) === 0) {
-      startsWith.push(clean);
-      return;
-    }
-    if (low.indexOf(q) !== -1) contains.push(clean);
-  });
-  var ranked = exact.concat(startsWith, contains).slice(0, 12);
-  resultsEl.innerHTML = '';
-  ranked.forEach(function (term) {
-    var row = document.createElement('div');
-    row.className = 'caption-term-result-row';
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'phrase-copy-item-btn caption-term-result-main';
-    btn.textContent = term;
-    btn.addEventListener('mousedown', function (e) { e.preventDefault(); });
-    btn.onclick = function (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      var inputEl = ui && ui.statsPhrasesAddInputEl ? ui.statsPhrasesAddInputEl : document.getElementById('stats-phrases-add-input');
-      if (inputEl) inputEl.value = term;
-      addStatsBalancePhraseFromInput();
-    };
-    row.appendChild(btn);
-    resultsEl.appendChild(row);
-  });
-  resultsEl.classList.toggle('hidden', !ranked.length);
-}
-
-function openBalancePhrasesHelpInPreview() {
-  if (typeof renderAdvancedHelpPreview !== 'function') {
-    setStatus('Help preview unavailable.');
-    return;
-  }
-  renderAdvancedHelpPreview(
-    'Balance Phrases Help',
-    '<p style="margin:0 0 10px 0;">Balance phrases help you check phrase coverage across the set.</p>' +
-    '<h4 style="margin:12px 0 6px 0;font-size:14px;">What This Is</h4>' +
-    '<ul style="margin:0 0 8px 18px;padding:0;">' +
-    '<li style="margin:0 0 6px 0;">A short list of phrases you care about, like <code>front view</code>, <code>indoor lighting</code>, or <code>close-up</code>.</li>' +
-    '<li style="margin:0 0 6px 0;">Review shows phrase counts in both captions and tags.</li>' +
-    '<li style="margin:0 0 6px 0;">This helps you spot gaps before training.</li>' +
-    '</ul>' +
-    '<h4 style="margin:12px 0 6px 0;font-size:14px;">How To Use It</h4>' +
-    '<ol style="margin:0 0 8px 18px;padding:0;">' +
-    '<li style="margin:0 0 6px 0;">Add phrases you want to track (catalog suggestions are optional).</li>' +
-    '<li style="margin:0 0 6px 0;">Run Review Set and check the Phrase Balance section.</li>' +
-    '<li style="margin:0 0 6px 0;">If a phrase is missing or low, add/edit captions for those examples.</li>' +
-    '<li style="margin:0 0 6px 0;">Repeat until coverage looks balanced for the set.</li>' +
-    '</ol>' +
-    '<h4 style="margin:12px 0 6px 0;font-size:14px;">Tip</h4>' +
-    '<p style="margin:0;">Click a balance phrase row to add it as a tag to the current media item.</p>'
-  );
-}
-
-function wireStatsBalancePhraseUi() {
-  loadStatsBalancePhrasesFromTextarea();
-  renderStatsBalancePhraseList();
+function wirePrimerTemplateHelpUi() {
   renderPrimerTemplatePlaceholderButtons();
-
-  var addBtn = ui && ui.statsPhrasesAddBtnEl ? ui.statsPhrasesAddBtnEl : document.getElementById('stats-phrases-add-btn');
-  var addInput = ui && ui.statsPhrasesAddInputEl ? ui.statsPhrasesAddInputEl : document.getElementById('stats-phrases-add-input');
-  var infoBtn = document.getElementById('stats-balance-info-btn');
   var primerInfoBtn = document.getElementById('primer-template-info-btn');
-  if (addBtn && !addBtn.__statsPhrasesBound) {
-    addBtn.__statsPhrasesBound = true;
-    addBtn.onclick = addStatsBalancePhraseFromInput;
-  }
-  if (infoBtn && !infoBtn.__statsPhrasesBound) {
-    infoBtn.__statsPhrasesBound = true;
-    infoBtn.addEventListener('click', openBalancePhrasesHelpInPreview);
-  }
-  if (primerInfoBtn && !primerInfoBtn.__statsPhrasesBound) {
-    primerInfoBtn.__statsPhrasesBound = true;
+  if (primerInfoBtn && !primerInfoBtn.__primerHelpBound) {
+    primerInfoBtn.__primerHelpBound = true;
     primerInfoBtn.addEventListener('click', openPrimerTemplateHelpInPreview);
-  }
-  if (addInput && !addInput.__statsPhrasesBound) {
-    addInput.__statsPhrasesBound = true;
-    addInput.addEventListener('input', function () {
-      renderStatsBalancePhraseResults(addInput.value);
-    });
-    addInput.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        addStatsBalancePhraseFromInput();
-      } else if (e.key === 'Escape') {
-        var resultsEl = document.getElementById('stats-phrases-add-results');
-        if (resultsEl) {
-          resultsEl.innerHTML = '';
-          resultsEl.classList.add('hidden');
-        }
-      }
-    });
-    addInput.addEventListener('blur', function () {
-      setTimeout(function () {
-        var resultsEl = document.getElementById('stats-phrases-add-results');
-        if (resultsEl) {
-          resultsEl.innerHTML = '';
-          resultsEl.classList.add('hidden');
-        }
-      }, 150);
-    });
   }
 }
 
@@ -535,11 +272,11 @@ function compute(items, options) {
 
     var normalizedTags = Array.isArray(item.tags)
       ? item.tags
-          .map(function (tag) { return normalizeBalancePhrase(tag).toLowerCase(); })
+          .map(function (tag) { return normalizeVariableTerm(tag).toLowerCase(); })
           .filter(Boolean)
       : [];
     phrases.forEach(function (p) {
-      var phraseNorm = normalizeBalancePhrase(p).toLowerCase();
+      var phraseNorm = normalizeVariableTerm(p).toLowerCase();
       if (!phraseNorm) return;
       var captionMatch = captionNorm.indexOf(normalize(p)) !== -1;
       var tagMatch = normalizedTags.indexOf(phraseNorm) !== -1;
@@ -665,10 +402,7 @@ function buildCombinedCaptionsText(items) {
 // Review DOM helpers
 function getOptionsFromDom() {
   var requiredPhraseEl = document.getElementById('stats-required-phrase');
-  var phrasesEl = document.getElementById('stats-phrases');
-  var phrasesValue = Array.isArray(statsBalancePhrases) && statsBalancePhrases.length
-    ? statsBalancePhrases.join('\n')
-    : (phrasesEl ? phrasesEl.value : '');
+  var phrasesValue = getSetVariablePhrases().join('\n');
   var reviewRulesRows = [];
   if (typeof getReviewRulesRows === 'function') {
     reviewRulesRows = getReviewRulesRows();

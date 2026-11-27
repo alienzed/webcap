@@ -244,9 +244,7 @@ function wireAllUi() {
   if (typeof wirePrimerCaptionResetUi === 'function') {
     wirePrimerCaptionResetUi();
   }
-  if (typeof wireStatsBalancePhraseUi === 'function') {
-    wireStatsBalancePhraseUi();
-  }
+  wirePrimerTemplateHelpUi();
 
   // Wire up review actions (if stats.js is loaded)
   wireReviewActions();

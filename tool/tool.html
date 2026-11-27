@@ -1177,6 +1177,14 @@
             <p id="set-dashboard-focus-migration" class="set-dashboard-distribution-note hidden" role="status"></p>
 
             <details class="set-dashboard-template-disclosure"><summary>Caption Template</summary><textarea id="set-dashboard-template-draft" rows="5" aria-label="Caption template"></textarea><div class="set-dashboard-section-actions"><button id="set-dashboard-template-save" type="button" class="set-dashboard-primary">Save Template</button><button id="set-dashboard-template-reset" type="button" class="set-dashboard-quiet">Reset draft</button></div></details>
+            <section class="set-dashboard-variable-definition" aria-label="Set Variables">
+              <div class="set-dashboard-section-heading"><h4>Set Variables</h4><button type="button" id="set-dashboard-configure-variables" class="set-dashboard-quiet">Edit Set Variables</button></div>
+              <p id="set-dashboard-variable-summary"></p>
+              <section id="set-dashboard-variable-editor" class="set-dashboard-variable-editor hidden" aria-label="Configure Set Variables">
+                <div class="set-dashboard-section-actions"><input id="set-dashboard-variable-term" type="text" aria-label="Standalone term" placeholder="Add an individual phrase or term"><button type="button" id="set-dashboard-variable-add-term" class="set-dashboard-quiet">Add term</button></div>
+                <div id="set-dashboard-variable-groups"></div><div class="set-dashboard-section-actions"><button type="button" class="set-dashboard-primary" id="set-dashboard-variable-apply">Apply</button><button type="button" class="set-dashboard-quiet" id="set-dashboard-variable-cancel">Cancel</button></div>
+              </section>
+            </section>
           <section class="set-dashboard-work-panel set-dashboard-intelligence-panel" aria-label="Sight and Vocabulary">
         <div class="set-dashboard-sight-panel">
           <div class="set-dashboard-sight-heading">
@@ -1292,12 +1300,9 @@
         </div>
         <div class="set-dashboard-stack">
           <details class="set-dashboard-guidance-panel set-dashboard-section" id="set-dashboard-balance-section" open><summary>Distribution &amp; Balance <span id="set-dashboard-balance-summary"></span></summary>
-            <div id="set-dashboard-priorities" class="set-dashboard-priority-grid" aria-label="Training priority distributions"><div id="set-dashboard-variables"></div><div id="set-dashboard-distribution"></div></div>
-            <div id="set-dashboard-variable-empty" class="set-dashboard-distribution-note">Add a training priority to see its distribution.</div>
-            <details class="set-dashboard-priority-settings"><summary>Manage training priorities</summary><div class="set-dashboard-section-heading"><h5>Grouped priority</h5><button type="button" id="set-dashboard-configure-variables" class="set-dashboard-quiet">Add or edit group</button></div>
-            <section id="set-dashboard-variable-editor" class="set-dashboard-variable-editor hidden" aria-label="Configure grouped priorities"><div id="set-dashboard-variable-groups"></div><div class="set-dashboard-section-actions"><button type="button" class="set-dashboard-primary" id="set-dashboard-variable-apply">Apply</button><button type="button" class="set-dashboard-quiet" id="set-dashboard-variable-cancel">Cancel</button></div></section>
-          <div id="set-dashboard-balance" class="set-dashboard-guidance-edit"><div class="section-label-inline"><label for="stats-phrases-add-input">Individual priority</label><button id="stats-balance-info-btn" type="button" class="mini-info-btn" title="Balance phrases help" aria-label="Balance phrases help">i</button></div><div class="checklist-input-row term-input-row"><input id="stats-phrases-add-input" type="text" class="form-control" placeholder="Add a phrase or term…"><button id="stats-phrases-add-btn" type="button" title="Add balance phrase" aria-label="Add balance phrase">+</button><div id="stats-phrases-add-results" class="caption-term-results hidden"></div></div><details><summary>Caption vs. tag counts</summary><div id="set-dashboard-distribution-sources" class="set-dashboard-distribution-note"></div></details><details><summary>Manage individual priorities</summary><div id="stats-phrases-items"></div></details><textarea id="stats-phrases" rows="4" class="hidden" placeholder="face down&#10;face up&#10;front view&#10;back view"></textarea></div>
-            </details>
+            <div id="set-dashboard-variables" class="set-dashboard-priority-grid" aria-label="Set Variable distributions"></div>
+            <div id="set-dashboard-variable-empty" class="set-dashboard-distribution-note">No Set Variables defined. <button type="button" id="set-dashboard-variable-empty-action" class="set-dashboard-quiet">Define Set Variables</button></div>
+
           </details>
         </div>
       </div>

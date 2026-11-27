@@ -14,7 +14,6 @@
   function snapshot() {
     var items = (state && Array.isArray(state.items)) ? state.items : [];
     var phrase = String(el('stats-required-phrase').value || '').trim();
-    var balances = String(el('stats-phrases').value || '').split(/\r?\n/).map(function (p) { return p.trim(); }).filter(Boolean);
     // Distribution and preparation use the current media scope.
     var visibleItems = getFilteredMediaItems(false).filter(function (item) { return !!(item && item.key); });
     var sight = visibleItems.filter(function (item) {
@@ -36,7 +35,7 @@
     });
     var totalGroups = visibleItems.length * groups.length;
     return {
-      items: items, visibleItems: visibleItems, total: items.length, phrase: phrase, balances: balances,
+      items: items, visibleItems: visibleItems, total: items.length, phrase: phrase,
       sight: sight, configuredGroups: groups.length,
       visibleTotal: visibleItems.length, visibleCaptions: visibleCaptions,
       reviewedGroups: reviewedGroups, totalGroups: totalGroups
@@ -90,64 +89,18 @@
     openDashboard('analyze');
   }
 
-  function renderDistribution(s) {
-    var root = el('set-dashboard-distribution');
-    var sources = [];
-    var existing = new Map(Array.from(root.children).map(function (row) { return [row.dataset.phrase, row]; }));
-    s.balances.forEach(function (phrase) {
-      var files = [], captionCount = 0, tagCount = 0;
-      s.visibleItems.forEach(function (item) {
-        var caption = balanceWheelCaptionMatches(item, phrase);
-        var tag = balanceWheelTagMatches(item, phrase);
-        if (caption) captionCount++;
-        if (tag) tagCount++;
-        if (caption || tag) files.push(item.fileName);
-      });
-      var row = existing.get(phrase);
-      if (!row) {
-        row = document.createElement('div');
-        row.className = 'set-dashboard-dist-row';
-        row.dataset.phrase = phrase;
-        var name = document.createElement('span');
-        name.className = 'set-dashboard-dist-name';
-        name.textContent = phrase;
-        var track = document.createElement('span');
-        track.className = 'set-dashboard-progress-track';
-        var fill = document.createElement('span');
-        fill.className = 'set-dashboard-progress-fill';
-        track.appendChild(fill);
-        var count = document.createElement('button');
-        count.type = 'button';
-        count.className = 'set-dashboard-dist-count';
-        row.append(name, track, count);
-        root.appendChild(row);
-      }
-      existing.delete(phrase);
-      var button = row.lastElementChild;
-      button.textContent = files.length + ' / ' + s.visibleTotal + ' →';
-      button.title = captionCount + ' captions · ' + tagCount + ' tags · ' + files.length + ' either';
-      sources.push(phrase + ': ' + button.title);
-      button.setAttribute('aria-label', phrase + ': ' + button.title + '. Inspect matching media');
-      button.disabled = !files.length;
-      button.onclick = function () { inspectDistribution(files, phrase); };
-      row.children[1].firstElementChild.style.width = (s.visibleTotal ? files.length * 100 / s.visibleTotal : 0) + '%';
-      // Reconcile only actual order changes; do not replace interactive rows.
-      if (root.children[s.balances.indexOf(phrase)] !== row) root.insertBefore(row, root.children[s.balances.indexOf(phrase)] || null);
-    });
-    existing.forEach(function (row) { row.remove(); });
-    el('set-dashboard-distribution-sources').textContent = sources.join('\n');
-  }
-
   function variableCoverage(variable, items) {
     var terms = variable.terms.map(function (term, index) {
       return { key: 'term:' + index, label: term, files: [], only: [], color: index };
     });
     var neither = [], multiple = [];
     items.forEach(function (item) {
-      var assigned = new Set(getChecklistAssignedTagsForMediaKey(item.key, variable.group).map(function (term) {
+      var assigned = variable.group ? new Set(getChecklistAssignedTagsForMediaKey(item.key, variable.group).map(function (term) {
         return normalizeChecklistTerm(term).toLowerCase();
-      }));
-      var matches = terms.filter(function (row) { return assigned.has(normalizeChecklistTerm(row.label).toLowerCase()); });
+      })) : null;
+      var matches = terms.filter(function (row) {
+        return variable.group ? assigned.has(normalizeChecklistTerm(row.label).toLowerCase()) : balanceWheelItemMatchesPhrase(item, row.label);
+      });
       matches.forEach(function (row) { row.files.push(item.fileName); });
       if (!matches.length) neither.push(item.fileName);
       else if (matches.length === 1) matches[0].only.push(item.fileName);
@@ -156,11 +109,11 @@
     // Exclusive bars partition the population exactly once. Multi-label bars
     // retain independent membership counts; their sum can exceed the scope.
     var rows = terms.map(function (row) {
-      return { key: row.key, label: row.label + (variable.exclusive && multiple.length ? ' only' : ''),
+      return { key: row.key, label: (variable.group ? row.label : 'Present') + (variable.exclusive && multiple.length ? ' only' : ''),
         files: variable.exclusive ? row.only : row.files, color: row.color };
     });
     if (variable.exclusive) rows.push({ key: 'multiple', label: 'Multiple', files: multiple, color: 'warning' });
-    rows.push({ key: 'neither', label: 'Neither', files: neither,
+    rows.push({ key: 'neither', label: variable.group ? 'Neither' : 'Absent', files: neither,
       color: variable.expected && items.length && neither.length / items.length > .25 ? 'warning' : 'neutral' });
     return { rows: rows, neither: neither.length, multiple: multiple.length,
       missingFiles: neither, multipleFiles: multiple };
@@ -171,10 +124,10 @@
     variables.forEach(function (variable) {
       var result = variableCoverage(variable, items);
       if (variable.exclusive && result.multiple) warnings.push({
-        group: variable.group, kind: 'multiple', label: 'Multiple exclusive terms', files: result.multipleFiles
+        key: setVariableKey(variable), group: variable.group || variable.terms[0], kind: 'multiple', label: 'Multiple exclusive terms', files: result.multipleFiles
       });
       if (variable.expected && items.length && result.neither / items.length > .25) warnings.push({
-        group: variable.group, kind: 'missing', label: 'Missing coverage', files: result.missingFiles
+        key: setVariableKey(variable), group: variable.group || variable.terms[0], kind: 'missing', label: 'Missing coverage', files: result.missingFiles
       });
     });
     return warnings;
@@ -188,9 +141,9 @@
 
   function renderVariableCard(section, variable, result, total) {
     var title = section.querySelector('h5');
-    title.textContent = variable.group;
+    title.textContent = variable.group || variable.terms[0];
     section.querySelector('.set-dashboard-variable-kind').textContent =
-      (variable.exclusive ? 'Exclusive' : 'May coexist') + (variable.expected ? ' · Expected' : '');
+      (variable.group ? (variable.exclusive ? 'Exclusive' : 'May coexist') : 'Caption or tag') + (variable.expected ? ' · Expected' : '');
     var stack = section.querySelector('.set-dashboard-variable-stack');
     setHidden(stack, !variable.exclusive || !total);
     var legend = section.querySelector('.set-dashboard-variable-rows');
@@ -223,8 +176,8 @@
       entry.children[2].firstElementChild.style.backgroundColor = color;
       entry.disabled = !row.files.length;
       entry.title = row.label + ' · ' + Math.round(share) + '% · Inspect matching media';
-      entry.setAttribute('aria-label', variable.group + ' · ' + row.label + ': inspect ' + row.files.length + ' media');
-      entry.onclick = function () { inspectDistribution(row.files, variable.group + ' · ' + row.label); };
+      entry.setAttribute('aria-label', (variable.group || variable.terms[0]) + ' · ' + row.label + ': inspect ' + row.files.length + ' media');
+      entry.onclick = function () { inspectDistribution(row.files, (variable.group || variable.terms[0]) + ' · ' + row.label); };
       if (legend.children[index] !== entry) legend.insertBefore(entry, legend.children[index] || null);
 
       var segment = oldSegments.get(row.key);
@@ -254,13 +207,14 @@
   function renderVariables(s) {
     var host = el('set-dashboard-variables');
     var variables = state.setVariables || [];
-    setHidden(el('set-dashboard-variable-empty'), !!variables.length || !!s.balances.length);
+    setHidden(el('set-dashboard-variable-empty'), !!variables.length);
     var oldCards = new Map(Array.from(host.children).map(function (card) { return [card.dataset.group, card]; }));
     variables.forEach(function (variable, index) {
-      var section = oldCards.get(variable.group);
+      var key = setVariableKey(variable);
+      var section = oldCards.get(key);
       if (!section) {
         section = document.createElement('section');
-        section.className = 'set-dashboard-variable-card'; section.dataset.group = variable.group;
+        section.className = 'set-dashboard-variable-card'; section.dataset.group = key;
         var title = document.createElement('h5');
         var kind = document.createElement('div'); kind.className = 'set-dashboard-variable-kind';
         var stack = document.createElement('div'); stack.className = 'set-dashboard-variable-stack';
@@ -270,7 +224,7 @@
         section.append(title, kind, stack, legend, notice);
         host.appendChild(section);
       }
-      oldCards.delete(variable.group);
+      oldCards.delete(key);
       renderVariableCard(section, variable, variableCoverage(variable, s.visibleItems), s.visibleTotal);
       if (host.children[index] !== section) host.insertBefore(section, host.children[index] || null);
     });
@@ -286,44 +240,69 @@
     return wrapper;
   }
 
+  function appendVariableField(host, variable, availableTerms) {
+    var field = document.createElement('details');
+    field.className = 'set-dashboard-variable-group';
+    field.dataset.group = variable.group;
+    var summary = document.createElement('summary');
+    summary.textContent = variable.group || variable.terms[0];
+    field.appendChild(summary);
+    field.open = !!variable.terms.length;
+    availableTerms.forEach(function (term) {
+      field.appendChild(makeVariableCheckbox(term, variable.terms.includes(term), 'term', term));
+    });
+    var options = document.createElement('div');
+    options.className = 'set-dashboard-variable-options';
+    if (variable.group) options.append(makeVariableCheckbox('Mutually exclusive', variable.exclusive, 'exclusive'));
+    options.append(makeVariableCheckbox('Expected on most media', variable.expected, 'expected'));
+    field.appendChild(options);
+    host.appendChild(field);
+    return field;
+  }
+
   function openVariableEditor() {
     var host = el('set-dashboard-variable-groups');
     host.replaceChildren();
-    var saved = new Map((state.setVariables || []).map(function (row) { return [row.group, row]; }));
-    var groups = Array.from(new Set(checklistItems.concat(Array.from(saved.keys()))));
-    groups.forEach(function (group) {
-      var row = saved.get(group) || { terms: [], exclusive: false, expected: false };
-      var field = document.createElement('details');
-      field.className = 'set-dashboard-variable-group';
-      field.dataset.group = group;
-      var summary = document.createElement('summary');
-      summary.textContent = group;
-      field.appendChild(summary);
-      field.open = saved.has(group);
-      var terms = Array.from(new Set(getChecklistKeywordTermsForRequirement(group).concat(row.terms)));
-      terms.forEach(function (term) {
-        field.appendChild(makeVariableCheckbox(term, row.terms.includes(term), 'term', term));
-      });
-      var options = document.createElement('div');
-      options.className = 'set-dashboard-variable-options';
-      options.append(makeVariableCheckbox('Mutually exclusive', row.exclusive, 'exclusive'), makeVariableCheckbox('Expected on most media', row.expected, 'expected'));
-      field.appendChild(options);
-      host.appendChild(field);
+    var saved = normalizeSetVariables(state.setVariables);
+    saved.filter(function (row) { return !row.group; }).forEach(function (row) {
+      appendVariableField(host, row, row.terms);
     });
+    var grouped = new Map(saved.filter(function (row) { return !!row.group; }).map(function (row) { return [row.group, row]; }));
+    Array.from(new Set(checklistItems.concat(Array.from(grouped.keys())))).forEach(function (group) {
+      var row = grouped.get(group) || {group:group, terms:[], exclusive:false, expected:false};
+      var terms = Array.from(new Set(getChecklistKeywordTermsForRequirement(group).concat(row.terms)));
+      appendVariableField(host, row, terms);
+    });
+    el('set-dashboard-variable-term').value = '';
     setHidden(el('set-dashboard-variable-editor'), false);
+  }
+
+  function addStandaloneVariable() {
+    var input = el('set-dashboard-variable-term');
+    var term = normalizeVariableTerm(input.value);
+    if (!term) return;
+    var host = el('set-dashboard-variable-groups');
+    var existing = Array.from(host.children).find(function (field) {
+      return !field.dataset.group && field.querySelector('[data-variable-type="term"]').value.toLowerCase() === term.toLowerCase();
+    });
+    if (existing) { existing.querySelector('[data-variable-type="term"]').checked = true; existing.open = true; }
+    else appendVariableField(host, {group:'',terms:[term],expected:false}, [term]);
+    input.value = '';
   }
 
   function applyVariableEditor() {
     var rows = Array.from(el('set-dashboard-variable-groups').children).map(function (field) {
+      var exclusive = field.querySelector('[data-variable-type="exclusive"]');
       return {
         group: field.dataset.group,
         terms: Array.from(field.querySelectorAll('[data-variable-type="term"]:checked')).map(function (input) { return input.value; }),
-        exclusive: field.querySelector('[data-variable-type="exclusive"]').checked,
+        exclusive: !!(exclusive && exclusive.checked),
         expected: field.querySelector('[data-variable-type="expected"]').checked
       };
     });
     state.setVariables = normalizeSetVariables(rows);
     scheduleSetDefinitionSave();
+    updateBalanceDistributionWheel();
     setHidden(el('set-dashboard-variable-editor'), true);
     renderStage();
   }
@@ -353,6 +332,8 @@
     el('set-dashboard-train').disabled = !s.visibleTotal;
     renderDefinition(s);
     el('set-dashboard-definition-summary').textContent = window.getQaTrainingFocus() || 'Define training focus';
+    var variables = state.setVariables || [];
+    el('set-dashboard-variable-summary').textContent = variables.length ? variables.map(function (row) { return row.group || row.terms[0]; }).join(' · ') : 'No Set Variables defined';
     if (!templateDirty) el('set-dashboard-template-draft').value = String(statsGetPrimerOptionsFromDom().template || '');
     if (el('set-dashboard-definition').open && !window.isSetIntelligenceOpen()) window.openSetIntelligence();
     else if (el('set-dashboard-definition').open) window.refreshSetIntelligenceScope();
@@ -366,10 +347,9 @@
     setHidden(tagsStatus, !tagsStatus.textContent);
     setHidden(el('set-dashboard-tags-primary'), !s.configuredGroups || !s.visibleTotal);
     el('set-dashboard-tags-primary').textContent = remaining ? 'Continue annotation review' : 'Focused Annotation';
-    var count = s.balances.length + (state.setVariables || []).length;
+    var count = variables.length;
     var warnings = variableWarnings(state.setVariables || [], s.visibleItems);
-    el('set-dashboard-balance-summary').textContent = count ? count + (count === 1 ? ' priority' : ' priorities') + (warnings.length ? ' · ' + warnings.length + ' coverage concerns' : '') : 'Add training priorities';
-    renderDistribution(s);
+    el('set-dashboard-balance-summary').textContent = count ? count + (count === 1 ? ' variable' : ' variables') + (warnings.length ? ' · ' + warnings.length + ' coverage concerns' : '') : 'Define Set Variables';
     renderVariables(s);
   }
 
@@ -474,7 +454,9 @@
     };
     window.addEventListener('webcap:media-metadata-updated', function () { if (open) renderStage(); });
     el('stats-required-phrase').addEventListener('change', function () { if (open) renderStage(); });
-    el('stats-phrases').addEventListener('input', function () { if (open) renderStage(); });
+    el('set-dashboard-variable-add-term').onclick = addStandaloneVariable;
+    el('set-dashboard-variable-term').addEventListener('keydown', function (event) { if (event.key === 'Enter') { event.preventDefault(); addStandaloneVariable(); } });
+    el('set-dashboard-variable-empty-action').onclick = function () { el('set-dashboard-definition').open = true; openVariableEditor(); el('set-dashboard-variable-editor').scrollIntoView({block:'nearest'}); };
   }
 
   window.getSetVariableWarnings = variableWarnings;

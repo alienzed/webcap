@@ -72,7 +72,7 @@ def test_set_intelligence_keeps_actionable_coverage_visible_and_raw_report_secon
     assert "responseSelect.onchange = selectRawResponse;" in scan
     assert "rescanBtn.onclick = function () { runSetIntelligence(); };" in scan
     assert "'Resume ' + String(openMissing) + ' Sight'" in scan
-    assert "rescanBtn.disabled = !scopeCount;" in scan
+    assert "rescanBtn.disabled = !scopeCount || !modelAvailable;" in scan
     assert "operation: 'intelligence_report'" in scan
     assert "function restoreCachedIntelligence(" in scan
     assert "if (setScanState.hasRun) return;" not in scan

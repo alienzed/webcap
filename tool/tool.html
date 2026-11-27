@@ -1170,9 +1170,11 @@
         <div class="set-dashboard-stack">
           <details id="set-dashboard-definition" class="set-dashboard-guidance-panel set-dashboard-section" open><summary>Set Definition <span id="set-dashboard-definition-summary"></span></summary>
             <div id="set-dashboard-definition-status" class="set-dashboard-warning hidden" role="status"></div>
+            <div class="set-dashboard-definition-fields">
             <div class="set-dashboard-guidance-edit"><label for="set-dashboard-training-focus">Training Focus</label><input id="set-dashboard-training-focus" type="text" maxlength="240" placeholder="What should the model learn?"></div>
-            <p id="set-dashboard-focus-migration" class="set-dashboard-distribution-note hidden" role="status"></p>
           <div id="set-dashboard-phrase" class="set-dashboard-guidance-edit"><label for="stats-required-phrase">Required key phrase</label><input id="stats-required-phrase" type="text" placeholder="e.g. subject name"></div>
+            </div>
+            <p id="set-dashboard-focus-migration" class="set-dashboard-distribution-note hidden" role="status"></p>
 
             <details class="set-dashboard-template-disclosure"><summary>Caption Template</summary><textarea id="set-dashboard-template-draft" rows="5" aria-label="Caption template"></textarea><div class="set-dashboard-section-actions"><button id="set-dashboard-template-save" type="button" class="set-dashboard-primary">Save Template</button><button id="set-dashboard-template-reset" type="button" class="set-dashboard-quiet">Reset draft</button></div></details>
           <section class="set-dashboard-work-panel set-dashboard-intelligence-panel" aria-label="Sight and Vocabulary">
@@ -1299,7 +1301,7 @@
           </details>
         </div>
       </div>
-      <details id="set-dashboard-review" class="set-dashboard-section set-dashboard-review"><summary>Quality Assurance <span id="set-dashboard-qa-summary"></span></summary><div id="set-dashboard-qa-workbench" class="qa-workbench" aria-label="Quality Assurance"></div></details>
+      <details id="set-dashboard-review" class="set-dashboard-section set-dashboard-review"><summary>Quality Assurance <span id="set-dashboard-qa-summary"></span><span class="set-dashboard-qa-open-label" aria-hidden="true">Open QA</span></summary><div id="set-dashboard-qa-workbench" class="qa-workbench" aria-label="Quality Assurance"></div></details>
       
     </section>
 

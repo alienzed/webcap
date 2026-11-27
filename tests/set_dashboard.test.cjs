@@ -206,3 +206,13 @@ test('generic Back reopens the Dashboard instead of selecting an empty surface',
   context.back();
   assert.deepEqual(actions,['open-dashboard','default']);
 });
+
+test('native Dashboard has readable grouped definition, bounded priority grid and themed disabled counts', () => {
+  const html = fs.readFileSync(path.join(__dirname,'../tool/tool.html'),'utf8');
+  const css = fs.readFileSync(path.join(__dirname,'../tool/css/set_dashboard.css'),'utf8');
+  assert.match(html, /class="set-dashboard-definition-fields"/);
+  assert.match(html, /class="set-dashboard-qa-open-label"/);
+  assert.ok(css.includes('calc((100% - 48px) / 4)'));
+  assert.ok(css.includes('#set-dashboard-modal .set-dashboard-dist-count:disabled'));
+  assert.doesNotMatch(css, /\.set-dashboard-review p\s*\{/);
+});

@@ -1,14 +1,13 @@
 var checklistDragSourceIndex = null;
 
 function closeChecklistRowOverflowMenus() {
-  var openMenus = document.querySelectorAll('#checklist-items .checklist-row-overflow[open]');
+  var openMenus = document.querySelectorAll('.checklist-group-list .checklist-row-overflow[open]');
   for (var i = 0; i < openMenus.length; i++) {
     openMenus[i].open = false;
   }
 }
 
-function wireChecklistRowOverflowDismissal() {
-  var itemsDiv = document.getElementById('checklist-items');
+function wireChecklistRowOverflowDismissal(itemsDiv) {
   if (itemsDiv.__overflowDismissWired) return;
   itemsDiv.__overflowDismissWired = true;
   itemsDiv.addEventListener('scroll', closeChecklistRowOverflowMenus);
@@ -16,7 +15,7 @@ function wireChecklistRowOverflowDismissal() {
 }
 
 function clearChecklistDropIndicators() {
-  var rows = document.querySelectorAll('#checklist-items .checklist-row-block');
+  var rows = document.querySelectorAll('.checklist-group-list .checklist-row-block');
   for (var i = 0; i < rows.length; i++) {
     rows[i].classList.remove('checklist-drop-before', 'checklist-drop-after');
     rows[i].removeAttribute('data-checklist-drop-after');
@@ -25,7 +24,7 @@ function clearChecklistDropIndicators() {
 
 function clearChecklistDragState() {
   clearChecklistDropIndicators();
-  var rows = document.querySelectorAll('#checklist-items .checklist-row-block');
+  var rows = document.querySelectorAll('.checklist-group-list .checklist-row-block');
   for (var i = 0; i < rows.length; i++) {
     rows[i].classList.remove('is-dragging');
   }
@@ -56,7 +55,6 @@ function positionChecklistRowOverflowMenu(summaryEl, menuEl) {
 
 function renderChecklistPanel(options) {
   var opts = options || {};
-  wireChecklistRowOverflowDismissal();
   if (!checklistPanelEl) checklistPanelEl = document.getElementById('caption-checklist-panel');
   var itemsDiv = document.getElementById('checklist-items');
   var groupWorkbenchList = document.getElementById('group-workbench-list');
@@ -102,9 +100,23 @@ function renderChecklistPanel(options) {
     });
   }
   if (!itemsDiv) return;
+  renderChecklistGroupRows(itemsDiv, {mediaKey:state.currentItem.key});
+  if (!opts.skipItemDetailRefresh) {
+    renderItemTagsPanel();
+    renderItemMetadataPanel();
+    renderAnnotateStrip();
+  }
+}
+
+// Shared Manage Groups renderer. Definition shows the vocabulary, never item assignments.
+function renderChecklistGroupRows(itemsDiv, options) {
+  var opts = options || {};
+  var definition = !!opts.definition;
+  var mediaKey = opts.mediaKey || '';
+  var checkedMap = definition ? {} : (checklistCheckedByMedia[mediaKey] || {});
+  var expanded = function (label) { return definition ? opts.expanded.has(label) : isChecklistRequirementExpanded(label); };
+  wireChecklistRowOverflowDismissal(itemsDiv);
   itemsDiv.innerHTML = '';
-  var checkedMap = checklistCheckedByMedia[state.currentItem.key] || {};
-  var mediaKey = state.currentItem.key;
   for (var i = 0; i < checklistItems.length; i++) {
     var item = checklistItems[i];
     var row = document.createElement('div');
@@ -153,14 +165,20 @@ function renderChecklistPanel(options) {
     var toggleBtn = document.createElement('button');
     toggleBtn.type = 'button';
     toggleBtn.className = 'checklist-row-toggle-btn';
-    toggleBtn.textContent = isChecklistRequirementExpanded(item) ? '\u25BE' : '\u25B8';
-    toggleBtn.title = isChecklistRequirementExpanded(item)
-      ? 'Hide selected tags for primer order'
-      : 'Show selected tags for primer order';
+    toggleBtn.textContent = expanded(item) ? '\u25BE' : '\u25B8';
+    toggleBtn.title = definition ? (expanded(item) ? 'Hide vocabulary terms' : 'Show vocabulary terms')
+      : (expanded(item) ? 'Hide selected tags for primer order' : 'Show selected tags for primer order');
+    toggleBtn.setAttribute('aria-expanded', String(expanded(item)));
     (function (requirementLabel) {
       toggleBtn.onclick = function () {
-        toggleChecklistRequirementExpanded(requirementLabel);
-        renderChecklistPanel();
+        if (definition) {
+          if (expanded(requirementLabel)) opts.expanded.delete(requirementLabel);
+          else opts.expanded.add(requirementLabel);
+          renderChecklistGroupRows(itemsDiv, opts);
+        } else {
+          toggleChecklistRequirementExpanded(requirementLabel);
+          renderChecklistPanel();
+        }
       };
     })(item);
 
@@ -211,6 +229,7 @@ function renderChecklistPanel(options) {
         if (!setChecklistRequirementHidden(requirementLabel, nextHidden)) return;
         setStatus((nextHidden ? 'Hidden from' : 'Shown in') + ' Annotation Groups: ' + requirementLabel);
         renderChecklistPanel({ skipItemDetailRefresh: true });
+        if (definition) renderChecklistGroupRows(itemsDiv, opts);
       };
     })(item, !isGroupHidden);
     actions.appendChild(visibilityBtn);
@@ -269,11 +288,11 @@ function renderChecklistPanel(options) {
       };
     })(i);
 
-    var menuDetails = document.createElement('details');
+    let menuDetails = document.createElement('details');
     menuDetails.className = 'checklist-row-overflow';
     menuDetails.ontoggle = function () {
       if (!menuDetails.open) return;
-      var openMenus = document.querySelectorAll('#checklist-items .checklist-row-overflow[open]');
+      var openMenus = document.querySelectorAll('.checklist-group-list .checklist-row-overflow[open]');
       for (var menuIndex = 0; menuIndex < openMenus.length; menuIndex++) {
         if (openMenus[menuIndex] !== menuDetails) openMenus[menuIndex].open = false;
       }
@@ -285,13 +304,13 @@ function renderChecklistPanel(options) {
       if (!menuDetails.contains(event.relatedTarget)) menuDetails.open = false;
     };
 
-    var menuSummary = document.createElement('summary');
+    let menuSummary = document.createElement('summary');
     menuSummary.className = 'checklist-row-overflow-btn';
     menuSummary.textContent = '\u22ee';
     menuSummary.title = 'More group actions';
     menuSummary.setAttribute('aria-label', 'More actions for ' + item);
 
-    var menu = document.createElement('div');
+    let menu = document.createElement('div');
     menu.className = 'checklist-row-menu';
     menu.setAttribute('role', 'menu');
     menu.appendChild(editTermsBtn);
@@ -306,7 +325,13 @@ function renderChecklistPanel(options) {
     summaryRow.appendChild(actions);
     row.appendChild(summaryRow);
 
-    if (isChecklistRequirementExpanded(item)) {
+    if (definition && expanded(item)) {
+      var vocabulary = document.createElement('div');
+      vocabulary.className = 'checklist-definition-terms';
+      var terms = getChecklistKeywordTermsForRequirement(item);
+      vocabulary.textContent = terms.length ? terms.join(' · ') : 'No terms configured.';
+      row.appendChild(vocabulary);
+    } else if (!definition && expanded(item)) {
       var selectedTags = getChecklistSelectedTagsForRequirementForMediaKey(mediaKey, item);
       var selectedTagsEl = document.createElement('div');
       selectedTagsEl.className = 'checklist-selected-tags';
@@ -368,10 +393,5 @@ function renderChecklistPanel(options) {
     }
 
     itemsDiv.appendChild(row);
-  }
-  if (!opts.skipItemDetailRefresh) {
-    renderItemTagsPanel();
-    renderItemMetadataPanel();
-    renderAnnotateStrip();
   }
 }

@@ -9,6 +9,7 @@
   var focusMigrationFolder = '';
   var focusMigrationStatus = '';
   var vocabularySignature = '';
+  var expandedVocabularyGroups = new Set();
 
   function el(id) { return document.getElementById(id); }
 
@@ -309,11 +310,11 @@
 
   function renderVocabulary() {
     var signature = JSON.stringify([openedFolder, checklistItems.map(function (group) {
-      return [group, getChecklistKeywordTermsForRequirement(group)];
+      return [group, getChecklistKeywordTermsForRequirement(group), isChecklistRequirementHidden(group)];
     })]);
     if (signature === vocabularySignature) return;
     vocabularySignature = signature;
-    renderGroupWorkbench({mode:'definition', targetEl:el('set-dashboard-group-workbench')});
+    renderChecklistGroupRows(el('set-dashboard-group-list'), {definition:true, expanded:expandedVocabularyGroups});
     var editor = el('set-dashboard-variable-editor');
     if (!editor.classList.contains('hidden')) {
       var host = el('set-dashboard-variable-groups');
@@ -367,9 +368,15 @@
     renderDefinition(s);
     el('set-dashboard-definition-summary').textContent = el('set-dashboard-definition').open ? '' : window.getQaTrainingFocus();
     var variables = state.setVariables || [];
-    el('set-dashboard-variable-summary').textContent = variables.length ? variables.map(function (row) {
-      return row.group ? row.group + ': ' + row.terms.join(', ') : row.terms[0];
-    }).join(' · ') : 'No Set Variables defined';
+    var summary = el('set-dashboard-variable-summary');
+    summary.replaceChildren();
+    if (!variables.length) summary.textContent = 'No Set Variables defined';
+    else variables.forEach(function (row) {
+      var chip = document.createElement('span');
+      chip.className = 'set-dashboard-variable-chip';
+      chip.textContent = row.group ? row.group + ': ' + row.terms.join(', ') : row.terms[0];
+      summary.appendChild(chip);
+    });
     el('set-dashboard-configure-variables').textContent = variables.length ? 'Edit Set Variables' : 'Define Set Variables';
     if (!templateDirty) el('set-dashboard-template-draft').value = String(statsGetPrimerOptionsFromDom().template || '');
     if (!window.isSetIntelligenceOpen()) window.openSetIntelligence();
@@ -405,6 +412,7 @@
       focusMigrationFolder = '';
       templateDirty = false;
       vocabularySignature = '';
+      expandedVocabularyGroups.clear();
       el('set-dashboard-group-name').value = '';
       el('set-dashboard-definition').open = !window.getQaTrainingFocus() || !String(el('stats-required-phrase').value || '').trim() || !(state.setVariables || []).length;
       el('set-dashboard-balance-section').open = true;
@@ -473,6 +481,7 @@
       el('set-dashboard-variable-term').focus();
     };
     el('set-dashboard-group-add').onclick = addVocabularyGroup;
+    el('set-dashboard-group-settings').onclick = openChecklistKeywordsModal;
     el('set-dashboard-group-name').addEventListener('keydown', function (event) {
       if (event.key === 'Enter') { event.preventDefault(); addVocabularyGroup(); }
     });

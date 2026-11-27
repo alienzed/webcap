@@ -680,7 +680,7 @@
                                     >
                                     <button id="checklist-add-btn" type="button" title="Add requirement" aria-label="Add requirement">+</button>
                                 </div>
-                                <div id="checklist-items"></div>
+                                <div id="checklist-items" class="checklist-group-list"></div>
                                 
 <details id="primer-template-section" class="caption-helper-drawer caption-helper-template-drawer">
                                     <summary class="caption-helper-drawer-summary">
@@ -1171,6 +1171,7 @@
           <details id="set-dashboard-definition" class="set-dashboard-guidance-panel set-dashboard-section" open>
             <summary><span class="set-dashboard-section-title">Set Definition</span><span id="set-dashboard-definition-summary"></span><span id="set-dashboard-definition-status" class="set-dashboard-warning hidden" role="status"></span></summary>
             <div class="set-dashboard-definition-grid">
+              <div class="set-dashboard-definition-main">
               <section class="set-dashboard-intent-panel" aria-label="Training Intent"><h4>Training Intent</h4>
             <div class="set-dashboard-definition-fields">
             <div class="set-dashboard-guidance-edit"><label for="set-dashboard-training-focus">Training Focus</label><input id="set-dashboard-training-focus" type="text" maxlength="240" placeholder="What should the model learn?"></div>
@@ -1180,10 +1181,19 @@
 
             <details class="set-dashboard-template-disclosure"><summary>Caption Template</summary><textarea id="set-dashboard-template-draft" rows="5" aria-label="Caption template"></textarea><div class="set-dashboard-section-actions"><button id="set-dashboard-template-save" type="button" class="set-dashboard-primary">Save Template</button><button id="set-dashboard-template-reset" type="button" class="set-dashboard-quiet">Reset draft</button></div></details>
               </section>
+            <section class="set-dashboard-variable-definition" aria-label="Set Variables">
+              <div class="set-dashboard-section-heading"><h4>Set Variables</h4><button type="button" id="set-dashboard-configure-variables" class="set-dashboard-quiet">Edit Set Variables</button></div>
+              <p id="set-dashboard-variable-summary"></p>
+              <section id="set-dashboard-variable-editor" class="set-dashboard-variable-editor hidden" aria-label="Configure Set Variables">
+                <div class="set-dashboard-section-actions"><input id="set-dashboard-variable-term" type="text" aria-label="Standalone term" placeholder="Add an individual phrase or term"><button type="button" id="set-dashboard-variable-add-term" class="set-dashboard-quiet">Add term</button></div>
+                <div id="set-dashboard-variable-groups"></div><div class="set-dashboard-section-actions"><button type="button" class="set-dashboard-primary" id="set-dashboard-variable-apply">Apply</button><button type="button" class="set-dashboard-quiet" id="set-dashboard-variable-cancel">Cancel</button></div>
+              </section>
+            </section>
+              </div>
         <aside class="set-dashboard-tags-panel" aria-label="Vocabulary and annotation">
-          <h4>Vocabulary</h4>
+          <div class="set-dashboard-section-heading"><h4>Manage Groups</h4><button type="button" id="set-dashboard-group-settings" class="set-dashboard-quiet" title="Configure requirement keywords">Configure</button></div>
           <div class="set-dashboard-add-group"><input id="set-dashboard-group-name" type="text" aria-label="New group name" placeholder="New vocabulary group"><button type="button" id="set-dashboard-group-add" class="set-dashboard-quiet">Add group</button></div>
-          <div id="set-dashboard-group-workbench" class="group-workbench-list" aria-label="Manage vocabulary groups"></div>
+          <div id="set-dashboard-group-list" class="checklist-group-list" aria-label="Manage vocabulary groups"></div>
           <p id="set-dashboard-tags-status" class="set-dashboard-section-copy"></p>
           <div class="set-dashboard-section-actions set-dashboard-vocabulary-actions">
             <button type="button" id="set-intelligence-primary-btn" class="set-dashboard-quiet">Discover Vocabulary</button>
@@ -1194,14 +1204,6 @@
             
           </div>
         </aside>
-            <section class="set-dashboard-variable-definition" aria-label="Set Variables">
-              <div class="set-dashboard-section-heading"><h4>Set Variables</h4><button type="button" id="set-dashboard-configure-variables" class="set-dashboard-quiet">Edit Set Variables</button></div>
-              <p id="set-dashboard-variable-summary"></p>
-              <section id="set-dashboard-variable-editor" class="set-dashboard-variable-editor hidden" aria-label="Configure Set Variables">
-                <div class="set-dashboard-section-actions"><input id="set-dashboard-variable-term" type="text" aria-label="Standalone term" placeholder="Add an individual phrase or term"><button type="button" id="set-dashboard-variable-add-term" class="set-dashboard-quiet">Add term</button></div>
-                <div id="set-dashboard-variable-groups"></div><div class="set-dashboard-section-actions"><button type="button" class="set-dashboard-primary" id="set-dashboard-variable-apply">Apply</button><button type="button" class="set-dashboard-quiet" id="set-dashboard-variable-cancel">Cancel</button></div>
-              </section>
-            </section>
             </div>
           </details>
           <section class="set-dashboard-section set-dashboard-intelligence-panel" aria-label="Set Intelligence">

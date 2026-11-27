@@ -60,7 +60,9 @@ function dashboard(options = {}) {
       refreshSetIntelligenceScope: () => {}
     },
     checklistItems: options.groups || [],
-    renderGroupWorkbench() {},
+    renderChecklistGroupRows(target, options) { assert.equal(target.id, 'set-dashboard-group-list'); assert.equal(options.definition, true); },
+    isChecklistRequirementHidden: () => false,
+    openChecklistKeywordsModal() {},
     getChecklistKeywordTermsForRequirement: () => ['tag'],
     isChecklistRequirementCheckedForMediaKey: (key, name) => typeof options.checked === 'function' ? options.checked(key, name) : !!options.checked,
     getTrainingRunnerActiveJob: () => options.training ? { status: 'running' } : null,
@@ -265,4 +267,16 @@ test('Set Intelligence remains open when definition is collapsed', () => {
   app.listeners['set-dashboard-definition:toggle']();
   assert.equal(app.context.window.isSetIntelligenceOpen(),true);
   assert.deepEqual(app.actions,['workspace','prepare']);
+});
+
+test('Set Definition reuses Manage Groups rows in a bounded two-column layout', () => {
+  const html=fs.readFileSync(path.join(__dirname,'../tool/tool.html'),'utf8');
+  const css=fs.readFileSync(path.join(__dirname,'../tool/css/set_dashboard.css'),'utf8');
+  const manager=fs.readFileSync(path.join(__dirname,'../tool/js/checklist_panel.js'),'utf8');
+  assert.match(html,/id="set-dashboard-group-list" class="checklist-group-list"/);
+  assert.doesNotMatch(html,/id="set-dashboard-group-workbench"/);
+  assert.match(source,/renderChecklistGroupRows\(el\('set-dashboard-group-list'\)/);
+  assert.match(manager,/renderChecklistGroupRows\(itemsDiv, \{mediaKey:state.currentItem.key\}\)/);
+  assert.match(css,/grid-template-columns:minmax\(0,1fr\) minmax\(300px, min\(40%,560px\)\)/);
+  assert.doesNotMatch(css,/#set-dashboard-group-list[^\n]*max-height/);
 });

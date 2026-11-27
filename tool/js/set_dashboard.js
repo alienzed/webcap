@@ -297,8 +297,19 @@
     reset.type = 'button'; reset.className = 'set-dashboard-quiet'; reset.textContent = 'Reset';
     var edit = document.createElement('button');
     edit.type = 'button'; edit.className = 'set-dashboard-quiet'; edit.textContent = 'Edit terms';
+    function selectedTerms() {
+      var chosen = new Map(checks.filter(function (check) { return check.input.checked; }).map(function (check) {
+        return [normalizeChecklistTerm(check.term).toLowerCase(), check.term];
+      }));
+      var terms = [];
+      variable.terms.forEach(function (term) {
+        var key = normalizeChecklistTerm(term).toLowerCase();
+        if (chosen.has(key)) { terms.push(term); chosen.delete(key); }
+      });
+      return terms.concat(Array.from(chosen.values()));
+    }
     var refreshControls = function () {
-      var terms = checks.filter(function (check) { return check.input.checked; }).map(function (check) { return check.term; });
+      var terms = selectedTerms();
       var next = replaceSetGroupVariable([variable], group, {terms:terms,exclusive:exclusive.input.checked,expected:expected.input.checked});
       var original = normalizeSetVariables([variable]);
       var dirty = JSON.stringify(next) !== JSON.stringify(original);
@@ -312,7 +323,7 @@
     expected.input.onchange = refreshControls;
     apply.onclick = function () {
       state.setVariables = replaceSetGroupVariable(state.setVariables, group, {
-        terms:checks.filter(function (check) { return check.input.checked; }).map(function (check) { return check.term; }),
+        terms:selectedTerms(),
         exclusive:exclusive.input.checked, expected:expected.input.checked
       });
       scheduleSetDefinitionSave();

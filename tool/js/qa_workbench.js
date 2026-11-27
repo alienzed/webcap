@@ -2539,7 +2539,7 @@
         variableWarnings.forEach(function (warning) {
           var action = qaCreateButton(warning.group + ' · ' + warning.files.length + ' ' + warning.label.toLowerCase(),
             'qa-health-chip', 'inspect-variable', JSON.stringify([warning.key, warning.kind]));
-          action.title = 'Inspect media (advisory; absence may be legitimate)';
+          action.title = 'Inspect media with overlapping exclusive terms';
           variableActions.appendChild(action);
         });
         variablesSection.appendChild(variableActions);

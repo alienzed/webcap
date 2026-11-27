@@ -10,7 +10,7 @@ Read saved set_variables and set_training_focus with the existing wildcard annot
 
 Use Ask QA as reference: review_assistant.js owns evidence and execute/cancel; director_chat.js owns message rendering, model selection, status, context inspection, stop and temporary session behavior. Extract only UI and lifecycle pieces necessary for a contextual modal; keep persistent drawer and other modes untouched. Avoid new registry or session store. Feature supplies title, captured context, conversation callback and optionally working result panel. Open directly from feature, close back to originating surface; preserve in-flight state and errors, keyboard focus, scroll and drafts. Ask QA remains full-width, read-only, with same captured evidence and explicit updated-context restart. Regression: qa_finding_chat.test.cjs, director_chat_persistence.test.cjs, browser checks for focus, close/reopen, stop, Set changes and Studio isolation.
 
-## Phase 3 — Wildcard Builder
+## Phase 3 — Wildcard Builder (implemented; browser and model verification pending)
 
 Move existing run selector, editable wildcard, stable terms, dimensions, shuffle/reroll and combination preview into feature-owned result region. First generation and follow-ups use same captured Set/run evidence from Phase 1, prior dialogue and current editable working prompt. Supply exact wildcard result schema only when authoring a new working result; discussion can return prose. Keep current draft on failed/empty output; preserve independently useful material. Keep Use as Prompt as explicit mutation (useGeneratedWildcard), reusing existing persistence and dimension synchronization. No extra validation calls. Verify run scope, edits, follow-up refinement, no accidental save and switching Sets.
 

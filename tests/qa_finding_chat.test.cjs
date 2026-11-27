@@ -240,6 +240,7 @@ test('Ask QA uses the task modal without replacing the conversation DOM', () => 
   drawer.parentNode = home;
   const dialog = {
     open:false,
+    classList:{toggle(){},remove(){}},
     appendChild(node) { node.parentNode = this; },
     after(node) { node.parentNode = home; },
     showModal() { this.open = true; },
@@ -247,7 +248,7 @@ test('Ask QA uses the task modal without replacing the conversation DOM', () => 
   };
   const nodes = {'task-conversation-modal':dialog,'director-chat-drawer':drawer};
   let mode = {taskModal:true};
-  const context = {state,el:id=>nodes[id],activeContextMode:()=>mode};
+  const context = {state,el:id=>nodes[id],activeContextMode:()=>mode,taskConversationPresentation:null};
   vm.runInNewContext(assistant.slice(start,end), context);
   assert.equal(context.syncTaskConversationSurface(), true);
   assert.equal(drawer.parentNode, dialog);

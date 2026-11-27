@@ -22,6 +22,7 @@ on:
       - 'tool/js/single_item_tag_assist.js'
       - 'tests/single_item_tag_assist.test.js'
       - 'tests/caption_assist_apply.test.cjs'
+      - 'tests/caption_assist_unsaved_primer.test.cjs'
       - 'tool/js/item_details.js'
       - 'tool/js/checklist_state.js'
       - 'tool/js/media.js'
@@ -170,7 +171,7 @@ jobs:
         run: |
           node --check tool/js/primer_settings.js
           node --check tool/js/single_item_tag_assist.js
-          node --test tests/single_item_tag_assist.test.js tests/caption_assist_apply.test.cjs
+          node --test tests/single_item_tag_assist.test.js tests/caption_assist_apply.test.cjs tests/caption_assist_unsaved_primer.test.cjs
       - name: Caption enrichment empty-result feedback
         run: |
           node --check tool/js/caption_enrichment.js

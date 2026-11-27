@@ -165,9 +165,8 @@ CAPTION_ASSIST_SYSTEM_PROMPT = (
     "the caption, because the draft lacks it, or because Sight does not independently repeat it. "
     "Prefer compact visual phrases over prose padding: do not add phrases "
     "such as 'the photo shows', 'can be seen', or 'the photo was taken' when they add no visual fact. "
-    "When a draft already contains a complete meaningful description, preserve its established wording and order unless a factual correction or missing selected tag requires a specific edit. "
+    "Consider the existing draft\'s structure and wording, retaining useful phrasing and details where they agree with the template and selected facts. "
     "Keep distinctive user-authored phrases intact, including combinations describing censorship or blur (for example, 'face censored and blurred'); never split, invert, or paraphrase them merely for style. "
-    "For mature captions, perform targeted corrections rather than a general rewrite. "
     "The existing draft is not more authoritative than deliberate selected tags. "
     "Use Context Sight to preserve visible relationships, including which person's attributes, garments, "
     "and actions belong to which person; do not flatten those relationships into generic shared traits. "
@@ -176,9 +175,9 @@ CAPTION_ASSIST_SYSTEM_PROMPT = (
     "Do not invent identity, demographic traits, colors, objects, actions, setting details, camera properties, mood, "
     "or other visual facts absent from Open Sight, Context Sight, selected annotations, required phrase, or draft, apart from an "
     "explicit subject description authored in captionTemplate. If a required phrase is provided, include it verbatim "
-    "exactly once. captionTemplate is the Set's caption-writing template. renderedPrimer demonstrates its "
-    "populated structure, preferred order, and wording conventions. Use both as guidance, not as mandatory "
-    "factual content. The order of groupedAnnotations also does not define caption order. "
+    "exactly once. captionTemplate is the Set's caption-writing template. Follow its structure and "
+    "preferred order, assembling the populated selected details into natural phrasing. "
+    "The order of groupedAnnotations also does not define caption order. "
     "Omit unpopulated facts and never invent content to fill a group. Keep each action and trait clearly "
     "attached to its subject. Preserve distinctive multiword tag phrases verbatim where they already read naturally. "
     "Treat concise camera and viewpoint wording as a preferred surface form: compose supplied angle and orientation "
@@ -343,7 +342,6 @@ def build_caption_assist_messages(
         "otherTags": other_tags,
         "currentDraft": draft,
         "captionTemplate": str(template or "").strip(),
-        "renderedPrimer": str(rendered_primer or "").strip(),
         "corrections": repair_corrections,
         "openSight": open_sight if isinstance(open_sight, dict) else None,
         "contextSight": context_sight if isinstance(context_sight, dict) else None,
@@ -365,8 +363,8 @@ def build_caption_assist_messages(
     ) if mismatch_hints and not repair_corrections else ""
     sight_guidance = (
         "This item has no user-selected tags or authored draft. Compose a substantive new training caption "
-        "from the specific, visually supported facts in openSight, treating captionTemplate and renderedPrimer "
-        "as optional style and ordering guidance, not content to copy or fill with empty placeholders. "
+        "from the specific, visually supported facts in openSight, treating captionTemplate "
+        "as optional style and ordering guidance with only populated details included. "
         "Include distinctive subject, position, clothing, construction and scene details when actually observed. "
         "Relate clear Sight facts to familiar annotation-group concepts where natural; do not assign tags or "
         "invent missing group values. Preserve any requiredPhrase. "

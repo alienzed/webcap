@@ -30,7 +30,7 @@ def test_caption_assist_leaves_room_for_runtime_reasoning(monkeypatch):
     assert "You write concise, information-dense natural-language training captions" in captured["contract"]["messages"][0]["content"]
     payload = json.loads(captured["contract"]["messages"][1]["content"].split("\n\n", 1)[1])
     assert payload["captionTemplate"] == "{position, }{background}"
-    assert payload["renderedPrimer"] == "standing, plain wall"
+    assert "renderedPrimer" not in payload
     assert "preferredCaptionSequence" not in payload
     assert payload["groupedAnnotations"][0]["key"] == "position"
     assert "groupOrder" not in payload
@@ -96,11 +96,11 @@ def test_caption_assist_prompt_uses_set_template_not_annotation_order():
     assert messages[1]["role"] == "user"
     payload = json.loads(messages[1]["content"].split("\n\n", 1)[1])
     assert payload["captionTemplate"] == template
-    assert payload["renderedPrimer"] == "subject, standing, triangle, soft, front"
+    assert "renderedPrimer" not in payload
     assert "groupOrder" not in payload
     assert "order of groupedAnnotations also does not define caption order" in messages[0]["content"]
     assert "captionTemplate is the Set's caption-writing template" in messages[0]["content"]
-    assert "renderedPrimer demonstrates its populated structure, preferred order" in messages[0]["content"]
+    assert "Follow its structure and preferred order" in messages[0]["content"]
     assert "Do not use annotation group order as caption order." in messages[1]["content"]
     assert "Do not use annotation group order or captionTemplate placeholder order" not in messages[1]["content"]
     assert "include it verbatim exactly once" in messages[0]["content"]
@@ -141,7 +141,7 @@ def test_caption_assist_without_template_supplies_no_order_override():
     )
     payload = json.loads(messages[1]["content"].split("\n\n", 1)[1])
     assert payload["captionTemplate"] == ""
-    assert payload["renderedPrimer"] == ""
+    assert "renderedPrimer" not in payload
     assert "preferredCaptionSequence" not in payload
     assert "Do not use annotation group order as caption order." in messages[1]["content"]
 

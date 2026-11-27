@@ -902,7 +902,7 @@ test('collection choice reuses existing view tag instead of creating another vie
 });
 
 
-test('External Explorer requests bounded detail analysis without changing technical scan', async () => {
+test('External Explorer has one Analyze action for technical metadata and detail', async () => {
   const f = fixture();
   f.window.openMediaExplorerActivity();
   await f.settle(f.pending[0], []);
@@ -912,13 +912,15 @@ test('External Explorer requests bounded detail analysis without changing techni
   f.nodes['media-explorer-open-path'].click();
   await f.settle(f.pending[f.pending.length - 1], [], true, {folders:[], discovered:0, analyzed:0, revision:1});
   const before = f.pending.length;
-  f.nodes['media-explorer-analyze-quality'].click();
+  assert.equal(f.nodes['media-explorer-generate-metadata'], undefined);
+  assert.equal(f.nodes['media-explorer-analyze-quality'], undefined);
+  f.nodes['media-explorer-analyze'].click();
   assert.equal(f.pending.length, before + 1);
   assert.ok(f.pending.at(-1).url.includes('/external/metadata'));
   assert.equal(JSON.parse(f.pending.at(-1).options.body).mode, 'quality');
   assert.equal(JSON.parse(f.pending.at(-1).options.body).scope, 'filtered');
-  f.nodes['media-explorer-generate-metadata'].click();
-  assert.equal(JSON.parse(f.pending.at(-1).options.body).mode, 'technical');
+  await f.settle(f.pending.at(-1), [], true, {running:false, total:0, discoveryComplete:true});
+  assert.match(f.nodes['media-explorer-metadata-progress'].textContent, /No matching media needs analysis/);
 });
 
 test('External measured detail filter and sorting use existing controls and persisted views', async () => {

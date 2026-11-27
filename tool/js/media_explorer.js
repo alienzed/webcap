@@ -1122,7 +1122,6 @@
     var external = isExternal();
     if (!external && el('media-explorer-sort').value === 'detail') el('media-explorer-sort').value = 'newest';
     el('media-explorer-sort').querySelector('option[value="detail"]').hidden = !external;
-    el('media-explorer-analyze-quality').classList.toggle('hidden', !external);
     el('media-explorer-external-path-bar').classList.toggle('hidden', !external);
     el('media-explorer-external-navigation').classList.toggle('hidden', !external);
     var shortcutButton = el('media-explorer-shortcuts-open');
@@ -1203,7 +1202,7 @@
       if (!visible || !isExternal()) return;
       externalJobRunning = !!job.running;
       externalJobSummary = job.total
-        ? 'Metadata ' + job.completed + '/' + job.total + ' · ' + job.failed + ' failed' +
+        ? 'Analysis ' + job.completed + '/' + job.total + ' · ' + job.failed + ' failed' +
           (job.uncached ? ' · ' + job.uncached + ' uncached' : '') +
           (job.running && job.current ? ' · ' + job.current : '') + (job.canceled ? ' · stopped' : '')
         : '';
@@ -1236,7 +1235,9 @@
     }).then(function (job) {
       externalJobRunning = !!job.running;
       if (!job.discoveryComplete && scope === 'filtered') {
-        externalJobSummary = 'Scanning discovered matches; folder discovery is still running';
+        externalJobSummary = 'Analyzing discovered matches; folder discovery is still running';
+      } else if (!job.total) {
+        externalJobSummary = 'No matching media needs analysis';
       }
       externalSummary();
       if (job.running) {
@@ -2606,8 +2607,7 @@
     var width = parseInt(explorerWorkspace.style.getPropertyValue('--explorer-list-width'), 10) || 292;
     explorerWorkspace.style.setProperty('--explorer-list-width', Math.max(220, Math.min(650, width + (e.key === 'ArrowRight' ? 20 : -20))) + 'px');
   });
-  el('media-explorer-generate-metadata').addEventListener('click', function () { requestExternalMetadata('filtered'); });
-  el('media-explorer-analyze-quality').addEventListener('click', function () {
+  el('media-explorer-analyze').addEventListener('click', function () {
     requestExternalMetadata('filtered', [], 'quality');
   });
   el('media-explorer-stop-metadata').addEventListener('click', function () {

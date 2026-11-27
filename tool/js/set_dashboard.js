@@ -382,6 +382,38 @@
     setHidden(el('set-dashboard-focus-migration'), !focusMigrationStatus);
   }
 
+  // Share the existing requirement-key catalog, but insert into this unsaved
+  // draft only. Save Template remains the explicit persistence boundary.
+  var templatePlaceholderSignature = null;
+  function renderTemplatePlaceholders() {
+    var draft = el('set-dashboard-template-draft');
+    var used = new Set((draft.value.match(/\{[^{}]+\}/g) || []).map(function (value) {
+      return value.toLowerCase();
+    }));
+    var unused = getPrimerTemplatePlaceholderItems().filter(function (item) {
+      return !used.has(item.placeholder.toLowerCase());
+    });
+    var signature = JSON.stringify(unused);
+    if (signature === templatePlaceholderSignature) return;
+    templatePlaceholderSignature = signature;
+    var host = el('set-dashboard-template-placeholders');
+    host.replaceChildren();
+    unused.forEach(function (item) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'primer-template-placeholder-btn';
+      button.textContent = item.label;
+      button.title = 'Insert ' + item.placeholder;
+      button.onclick = function () {
+        draft.setRangeText(item.placeholder, draft.selectionStart, draft.selectionEnd, 'end');
+        draft.focus();
+        templateDirty = true;
+        renderTemplatePlaceholders();
+      };
+      host.appendChild(button);
+    });
+  }
+
   function renderStage() {
     if (!open) return;
     if (String(state.folder || '') !== openedFolder) { closeDashboard(); return; }
@@ -395,7 +427,10 @@
     if (!templateDirty) el('set-dashboard-template-draft').value = String(statsGetPrimerOptionsFromDom().template || '');
     if (!window.isSetIntelligenceOpen()) window.openSetIntelligence();
     else window.refreshSetIntelligenceScope();
-    if (el('set-dashboard-definition').open) renderVocabulary();
+    if (el('set-dashboard-definition').open) {
+      renderVocabulary();
+      renderTemplatePlaceholders();
+    }
     var missingCaptions = s.visibleTotal - s.visibleCaptions;
     if (!qaOpen) el('set-dashboard-qa-summary').textContent = missingCaptions ? missingCaptions + ' without captions' : 'Inspect findings';
     var tagsStatus = el('set-dashboard-tags-status');
@@ -502,7 +537,7 @@
       'set-dashboard-review-prune': 'prune', 'set-dashboard-review-duplicates': 'duplicates'
     };
     Object.keys(destinations).forEach(function (id) { el(id).onclick = function (event) { if (id === 'set-dashboard-curate' && event) { event.preventDefault(); event.stopPropagation(); } run(destinations[id]); }; });
-    el('set-dashboard-template-draft').addEventListener('input', function () { templateDirty = true; });
+    el('set-dashboard-template-draft').addEventListener('input', function () { templateDirty = true; renderTemplatePlaceholders(); });
     el('set-dashboard-template-save').onclick = function () {
       setPrimerTemplateFromDashboard(el('set-dashboard-template-draft').value);
       templateDirty = false;

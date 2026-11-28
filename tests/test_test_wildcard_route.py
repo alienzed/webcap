@@ -131,17 +131,26 @@ def test_wildcard_excludes_media_not_in_training_run(tmp_path, monkeypatch):
     assert "excluded purple dress" not in seen["contract"]["prompt"]
 
 
-def test_wildcard_rejects_missing_training_run(tmp_path, monkeypatch):
+def test_wildcard_uses_all_set_media_when_no_training_run_selected(tmp_path, monkeypatch):
     set_root = tmp_path / "set"
     set_root.mkdir()
     (set_root / "one.png").write_bytes(b"media")
+    (set_root / "one.txt").write_text("standing in bright light", encoding="utf-8")
     monkeypatch.setattr(app_module.app_config, "FS_ROOT", tmp_path)
     monkeypatch.setattr("tool.server.epoch_reference.training_wildcard_members",
-                        lambda folder, job_id: (_ for _ in ()).throw(ValueError("Choose a training run")) if not job_id else {"one.png"})
+                        lambda folder, job_id: pytest.fail("No training run filter should be applied"))
+    calls = []
+    monkeypatch.setattr(app_module, "enqueue_llm",
+                        lambda client, model, contract, **kwargs: calls.append(contract) or {"jobId": "job"})
     response = app_module.app.test_client().post("/fs/test_generations/wildcard",
                                                   json={"folder": "set", "directorModel": "director.gguf"})
-    assert response.status_code == 400
-    assert "Choose a training run" in response.get_json()["error"]
+    assert response.status_code == 202
+    assert response.get_json()["sourceScope"] == "set"
+    assert response.get_json()["trainingMediaCount"] == 1
+    assert response.get_json()["warning"] == ""
+    assert len(calls) == 1
+    assert "standing in bright light" in calls[0]["prompt"]
+
 
 def test_wildcard_snapshot_is_read_only_and_followup_does_not_reread_set(tmp_path, monkeypatch):
     set_root = tmp_path / "set"

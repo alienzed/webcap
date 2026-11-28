@@ -427,3 +427,37 @@ def test_intelligence_report_rehydrates_cached_unified_sight(tmp_path, monkeypat
     assert payload["open"]["structured"] == 1
     assert "context" not in payload
     assert payload["open"]["items"][0]["sight"]["description"] == "Front view."
+
+
+def test_vocabulary_auto_model_selection_is_opt_in_and_resolves_before_queue(monkeypatch):
+    from tool.server import model_lab_quality, storyboard_llm_runtime
+
+    monkeypatch.setattr(app_module, "mine_vision_vocabulary",
+                        lambda *a, **kw: {"itemCount": 2, "evidenceCount": 1, "evidence": []})
+    monkeypatch.setattr(storyboard_llm_runtime, "list_models",
+                        lambda **kw: [{"id": "local::default"}, {"id": "local::better"}])
+    recommendations = []
+    def recommend(default, available):
+        recommendations.append((default, list(available)))
+        return {"modelRef": "local::better", "reason": "Matching review."}
+    monkeypatch.setattr(model_lab_quality, "schema_model_recommendation", recommend)
+    queued = []
+    def enqueue(client, model_id, contract, context=None, label=""):
+        queued.append((model_id, contract["operation"]))
+        return {"jobId": "job", "modelId": model_id}
+    monkeypatch.setattr(app_module, "enqueue_llm", enqueue)
+    client = app_module.app.test_client()
+    request = {"operation": "synthesize_vocabulary", "folder": "set",
+               "visionModel": "vl", "directorModel": "local::default"}
+    explicit = client.post("/fs/vision_schema", json=request)
+    assert explicit.status_code == 202
+    assert explicit.get_json()["job"]["modelId"] == "local::default"
+    assert "modelSelection" not in explicit.get_json()
+    assert not recommendations
+    automatic = client.post("/fs/vision_schema", json={**request, "autoDirectorModel": True})
+    assert automatic.status_code == 202
+    assert automatic.get_json()["job"]["modelId"] == "local::better"
+    assert automatic.get_json()["modelSelection"]["modelRef"] == "local::better"
+    assert recommendations == [("local::default", ["local::default", "local::better"])]
+    assert queued == [("local::default", "vision_schema_suggest"),
+                      ("local::better", "vision_schema_suggest")]

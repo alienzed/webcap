@@ -86,9 +86,13 @@ test('Set Definition renders group-only intent and persists a scoped change in t
   await expect(intelligencePanel.locator('#set-dashboard-tags-primary')).toBeVisible();
   await definition.locator(':scope > summary').click();
   await expect(groupsPanel).toBeHidden();
-  await expect(intelligence).toBeVisible();
+  await expect(intelligencePanel).toBeHidden();
+  await expect(intelligence).toBeHidden();
+  await expect(page.locator('#set-dashboard-balance-section')).toBeVisible();
   await definition.locator(':scope > summary').click();
   await expect(groupsPanel).toBeVisible();
+  await expect(intelligence).toBeVisible();
+  await expect(definition.locator('.set-dashboard-intelligence-panel')).toHaveCount(1);
   await expect(template).toHaveValue('subject, {viewpoint}, {lighting}');
   await page.locator('#set-dashboard-template-reset').click();
   await expect(template).toHaveValue(savedTemplate);
@@ -99,6 +103,7 @@ test('Set Definition renders group-only intent and persists a scoped change in t
       const def=grid.querySelector('#set-dashboard-definition').getBoundingClientRect();
       const groups=grid.querySelector('#set-dashboard-groups-panel').getBoundingClientRect();
       const intel=grid.querySelector('.set-dashboard-intelligence-panel').getBoundingClientRect();
+      const intent=grid.querySelector('.set-dashboard-intent-panel').getBoundingClientRect();
       const balance=grid.querySelector('#set-dashboard-balance-section').getBoundingClientRect();
       const list=grid.querySelector('#set-dashboard-group-list');
       const rect=grid.getBoundingClientRect();
@@ -106,22 +111,25 @@ test('Set Definition renders group-only intent and persists a scoped change in t
         defX:def.x,defY:def.y,defRight:def.right,defBottom:def.bottom,defWidth:def.width,
         groupX:groups.x,groupY:groups.y,groupBottom:groups.bottom,groupWidth:groups.width,
         intelX:intel.x,intelY:intel.y,intelBottom:intel.bottom,intelWidth:intel.width,
+        intentX:intent.x,intentBottom:intent.bottom,intentWidth:intent.width,
         balanceX:balance.x,balanceY:balance.y,balanceWidth:balance.width};
     });
     expect(geometry.overflow).toBeLessThanOrEqual(2);
     expect(geometry.listOverflow).toBeLessThanOrEqual(2);
     expect(geometry.listHeight).toBe('none');
-    expect(Math.abs(geometry.intelX-geometry.defX)).toBeLessThanOrEqual(2);
-    expect(geometry.intelY).toBeGreaterThanOrEqual(geometry.defBottom);
+    expect(Math.abs(geometry.intelX-geometry.intentX)).toBeLessThanOrEqual(2);
+    expect(Math.abs(geometry.intelWidth-geometry.intentWidth)).toBeLessThanOrEqual(2);
+    expect(geometry.intelY).toBeGreaterThanOrEqual(geometry.intentBottom);
+    expect(geometry.intelBottom).toBeLessThanOrEqual(geometry.defBottom);
     expect(Math.abs(geometry.balanceWidth-geometry.width)).toBeLessThanOrEqual(2);
-    expect(geometry.balanceY).toBeGreaterThanOrEqual(Math.max(geometry.groupBottom,geometry.intelBottom));
+    expect(geometry.balanceY).toBeGreaterThanOrEqual(Math.max(geometry.groupBottom,geometry.defBottom));
     if(width>=1440 || geometry.width>=860) {
       expect(geometry.groupX).toBeGreaterThan(geometry.defRight);
       expect(Math.abs(geometry.groupY-geometry.defY)).toBeLessThanOrEqual(2);
       expect(Math.abs(geometry.groupWidth-geometry.defWidth)).toBeLessThanOrEqual(2);
     } else {
       expect(Math.abs(geometry.groupX-geometry.defX)).toBeLessThanOrEqual(2);
-      expect(geometry.groupY).toBeGreaterThanOrEqual(geometry.intelBottom);
+      expect(geometry.groupY).toBeGreaterThanOrEqual(geometry.defBottom);
     }
     await page.locator('#set-dashboard-modal').evaluate(node=>{node.scrollTop=0;});
     await page.screenshot({path:testInfo.outputPath('set-definition-'+width+'.png'),fullPage:true});

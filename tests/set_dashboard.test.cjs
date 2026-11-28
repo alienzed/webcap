@@ -283,12 +283,20 @@ test('coverage does not count matching unscoped tags, caption text or other grou
   assert.equal(context.warnings([v],items).length,0);
   assert.equal(context.coverage(v,items).rows.at(-1).color,'neutral');
 });
-test('Set Intelligence remains open when definition is collapsed', () => {
+test('Set Intelligence follows Set Definition; explicit Prepare Set reopens it', () => {
   const app=dashboard({phrase:'subject'});
   app.elements['set-dashboard-definition'].open=false;
   app.listeners['set-dashboard-definition:toggle']();
+  assert.equal(app.context.window.isSetIntelligenceOpen(),false);
+  assert.deepEqual(app.actions,['workspace','prepare','hide-prepare']);
+  app.elements['set-dashboard-definition'].open=true;
+  app.listeners['set-dashboard-definition:toggle']();
   assert.equal(app.context.window.isSetIntelligenceOpen(),true);
-  assert.deepEqual(app.actions,['workspace','prepare']);
+  app.elements['set-dashboard-definition'].open=false;
+  app.listeners['set-dashboard-definition:toggle']();
+  app.context.window.openSetDashboard('analyze');
+  assert.equal(app.elements['set-dashboard-definition'].open,true);
+  assert.equal(app.context.window.isSetIntelligenceOpen(),true);
 });
 
 test('Set Dashboard reuses Manage Groups rows in a workspace-width two-column layout', () => {

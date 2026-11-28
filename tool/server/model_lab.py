@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 import os
@@ -34,6 +35,14 @@ class ModelLabStopped(RuntimeError):
 
 def _now_iso():
     return datetime.now(timezone.utc).isoformat()
+
+
+def assessment_input_key(messages):
+    """Fingerprint the exact assessment input without storing another prompt copy."""
+    if not isinstance(messages, list) or not messages:
+        return ""
+    return hashlib.sha256(json.dumps(messages, ensure_ascii=False, sort_keys=True,
+                                     separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
 def _copy(value):
@@ -704,7 +713,11 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
         if not job_id:
             raise RuntimeError("Model Lab probe did not receive an LLM job ID.")
         _set_current_job(run["id"], job_id)
-        _update_attempt(run, attempt_id, jobId=job_id)
+        request = queued.get("request") or {}
+        input_key = assessment_input_key(request.get("messages")) if kind in {
+            "language_synthesis", "set_vocabulary_synthesis"
+        } else ""
+        _update_attempt(run, attempt_id, jobId=job_id, **({"inputKey": input_key} if input_key else {}))
 
         active_started = None
         last_job_status = ""
@@ -1071,6 +1084,13 @@ def _run_vision_model(run, model):
             consecutive_failures += 1
 
 
+def _synthetic_groups():
+    return [
+        {"group": "BT Shape", "terms": ["triangle", "bandeau"]},
+        {"group": "BT Connector", "terms": ["chain"]},
+    ]
+
+
 def _synthetic_analysis():
     evidence = [
         {
@@ -1235,11 +1255,7 @@ def _run_director_model(run, model):
     if not reference_vision_ref:
         # Director-only: exercise the actual Schema Assist contract with a
         # small frozen representative Sight fixture, not a generic prose test.
-        fixture_groups = [
-            {"group": "BT Shape", "terms": ["triangle", "bandeau"]},
-            {"group": "BT Connector", "terms": ["chain"]},
-        ]
-        _run_schema_pair(run, model_ref, _synthetic_analysis(), fixture_groups, "language")
+        _run_schema_pair(run, model_ref, _synthetic_analysis(), _synthetic_groups(), "language")
         return
     open_records, vocabulary_records = _vision_records(run, reference_vision_ref)
     if len(open_records) < 2:

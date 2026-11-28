@@ -1723,6 +1723,14 @@ def register_routes(app):
                 }
                 if summary_requested:
                     payload["capabilityRuns"] = capability_run_summaries(rows, cached_runs)
+                    from .model_lab_quality import schema_model_recommendation
+                    config = app_config.load_config_from_disk()
+                    payload["autoSchemaModel"] = config.get("auto_schema_model") is True
+                    payload["schemaRecommendation"] = schema_model_recommendation(
+                        str(config.get("director_model") or ""),
+                        (model["modelRef"] for model in payload["models"]["directors"]),
+                        rows, cached_runs,
+                    )
                 if run_id:
                     payload["run"] = get_run(run_id)
                 return jsonify(payload)
@@ -1737,6 +1745,14 @@ def register_routes(app):
             if action == "import":
                 from .assessment_transfer import import_results
                 return jsonify({"ok": True, **import_results(data.get("bundle"), data.get("runtimeMap"))})
+            if action == "set_auto_schema_model":
+                enabled = data.get("enabled")
+                if type(enabled) is not bool:
+                    raise ValueError("Choose whether to use assessed synthesis models.")
+                config = app_config.load_config_from_disk()
+                config["auto_schema_model"] = enabled
+                saved = app_config.save_config_to_disk(config)
+                return jsonify({"ok": True, "config": saved})
             if action == "judge":
                 from .model_lab_quality import start_review
                 run = start_review(data.get("runId"), data.get("modelRef"), data.get("judgeModelRef"))

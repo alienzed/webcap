@@ -56,4 +56,4 @@ After the v4 rewrite, the production Classic v3 role and H3 toolkit were restore
 
 ## Related AI research
 
-See the [AI research index](ai-research/README.md) (R01 R02 R03 R04 R06 R07 R08 R10 R14 R18) for candidate publications and future research questions. This reference does not change the feature contract or establish evidence for its current implementation.
+See the [AI research index](ai-research/README.md) (R01 R02 R03 R04 R06 R07 R08 R10 R14 R18) for candidate publications and future research questions. See [R01 evidence notes](ai-research/R01-prompt-structure.md) for initial findings and limitations on prompt structure and instruction hierarchy. These references do not change the feature contract or establish evidence for its current implementation.

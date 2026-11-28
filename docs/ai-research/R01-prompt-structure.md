@@ -1,0 +1,60 @@
+# R01 — Prompt structure and instruction hierarchy
+
+Status: initial evidence notes, 2026-11-27. Documentation only; no adopted changes to model instructions, schemas, orchestration, profiles or feature contracts. Return to the [research index](README.md) and [bibliography](references.md).
+
+## Scope and method
+
+This pass addresses role definition, concrete task instructions, formatting, polarity, conflicting instructions, and multiple requirements. It concerns prompts **given to LLMs and VLMs**, not the downstream diffusion model's own prompt language. Output schema design (R03), examples (R04), context selection (R02), and generative media prompting (R14) receive separate treatments.
+
+Sources were selected for their direct bearing on these questions and checked against primary publication records/abstracts; selected sections of the full-text HTML for P17, P18 and P19 were also consulted. This is a targeted first-pass evidence map, not a systematic literature review. No WebCap inference was run and no study reproduction is required.
+
+## Evidence
+
+The findings below report the scope of the original work. The implications column is an engineering interpretation for later consideration, not a claim that a technique is already effective in WebCap.
+
+| Question | Published finding | Limits and relevance to WebCap |
+| --- | --- | --- |
+| Does formatting matter? | [P17 — Sclar et al.](https://arxiv.org/abs/2310.11324) (ICLR 2024, sec. 4, app. B/C) found substantial accuracy differences between semantically equivalent few-shot templates in open models. In the largest reported Llama-2-13B case, the spread was 76 accuracy points. Relative rankings transferred poorly between models. [P18 — He et al.](https://arxiv.org/abs/2411.10541) compared plain text, Markdown, JSON and YAML on GPT models; no format won universally (sec. 6–7). | Strong evidence that formatting can affect model results, not that XML, Markdown or JSON is universally superior. P18 did not test XML/HTML. Most measured tasks differ from creative authoring; effect sizes are not WebCap predictions. A legible structure and meaningful labels are useful design properties independently of benchmark gains. |
+| Does assigning a persona improve capability? | [P19 — Zheng et al.](https://aclanthology.org/2024.findings-emnlp.888/) (Findings EMNLP 2024, sec. 3–4, 9) found no general factual-QA improvement from adding any of 162 personas across four open model families and 2,410 questions. [P26 — Kong et al.](https://aclanthology.org/2024.naacl-long.228/) (NAACL 2024) reported gains on reasoning benchmarks using a designed role-play interaction. [P27 — Kim et al.](https://aclanthology.org/2025.findings-ijcnlp.51/) (Findings IJCNLP 2025) investigated drawbacks of dataset-aligned roles and reported gains from combining persona and neutral solutions. | Mixed and task-specific evidence. A role can communicate intended behaviour, voice or task scope; assigning an expert identity is not proof of greater competence. P19 explicitly excludes open-ended tasks; P26 and P27 concern reasoning and different prompting procedures. None establishes that an elaborate creative persona improves production specifications, or that removing roles improves creativity. |
+| Positive or negative instructions? | [P20 — Jang et al.](https://proceedings.mlr.press/v203/jang23a.html) (PMLR 2023) found failures on negated prompts across nine NLP tasks, including instruction-tuned models. | Supports caution about relying on negation alone. It does not establish a universal priming mechanism or a categorical prohibition against negative constraints. An explicit exclusion may be essential to author intent. Existing AGENTS.md preference for actionable affirmative wording is a reasonable direction, but its mechanism and applicability to modern local models remain unresolved. |
+| Can message priority reliably resolve contradictory instructions? | [P21 — Wallace et al.](https://arxiv.org/abs/2404.13208) demonstrated better conflict handling after explicitly training GPT-3.5 on instruction hierarchy. [P22 — IHEval](https://aclanthology.org/2025.naacl-long.425/) (NAACL 2025) found major drops on conflicting priorities across evaluated models; the best open model in their study achieved 48% on conflict resolution. | Message priority depends on learned model behavior, not just the presence of system/user labels or delimiters. A trust boundary is not the same thing as a section heading. WebCap's separation of operation control from model output remains appropriate; these studies do not imply adding another runtime gate, validator or conflict-resolution agent. |
+| What happens when requirements accumulate? | [P23 — FollowBench](https://aclanthology.org/2024.acl-long.257/) (ACL 2024) adds constraints in stages across five types and identifies instruction-following weaknesses in 13 models. [P24 — IFEval](https://arxiv.org/abs/2311.07911) defines 25 types of mechanically checkable instructions and about 500 prompts. | Following every requested requirement is distinct from general output quality. These benchmarks motivate distinguishing requested content, formatting and preferences, but do not prove that fewer instructions always win, that bullet lists outperform prose, or that creative quality should be reduced to compliance scores. No new benchmark or enforcement mechanism is proposed. |
+| Does prompt sensitivity extend to vision-language models? | [P25 — Promptception](https://aclanthology.org/2025.findings-emnlp.1302/) (Findings EMNLP 2025) evaluated 61 prompt types across 10 multimodal models and three multiple-choice benchmarks, finding meaningful effects of wording and structure; sensitivity patterns differed for proprietary and open models. | Directly relevant to WebCap's vision questions and evaluation work, but not evidence that the same format is best for open-ended Sight or captioning. R05/R15 should extend this link. |
+| Does instruction following depend on model training? | [P03 — Ouyang et al.](https://arxiv.org/abs/2203.02155) reported improved human preference for instruction-tuned GPT-3, including a smaller model outperforming a much larger base model on their preference distribution. [P02 — Brown et al.](https://arxiv.org/abs/2005.14165) established that textual instructions and demonstrations can elicit tasks without weight updates. [P01 — Prompt Report](https://arxiv.org/abs/2406.06608) catalogs prompting techniques and guidance. | Model training and task formulation both matter. A survey is useful for vocabulary and locating original experiments; it is not itself proof of a specific template. No inference about the superiority of a particular WebCap model, profile or example strategy follows. R04/R18 cover these questions more directly. |
+
+## Design considerations for a later pass
+
+These are bounded interpretations of the evidence, not adopted rules or instructions to rewrite existing prompts.
+
+- **Define the actual task.** A role label is useful insofar as it conveys behavior, responsibility or creative perspective. Distinguish a concrete task objective and desired deliverable from decorative claims of expertise (P19, P26, P27).
+- **Make semantic structure explicit.** Purpose, inputs, task requirements and expected output can be separately identifiable without committing to one markup language. Formatting is a meaningful design choice but no universal format winner has been demonstrated (P17, P18).
+- **Express desired outcomes concretely.** Affirmative wording can make the intended action clearer; preserve necessary exclusions rather than deleting meaning to avoid a negative word (P20).
+- **Separate responsibilities and authority.** The application owns deterministic execution and persistence. The model authors or advises on the explicit task; saved source material is evidence. Conflicting natural-language instructions cannot be assumed to resolve merely through formatting (P21, P22).
+- **Retain substantive requirements.** Avoid accidental duplicate or conflicting directives, not requirements essential to the intended production. Distinguish creative richness from redundant constraints (P23, P24).
+
+These considerations do not select a replacement for Classic v3, change the chat/write boundary, prescribe XML, require new prompt tests, or establish a model-facing instruction template.
+
+## Feature connections
+
+| WebCap feature or contract | Current documented design | Question for later review |
+| --- | --- | --- |
+| [Studio Director Chat / explicit Read](../studio-director-contract.md) | Conversational role, selected guidance profile, complete persisted conversation, user-visible Read snapshots; writing is explicit. | Which role statements convey practical conversational behavior? Which instructions are shared, task-specific or merely decorative? P19, P21, P22, P26, P27. |
+| [Write Project and Write Scenes](../llm-guidance-architecture.md) | Selected profile and current task, operation-specific context/schema; Scene writing includes H3 reference. | Are the purpose and requested contents of each field identifiable? Are all required distinctions preserved? P17, P18, P23, P24. |
+| [Caption Assist and Caption Template Assist](../../tool/server/caption_ops.py) | Separate request builders for enrichment, caption assistance and template assistance; [root README](../../README.md) documents user review of proposals. | Are authored source, vocabulary, template and editing task distinguishable, with explicit preservation requirements? P17, P20, P22, P23. |
+| [Standalone Visual Direction / Generate Director](../llm-guidance-architecture.md) | Specialist task guidance and model-dependent H3 materials. | Is the intended authoring action explicit, without duplicating shared knowledge or conflating generation instructions with the LLM task? P17, P19, P23. |
+| [H3 prompt authoring](../mmh3-prompt-guidelines.md) | Separate model-specific prompt reference for authoring operations. | Distinguish instructions for the text authoring model from the actual H3 prompt format. P17/P18 address the former; direct H3 evidence belongs in R14. |
+| [Vision questions / evaluation](../../tool/server/caption_vision.py), [Structured Sight](../vision_schema_assist.md), [Campaigns](../epoch_finder_implementation.md) | Distinct visual tasks, structured evidence, and visual question contracts. | What instruction formulation is supported for open observation versus multiple-choice evaluation? P25; extend through R05 and R15. |
+| [Model Assessment](../model-assessment-consolidation.md) | Workflow-based probes and optional separate judge. | Record model/task/prompt differences when interpreting existing results; do not add benchmarking work solely to replicate research. P17, P24, P25. |
+| [AGENTS.md](../../AGENTS.md) | Existing concise, positive, actionable instruction-writing guidance. | P20 supports caution about negation, not the stronger mechanism or an absolute rule. P17/P18 qualify formatting claims, P19/P26/P27 qualify persona claims. Existing wording remains unchanged in this pass. |
+
+The source links above trace research to documentation/code ownership, not proof that every current prompt has been inspected or implements the research.
+
+## Open questions
+
+- Direct evidence on LLM authoring of detailed creative production specifications, versus factual QA or mathematical reasoning.
+- Comparative evidence for structured purpose/content/task descriptions versus prose, including XML, in currently used small/quantized local instruction models.
+- Evidence distinguishing explicit positive alternative instructions from necessary exclusions in modern models and real editing tasks.
+- How message-role hierarchy is implemented by WebCap's particular model/runtime chat templates; the studies do not establish that runtime behavior.
+- Model-specific downstream H3/Krea2 prompting evidence (R14), richer context and example evidence (R02/R04), and schema-specific evidence (R03).
+
+No new product changes, experiments or work items are authorized by these open questions. The next literature topic is R02 — context engineering.

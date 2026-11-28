@@ -1,12 +1,12 @@
 # AI research reference index
 
-Status: initial bibliography and research agenda, 2026-11-27. Documentation inventory only; not a literature review, implementation plan, or claim that existing behavior is supported by the listed studies.
+Status: research agenda and initial topic evidence notes, 2026-11-27. Documentation only; not an implementation plan or claim that existing behavior is supported by the listed studies.
 
 ## Purpose
 
 Design meaningful AI/model interactions using relevant published research and established practices. Maintain traceable links from features to research topics and from those topics to primary publications. The goal is to adopt applicable knowledge, not reproduce research experiments. Normal software correctness and regression testing remain separate.
 
-Every reference at this stage is a **candidate for later review**. A link identifies a question to investigate, not an endorsement. Applicability to actual models/workloads, contrary findings and design implications belong to a subsequent pass. This index does not authorize implementation or prompt changes. Leave evidence gaps visible.
+Bibliography references are candidates unless discussed in a linked topic evidence note. A link identifies a research question, not an endorsement. Topic notes distinguish findings, limits and possible applicability; none adopts a product change. This index does not authorize implementation or prompt changes. Leave evidence gaps visible.
 
 ## Research topics
 
@@ -14,7 +14,7 @@ Reference IDs resolve to the [candidate bibliography](references.md). Topic IDs 
 
 | ID | Topic | Questions for later review | Candidate references |
 | --- | --- | --- | --- |
-| R01 | Prompt structure and instruction hierarchy | Role, task, specificity, formatting, positive vs negative instructions | P01 P02 P03 |
+| R01 | [Prompt structure and instruction hierarchy](R01-prompt-structure.md) — initial evidence notes | Role, task, specificity, formatting, positive vs negative instructions | P01 P02 P03 P17–P27 |
 | R02 | Context engineering | Selection, placement, length, interference, history, explicit grounding | P04 |
 | R03 | Structured outputs | Schema descriptions, JSON, constrained decoding, partial results | P05 |
 | R04 | In-context learning | Examples, ordering, selection, few-shot prompting | P01 P02 |

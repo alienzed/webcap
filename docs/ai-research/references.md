@@ -1,6 +1,6 @@
 # Candidate AI research bibliography
 
-Status: source discovery only, 2026-11-27. Titles and publication landing pages are starting points. Findings have not been adopted or evaluated for WebCap. Years are initial public manuscript dates; links do not establish peer-review status or applicability. See the [research index](README.md) for topic and feature mappings.
+Status: source discovery and initial topic notes, 2026-11-27. Titles and publication landing pages are starting points; see linked topic notes for sources discussed. Findings have not been adopted or evaluated for WebCap. Years are initial public manuscript dates or venue years where identified; links do not establish peer-review status or applicability. See the [research index](README.md) for topic and feature mappings.
 
 | ID | Publication |
 | --- | --- |
@@ -20,6 +20,18 @@ Status: source discovery only, 2026-11-27. Titles and publication landing pages 
 | P14 | [Sorscher et al. (2022), Beyond neural scaling laws: beating power law scaling via data pruning](https://arxiv.org/abs/2206.14486) |
 | P15 | [Zheng et al. (2023), Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena](https://arxiv.org/abs/2306.05685) |
 | P16 | [Hu et al. (2021), LoRA: Low-Rank Adaptation of Large Language Models](https://arxiv.org/abs/2106.09685) |
+
+| P17 | [Sclar et al. (2023; ICLR 2024), Quantifying Language Models' Sensitivity to Spurious Features in Prompt Design](https://arxiv.org/abs/2310.11324) |
+| P18 | [He et al. (2024), Does Prompt Formatting Have Any Impact on LLM Performance? (preprint)](https://arxiv.org/abs/2411.10541) |
+| P19 | [Zheng et al. (2023; Findings of EMNLP 2024), When 'A Helpful Assistant' Is Not Really Helpful: Personas in System Prompts Do Not Improve Performances of Large Language Models](https://aclanthology.org/2024.findings-emnlp.888/) |
+| P20 | [Jang, Ye and Seo (2022; PMLR 2023), Can Large Language Models Truly Understand Prompts? A Case Study with Negated Prompts](https://proceedings.mlr.press/v203/jang23a.html) |
+| P21 | [Wallace et al. (2024), The Instruction Hierarchy: Training LLMs to Prioritize Privileged Instructions](https://arxiv.org/abs/2404.13208) |
+| P22 | [Zhang et al. (NAACL 2025), IHEval: Evaluating Language Models on Following the Instruction Hierarchy](https://aclanthology.org/2025.naacl-long.425/) |
+| P23 | [Jiang et al. (ACL 2024), FollowBench: A Multi-level Fine-grained Constraints Following Benchmark for Large Language Models](https://aclanthology.org/2024.acl-long.257/) |
+| P24 | [Zhou et al. (2023), Instruction-Following Evaluation for Large Language Models (preprint)](https://arxiv.org/abs/2311.07911) |
+| P25 | [Ismithdeen, Khattak and Khan (Findings of EMNLP 2025), Promptception: How Sensitive Are Large Multimodal Models to Prompts?](https://aclanthology.org/2025.findings-emnlp.1302/) |
+| P26 | [Kong et al. (2023; NAACL 2024), Better Zero-Shot Reasoning with Role-Play Prompting](https://aclanthology.org/2024.naacl-long.228/) |
+| P27 | [Kim, Yang and Jung (Findings of IJCNLP 2025), Persona is a Double-Edged Sword: Rethinking the Impact of Role-play Prompts in Zero-shot Reasoning Tasks](https://aclanthology.org/2025.findings-ijcnlp.51/) |
 
 ## Open bibliography gaps
 

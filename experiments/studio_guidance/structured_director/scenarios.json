@@ -24,7 +24,7 @@
       "id": "final-project-balance",
       "split": "development",
       "category": "project-versatility",
-      "operation": "studio_project_draft",
+      "operation": "studio_chat",
       "focus": "A complete distinctive collection that supports documentary precision, dry comedy and spectacular imagination without imposing a single narrative or mood.",
       "fidelity_checks": [
         "Meaningful title, concept, developed style and relevant invariant values.",
@@ -35,15 +35,18 @@
         {
           "role": "user",
           "content": "A collection of independent short films about balance. The same clear glass sphere with a cobalt-blue equatorial band appears in every film. People, settings and techniques vary freely. Some films should be precise and observational, others dryly comic or spectacularly imaginative. There is no overall plot. Give the collection a recognizable identity while retaining that range."
+        },
+        {
+          "role": "user",
+          "content": "Create one complete Project with a distinctive title, an inspiring Concept, developed Visual / atmosphere and genuinely enduring Invariants.\nReturn the complete requested material in this chat."
         }
-      ],
-      "instruction": "Create one complete Project with a distinctive title, an inspiring Concept, developed Visual / atmosphere and genuinely enduring Invariants."
+      ]
     },
     {
       "id": "final-scene-gauge",
       "split": "development",
       "category": "clinical-precision-and-restraint",
-      "operation": "studio_scenes_draft",
+      "operation": "studio_chat",
       "focus": "Neutral, clinically clear observation of a specified physical operation; precision and restraint are the creative goal.",
       "fidelity_checks": [
         "One 10-second Scene in one continuous fixed close-up.",
@@ -55,21 +58,18 @@
         {
           "role": "user",
           "content": "This is a clinically clear observational demonstration. Its value is seeing the physical contact and the needle settle, with a patient camera and neutral presentation."
+        },
+        {
+          "role": "user",
+          "content": "Project Read snapshot:\n{\n  \"title\": \"Contact and Measure\",\n  \"concept\": \"Precise observational demonstrations of simple mechanical measurements.\",\n  \"style\": \"Clinical clarity, neutral light and faithful real-time physical action.\",\n  \"invariants\": []\n}\n\nWrite one complete 10-second H3 Scene in one continuous fixed close-up. On a clean white laboratory bench, sky-blue gloved hands place a stainless-steel gauge block beneath a dial indicator. The right hand lowers the probe until it contacts the block; the dial needle moves once and settles. Both hands then withdraw, leaving the block and instrument still. Keep the probe contact and dial needle in frame throughout. Use uniform neutral illumination, real-time movement and only quiet physical sounds. No dialogue or music.\nReturn the complete requested material in this chat."
         }
-      ],
-      "instruction": "Write one complete 10-second H3 Scene in one continuous fixed close-up. On a clean white laboratory bench, sky-blue gloved hands place a stainless-steel gauge block beneath a dial indicator. The right hand lowers the probe until it contacts the block; the dial needle moves once and settles. Both hands then withdraw, leaving the block and instrument still. Keep the probe contact and dial needle in frame throughout. Use uniform neutral illumination, real-time movement and only quiet physical sounds. No dialogue or music.",
-      "project": {
-        "title": "Contact and Measure",
-        "concept": "Precise observational demonstrations of simple mechanical measurements.",
-        "style": "Clinical clarity, neutral light and faithful real-time physical action.",
-        "invariants": []
-      }
+      ]
     },
     {
       "id": "final-scene-wooden-sea",
       "split": "development",
       "category": "ambitious-imaginative-authoring",
-      "operation": "studio_scenes_draft",
+      "operation": "studio_chat",
       "focus": "An ambitious tactile transformation with coherent material identity, full intended scale, expressive sound and clear audiovisual progression.",
       "fidelity_checks": [
         "One 15-second Scene with three consecutive authored shots covering the duration.",
@@ -82,15 +82,12 @@
         {
           "role": "user",
           "content": "Make an impossible material transformation feel tangible and exhilarating. The pleasure is the whole workshop becoming a wooden sea, then a tiny object returning safely to human hands."
+        },
+        {
+          "role": "user",
+          "content": "Project Read snapshot:\n{\n  \"title\": \"Materials Otherwise\",\n  \"concept\": \"Impossible behavior realized through the tactile identities of familiar materials.\",\n  \"style\": \"Ambitious handmade audiovisual conception with coherent physical relationships.\",\n  \"invariants\": []\n}\n\nWrite one complete 15-second H3 Scene in three consecutive shots. A small teal ceramic whale with one gold stripe starts swimming through the solid surface of a wooden worktable as though it were water. The table becomes rolling wooden waves that fill the workshop while its walls remain intact. The whale leaps from the wooden sea, becomes solid ceramic again, and lands in a craftswoman's waiting hands. She says exactly \"Easy, now.\" Choose her appearance and clothing consistently. Preserve the full workshop-scale transformation, the whale's identity, tangible wood and ceramic textures, and purposeful sound.\nReturn the complete requested material in this chat."
         }
-      ],
-      "instruction": "Write one complete 15-second H3 Scene in three consecutive shots. A small teal ceramic whale with one gold stripe starts swimming through the solid surface of a wooden worktable as though it were water. The table becomes rolling wooden waves that fill the workshop while its walls remain intact. The whale leaps from the wooden sea, becomes solid ceramic again, and lands in a craftswoman's waiting hands. She says exactly \"Easy, now.\" Choose her appearance and clothing consistently. Preserve the full workshop-scale transformation, the whale's identity, tangible wood and ceramic textures, and purposeful sound.",
-      "project": {
-        "title": "Materials Otherwise",
-        "concept": "Impossible behavior realized through the tactile identities of familiar materials.",
-        "style": "Ambitious handmade audiovisual conception with coherent physical relationships.",
-        "invariants": []
-      }
+      ]
     },
     {
       "id": "chat-overview-gap",
@@ -184,7 +181,7 @@
       "id": "project-blueprint",
       "split": "development",
       "category": "overview-blueprint",
-      "operation": "studio_project_draft",
+      "operation": "studio_chat",
       "focus": "Turn a defined production into a scene-development map with correct distribution.",
       "fidelity_checks": [
         "Overview makes the exact 8-Scene distribution and sequence recoverable: 2 arrival, 3 demonstration, 2 failures, 1 resolution.",
@@ -195,15 +192,18 @@
         {
           "role": "user",
           "content": "A short instructional film about a bicycle mechanic repairing a puncture, exactly eight Scenes: two arrival/diagnosis, three distinct repair steps, two small failed attempts at reinflation, and one successful test ride. Unhurried opening, brisk repair, brief comic frustration, satisfying finish. The mechanic and red bicycle recur; focus on hands and observable physical steps."
+        },
+        {
+          "role": "user",
+          "content": "Create the Project Parameters for this production. Make the Overview useful as a blueprint for an LLM to author all eight Scenes.\nReturn the complete requested material in this chat."
         }
-      ],
-      "instruction": "Create the Project Parameters for this production. Make the Overview useful as a blueprint for an LLM to author all eight Scenes."
+      ]
     },
     {
       "id": "project-rotating-cast",
       "split": "development",
       "category": "invariant-scope",
-      "operation": "studio_project_draft",
+      "operation": "studio_chat",
       "focus": "Preserve fixed format and recurring object without freezing rotating subjects.",
       "fidelity_checks": [
         "Overview specifies 2 street, 2 workplace, 2 home clips, all independent.",
@@ -214,45 +214,35 @@
         {
           "role": "user",
           "content": "Six independent realistic clips about strangers sheltering from rain: two on streets, two at workplaces and two at homes. A yellow umbrella with a black curved handle appears in every clip, but every clip uses a different person, wardrobe and location. Warm documentary tone. No continuing story."
+        },
+        {
+          "role": "user",
+          "content": "Create one Project with title, concept, style and genuinely enduring invariants.\nReturn the complete requested material in this chat."
         }
-      ],
-      "instruction": "Create one Project with title, concept, style and genuinely enduring invariants."
+      ]
     },
     {
       "id": "scene-blueprint-execution",
       "split": "development",
       "category": "overview-to-scenes",
-      "operation": "studio_scenes_draft",
+      "operation": "studio_chat",
       "focus": "Realize a small structured Overview with distinct Scenes and relevant anchors.",
       "fidelity_checks": [
         "Returns three distinct Scenes in specified order: arrival, repair, test.",
         "Each complete prompt stands alone, describes the red bicycle and relevant mechanic identity.",
-        "Supported durations, complete timing, physical causal progression and no redundant scenes."
+        "Supported durations, complete timing, physical causal progression and no redundant scenes.",
+        "Defaults to 15 seconds for new Scenes unless a different duration is specified, with timed shots ending at the chosen duration."
       ],
       "history": [
         {
           "role": "user",
           "content": "The value is a legible repair sequence, not a dramatic story."
+        },
+        {
+          "role": "user",
+          "content": "Project Read snapshot:\n{\n  \"title\": \"Flat to Rolling\",\n  \"concept\": \"Exactly three clips: arrival and diagnosis (squeeze flat rear tire), repair (install patched tube and inflate), successful test (slow roll in the courtyard). Calm opening, brisk repair, satisfying finish. Focus on clear hands and physical actions.\",\n  \"style\": \"Naturalistic workshop documentary, clear neutral lighting, restrained camera and real physical sounds.\",\n  \"invariants\": [\n    {\n      \"kind\": \"character\",\n      \"title\": \"Mechanic\",\n      \"text\": \"Adult woman, short dark hair, navy work shirt.\"\n    },\n    {\n      \"kind\": \"visual\",\n      \"title\": \"Bicycle\",\n      \"text\": \"Red city bicycle with black saddle.\"\n    }\n  ]\n}\n\nWrite all three Scenes in the order specified in the Project. Each is independently renderable.\nReturn the complete requested material in this chat."
         }
-      ],
-      "instruction": "Write all three Scenes in the order specified in the Project. Each is independently renderable, 4–15 seconds.",
-      "project": {
-        "title": "Flat to Rolling",
-        "concept": "Exactly three clips: arrival and diagnosis (squeeze flat rear tire), repair (install patched tube and inflate), successful test (slow roll in the courtyard). Calm opening, brisk repair, satisfying finish. Focus on clear hands and physical actions.",
-        "style": "Naturalistic workshop documentary, clear neutral lighting, restrained camera and real physical sounds.",
-        "invariants": [
-          {
-            "kind": "character",
-            "title": "Mechanic",
-            "text": "Adult woman, short dark hair, navy work shirt."
-          },
-          {
-            "kind": "visual",
-            "title": "Bicycle",
-            "text": "Red city bicycle with black saddle."
-          }
-        ]
-      }
+      ]
     }
   ]
 }

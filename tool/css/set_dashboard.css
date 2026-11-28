@@ -797,7 +797,9 @@
   font-size:16px; min-height:36px; padding:6px 10px; white-space:normal; overflow-wrap:anywhere;
 }
 
-#set-dashboard-modal .set-dashboard-intelligence-panel { padding:16px 20px; }
+#set-dashboard-modal #set-dashboard-definition .set-dashboard-intelligence-panel {
+  margin-top:20px; padding:20px 0 0; border:0; border-top:1px solid var(--border); border-radius:0; background:transparent;
+}
 #set-dashboard-modal .set-dashboard-intelligence-panel > .set-dashboard-sight-panel {
   min-width:0; padding:0; margin:0; border:0; background:transparent !important;
 }

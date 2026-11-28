@@ -779,6 +779,7 @@
         folder: folder,
         visionModel: visionModel,
         directorModel: director,
+        autoDirectorModel: APP_CONFIG.auto_schema_model === true,
         files: schemaState.scopeFiles.slice(),
         existingGroups: groups,
         captionTemplate: currentCaptionTemplate()
@@ -787,6 +788,9 @@
       var jobId = String(payload.job && payload.job.jobId || '');
       if (!jobId) throw new Error('Vocabulary synthesis did not return a queued job.');
       schemaState.analysis = payload.analysis || schemaState.analysis;
+      if (payload.modelSelection) {
+        reportConsoleInfo('Vocabulary Synthesis', payload.modelSelection.modelRef + ' · ' + payload.modelSelection.reason);
+      }
       schemaState.schemaJobId = jobId;
       publishVocabularyActivity();
       trackTransientLlmJob(payload.job);

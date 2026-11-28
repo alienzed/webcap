@@ -159,7 +159,8 @@ def test_unsupported_generation_model_fails_instead_of_misapplying_h3_guidance()
 
 def test_h3_runtime_reference_uses_current_studio_fields_and_conditional_legacy_guidelines():
     prompt = guidance(profile="current")["promptContract"]
-    assert "Use supplied Project Concept, Visual / atmosphere, relevant Invariants, and the saved Scene Prompt" in prompt
+    assert "Use supplied Project Concept, Visual / atmosphere, relevant Invariants, Story facts and references as established generation context." in prompt
+    assert "Use the saved Scene Prompt when revising" in prompt
     assert "legacy Story Guidelines only when explicitly supplied" in prompt
     assert "integrated_multimodal_description:" in prompt
 

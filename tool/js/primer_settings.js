@@ -321,11 +321,17 @@ var primerTemplateTaskSequence = 0;
 var primerTemplateModeRegistered = false;
 
 // The existing template field remains the single saved template owner.
-function setPrimerTemplateFromDashboard(value, referenceCaptions) {
+function setPrimerTemplateFromDashboard(value, referenceCaptions, alreadySaved) {
   if (Array.isArray(referenceCaptions)) state.primerReferenceCaptions = normalizePrimerReferenceCaptions(referenceCaptions);
   var field = document.getElementById('primer-template');
   field.value = String(value || '');
-  field.dispatchEvent(new Event('input', {bubbles: true}));
+  if (alreadySaved) {
+    state.folderHasSavedPrimerTemplate = true;
+    refreshPrimerPreviewForCurrentItem();
+    if (typeof updatePrimerCaptionResetUi === 'function') updatePrimerCaptionResetUi();
+  } else {
+    field.dispatchEvent(new Event('input', {bubbles: true}));
+  }
 }
 
 function wireStatsPrimerAutoSave() {
@@ -1405,6 +1411,8 @@ function renderPrimerTemplateTaskReferences() {
 
 function setPrimerTemplateTaskBusy(busy, ready) {
   if (!primerTemplateTask) return;
+  primerTemplateTask.modelReady = ready;
+  busy = !!(busy || primerTemplateTask.saving);
   primerTemplateTask.busy = busy;
   primerTemplateTaskEl('draft').disabled = busy;
   primerTemplateTaskEl('reference-select').disabled = busy;
@@ -1416,6 +1424,7 @@ function setPrimerTemplateTaskBusy(busy, ready) {
 
 function executePrimerTemplateTask(request, author) {
   var task = primerTemplateTask;
+  if (task.saving) throw new Error('Wait for the current template write to finish.');
   task.stopRequested = false;
   var draft = String(primerTemplateTaskEl('draft').value || '');
   var payload = Object.assign({},task.request,{
@@ -1484,6 +1493,7 @@ function registerPrimerTemplateMode() {
 }
 
 function openPrimerTemplateDesigner(options) {
+  if (primerTemplateTask && primerTemplateTask.busy) throw new Error('Finish the current Caption Template operation first.');
   options = options || {};
   var folder = String(state.folder || '');
   var request = buildPrimerTemplateAssistRequest();
@@ -1559,16 +1569,38 @@ function wirePrimerTemplateAssistUi() {
   primerTemplateTaskEl('generate').onclick = function () {
     try { window.runTaskConversationWrite('caption-template'); } catch(error) { report(error); }
   };
-  primerTemplateTaskEl('write').onclick = function () {
+  primerTemplateTaskEl('write').onclick = async function () {
+    var task = primerTemplateTask;
+    if (!task || task.busy) return;
     try {
-      var task = primerTemplateTask;
       if (task.folder !== String(state.folder || '')) throw new Error('The template belongs to a different Set.');
-      setPrimerTemplateFromDashboard(primerTemplateTaskEl('draft').value,task.references);
+      var draft = primerTemplateTaskEl('draft').value;
+      var references = normalizePrimerReferenceCaptions(task.references);
+      var captured = captureCurrentFolderStateSave();
+      if (!captured) throw new Error('The Set is not available for saving.');
+      // Persist the explicit draft with the existing Set snapshot writer.
+      // Until its receipt succeeds, the saved template and references remain unchanged.
+      captured.snapshot.primer.template = draft;
+      captured.snapshot.primer.referenceCaptions = references;
+      task.saving = true;
+      setPrimerTemplateTaskBusy(false,task.modelReady);
+      primerTemplateTaskEl('status').textContent = 'Writing template…';
+      cancelPendingFolderStateSave(captured.folderPath);
+      if (!await writeCapturedFolderState(captured)) throw new Error('Caption Template could not be saved. Your draft is retained.');
       task.applied = true;
-      if (task.onWrite) task.onWrite();
-      window.setDirectorChatOpen(false);
-      setStatus('Caption Template updated.');
-    } catch(error) { report(error); }
+      if (task.folder === String(state.folder || '') && primerTemplateTask === task) {
+        setPrimerTemplateFromDashboard(draft,references,true);
+        if (task.onWrite) task.onWrite();
+        if (document.getElementById('task-conversation-modal').contains(primerTemplateTaskEl('result'))) window.setDirectorChatOpen(false);
+      }
+      setStatus('Caption Template saved.');
+    } catch(error) {
+      primerTemplateTaskEl('status').textContent = String(error.message || error);
+      report(error);
+    } finally {
+      task.saving = false;
+      if (primerTemplateTask === task) setPrimerTemplateTaskBusy(false,task.modelReady);
+    }
   };
 }
 

@@ -1187,7 +1187,8 @@ def test_primer_template_assistant_uses_existing_template_editor():
     assert "getPrimerMappingsRows()" in script
     assert "validatePrimerTemplateCandidate" in script
     assert "Template Assist invented an unavailable placeholder" in script
-    assert "setPrimerTemplateFromDashboard(primerTemplateTaskEl('draft').value,task.references)" in script
+    assert "setPrimerTemplateFromDashboard(draft,references,true)" in script
+    assert "if (!await writeCapturedFolderState(captured))" in script
     assert "field.dispatchEvent(new Event('input', {bubbles: true}))" in script
     assert "fetch(url, options || {})" in script
     assert "'/caption/template-assist'" in script

@@ -2,13 +2,9 @@
   <purpose>Write a directly usable prompt for one video Scene, at most 15 seconds.</purpose>
 
   <scene_duration>
-    <instruction>MiniMax H3 generates clips from 4 to 15 seconds.</instruction>
-    <instruction>For a new Scene, choose durationSeconds
-within this supported range to suit its particular action, pacing and dialogue.</instruction>
-    <instruction>Scenes
-may have different durations.</instruction>
-    <instruction>Make the final timed shot end at durationSeconds.</instruction>
-    <instruction>For an existing Scene, match its saved duration unless the author requests a change.</instruction>
+    <instruction>Scenes default to 15 seconds.</instruction>
+    <instruction>Shot timestamps span the Scene's duration.</instruction>
+    <instruction>Preserve the saved duration when revising a Scene unless instructed otherwise.</instruction>
   </scene_duration>
 
   <authoring_structure>

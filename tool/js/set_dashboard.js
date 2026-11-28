@@ -417,11 +417,13 @@
     el('set-dashboard-definition-summary').textContent = el('set-dashboard-definition').open ? '' : window.getQaTrainingFocus();
     var variables = state.setVariables || [];
     if (!templateDirty) el('set-dashboard-template-draft').value = String(statsGetPrimerOptionsFromDom().template || '');
-    if (!window.isSetIntelligenceOpen()) window.openSetIntelligence();
-    else window.refreshSetIntelligenceScope();
     if (el('set-dashboard-definition').open) {
+      if (!window.isSetIntelligenceOpen()) window.openSetIntelligence();
+      else window.refreshSetIntelligenceScope();
       renderVocabulary();
       renderTemplatePlaceholders();
+    } else if (window.isSetIntelligenceOpen()) {
+      window.closeSetIntelligence();
     }
     var missingCaptions = s.visibleTotal - s.visibleCaptions;
     if (!qaOpen) el('set-dashboard-qa-summary').textContent = missingCaptions ? missingCaptions + ' without captions' : 'Inspect findings';
@@ -461,7 +463,7 @@
     }
     openedFolder = String(state.folder || '');
     if (preferredStage === 'review') el('set-dashboard-review').open = true;
-    if (preferredStage === 'analyze' && !el('set-dashboard-definition').open && !el('set-dashboard-balance-section').open) el('set-dashboard-balance-section').open = true;
+    if (preferredStage === 'analyze') el('set-dashboard-definition').open = true;
     if (preferredStage === 'reports') el('set-dashboard-reports').open = true;
     el('set-dashboard-name').textContent = openedFolder.split(/[\\/]/).filter(Boolean).pop() || 'Current Set';
     open = true;

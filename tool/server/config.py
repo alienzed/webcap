@@ -231,6 +231,7 @@ def validate_config_payload(payload):
     if not isinstance(director_model, str):
         raise ValueError("Config.director_model must be a string.")
     out["director_model"] = director_model.strip()
+    out["auto_schema_model"] = out.get("auto_schema_model") is True
 
     vision_model = out.get("vision_model", "")
     if not isinstance(vision_model, str):

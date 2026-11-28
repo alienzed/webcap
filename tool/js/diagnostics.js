@@ -775,11 +775,21 @@ function refreshUnifiedModelAssessment() {
         raw.appendChild(failure);
       }
       panel.appendChild(raw);
+      function judgeSourceHas(saved, isCandidate) {
+        var probes = (saved.models || {})[ref] || {};
+        return saved.status === 'completed' && Object.keys(probes).some(function (kind) {
+          return isCandidate(kind) && Number((probes[kind].counts || {}).completed || 0) > 0;
+        });
+      }
+      // Prefer a saved synthesis result when choosing the review source.
+      // A newer Scene-only run should not obscure a usable synthesis probe.
       var judgeSource = capabilityRuns.find(function (saved) {
-        return saved.status === 'completed' && Object.keys((saved.models || {})[ref] || {}).some(function (kind) {
-          var item = saved.models[ref][kind];
-          return (kind === 'language_synthesis' || kind === 'set_vocabulary_synthesis' || kind.indexOf('director_scene_plan_') === 0) &&
-            Number((item.counts || {}).completed || 0) > 0;
+        return !saved.importedFrom && judgeSourceHas(saved, function (kind) {
+          return kind === 'language_synthesis' || kind === 'set_vocabulary_synthesis';
+        });
+      }) || capabilityRuns.find(function (saved) {
+        return judgeSourceHas(saved, function (kind) {
+          return kind === 'language_synthesis' || kind === 'set_vocabulary_synthesis' || kind.indexOf('director_scene_plan_') === 0;
         });
       });
       if (supportsDirector && judgeSource) {

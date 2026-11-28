@@ -30,7 +30,6 @@ def test_assessment_table_is_compact_and_retains_thinking_as_context():
     assert "qualityCell.textContent = qualityLabel" in source
     assert "row.assessmentSort.quality = (synthesisReview || qualityReview.tasks[0]).score" in source
     assert "qualityReview.tasks.reduce" not in source
-    assert "row.assessmentSort.quality = qualityReview.tasks.reduce" in source
     assert "tests.director_thinking" in source
     assert "' · Thinking: ' + thinkingLabel" in source
 

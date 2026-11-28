@@ -615,8 +615,9 @@ function refreshUnifiedModelAssessment() {
       qualityLabel = diagnosticsAssessmentReviewLabel(qualityReview);
       if (qualityReview && qualityReview.status === 'completed' && (qualityReview.tasks || []).length) {
         qualityReason = qualityReview.tasks.map(function (task) { return task.task + ': ' + task.reason; }).join(' · ');
-        row.assessmentSort.quality = qualityReview.tasks.reduce(function (total, item) { return total + item.score; }, 0) / qualityReview.tasks.length;
-        qualityCell.textContent = row.assessmentSort.quality.toFixed(1) + '/5 · ' + qualityReview.tasks.length + ' task' + (qualityReview.tasks.length === 1 ? '' : 's');
+        var synthesisReview = qualityReview.tasks.find(function (task) { return task.task === 'structured'; });
+        row.assessmentSort.quality = (synthesisReview || qualityReview.tasks[0]).score;
+        qualityCell.textContent = qualityLabel;
         var judgeModel = (labModels.directors || []).find(function (entry) { return String(entry.modelRef || '') === String(qualityReview.judgeModelRef || ''); });
         var judgeName = judgeModel ? String(judgeModel.label || judgeModel.modelId || qualityReview.judgeModelRef) : String(qualityReview.judgeModelRef || 'unknown');
         qualityCell.title = 'Advisory judgment by ' + judgeName + ' · ' + qualityReview.tasks.length + ' task(s) · Run ' + qualityRun.id + ' · ' + (qualityReview.finishedAt || 'date unknown') + '. Not a reliability or consensus measure. ' + qualityReason;
@@ -777,7 +778,7 @@ function refreshUnifiedModelAssessment() {
       var judgeSource = capabilityRuns.find(function (saved) {
         return saved.status === 'completed' && Object.keys((saved.models || {})[ref] || {}).some(function (kind) {
           var item = saved.models[ref][kind];
-          return kind.indexOf('director_scene_plan_') === 0 &&
+          return (kind === 'language_synthesis' || kind === 'set_vocabulary_synthesis' || kind.indexOf('director_scene_plan_') === 0) &&
             Number((item.counts || {}).completed || 0) > 0;
         });
       });

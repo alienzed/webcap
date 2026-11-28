@@ -118,3 +118,5 @@ This contract intentionally does not prescribe a new agent hierarchy, scoring fr
 ## Related AI research
 
 See the [AI research index](ai-research/README.md) (R02 R03 R06 R07 R09 R14) for candidate publications and future research questions. This reference does not change the feature contract or establish evidence for its current implementation.
+
+See [R02 — Context engineering](ai-research/R02-context-engineering.md) for published evidence, limits, and applicability questions. The research note does not change this feature's contract or runtime behavior.

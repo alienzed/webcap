@@ -49,3 +49,5 @@ Existing review receipts and Caption Assist behavior must remain readable/usable
 ## Related AI research
 
 See the [AI research index](ai-research/README.md) (R03 R07 R08 R09) for candidate publications and future research questions. This reference does not change the feature contract or establish evidence for its current implementation.
+
+See [R03 — Structured outputs and schema design](ai-research/R03-structured-outputs.md) for published evidence, limits, and questions about schema meaning, decoding and output quality. This research reference does not change the feature contract.

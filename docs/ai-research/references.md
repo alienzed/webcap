@@ -41,6 +41,17 @@ Status: source discovery and initial topic notes, 2026-11-27. Titles and publica
 | P35 | [Bai et al. (ACL 2025), LongBench v2: Towards Deeper Understanding and Reasoning on Realistic Long-context Multitasks](https://aclanthology.org/2025.acl-long.183/) |
 | P36 | [Amiraz et al. (ACL 2025), The Distracting Effect: Understanding Irrelevant Passages in RAG](https://aclanthology.org/2025.acl-long.892/) |
 | P37 | [Min and Song (Findings of EMNLP 2026), Don't Scroll Back: Missing-Evidence Memory for Streaming Dialogue Summarization](https://aclanthology.org/2026.findings-emnlp.1075/) |
+| P38 | [Geng et al. (2025, preprint), Generating Structured Outputs from Language Models: Benchmark and Studies](https://arxiv.org/abs/2501.10868) |
+| P39 | [Tam et al. (EMNLP Industry 2024), Let Me Speak Freely? A Study On The Impact Of Format Restrictions On Large Language Model Performance](https://aclanthology.org/2024.emnlp-industry.91/) |
+| P40 | [Park et al. (NeurIPS 2024), Grammar-Aligned Decoding](https://arxiv.org/abs/2405.21047) |
+| P41 | [Schall and de Melo (RANLP 2025), The Hidden Cost of Structure: How Constrained Decoding Affects Language Model Performance](https://aclanthology.org/2025.ranlp-1.124/) |
+| P42 | [Banerjee et al. (ICML 2025), CRANE: Reasoning with constrained LLM generation](https://proceedings.mlr.press/v267/banerjee25a.html) |
+| P43 | [Reddy et al. (ICML 2026), The Hidden Cost of Structured Generation in LLMs: Draft-Conditioned Constrained Decoding](https://proceedings.mlr.press/v306/reddy26a.html) |
+| P44 | [Nguyen et al. (2026, preprint), Constrained Decoding: Harmful or Beneficial? Revisiting Its Impact on LLM Performance](https://arxiv.org/abs/2610.35328) |
+| P45 | [Lin (2026, preprint), Your Prompt Is Not the Only Prompt: How Much Do LLMs Weight Structured-Output Schema Descriptions?](https://arxiv.org/abs/2608.08254) |
+| P46 | [Le (AACL-IJCNLP 2026), Schema-Key Wording as an Instruction Channel in Structured Generation under Constrained Decoding](https://aclanthology.org/2026.aacl-long.116/) |
+| P47 | [Ferguson et al. (2026, preprint), ExtractBench: A Benchmark and Evaluation Methodology for Complex Structured Extraction](https://arxiv.org/abs/2602.12247) |
+| P48 | [Singh et al. (2026, preprint), The Structured Output Benchmark: A Multi-Source Benchmark for Evaluating Structured Output Quality in Large Language Models](https://arxiv.org/abs/2604.25359) |
 
 ## Open bibliography gaps
 

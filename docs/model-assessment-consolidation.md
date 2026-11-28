@@ -48,6 +48,53 @@ The existing assessment journals and optional saved-output judge serve a second 
 2. Expand only to operations with representative evidence. Scene-plan probes measure the older `develop_story` contract and structured capacity, not current Studio Chat/Write quality; completed journals deliberately compact generated Scene text. Sight completion is not visual accuracy, and schema challenge receives each model's own draft, not a common challenge input. Do not substitute those measurements for task quality. Caption Assist and Studio Chat need appropriate representative tests if selected for later expansion.
 3. Codex can use the existing `GET /app/model-lab?summary=1`, `GET /app/model-lab?run=<id>` and POST actions `preview`, `start`, `judge`, `stop`, plus existing export. No separate benchmark service is needed. Access should be through an explicitly authorized private connection to the running WebCap app; this change adds no public listener, remote credentials, or production access. Actual remote/live evaluation is required before enabling additional operations.
 
+### Remote Codex assessment runbook
+
+Use the existing running WebCap app over an already authorized private connection. No runtime credentials, direct inference port, remote shell, or public WebCap listener are required by these calls. Run commands on the authorized client, with the base URL of the reachable WebCap instance (not the Ollama/llama.cpp endpoint). Keep response files on that client.
+
+```bash
+# Set WEBCAP_URL to the authorized WebCap base URL first.
+curl -fsS "$WEBCAP_URL/app/model-lab?summary=1" > assessment-summary.json
+```
+
+From `models.directors` choose the currently configured Director, at least one alternative, and an independent judge (not either candidate). Use the exact returned catalog model objects, including runtime identity. The minimal comparable pilot uses a Director-only quick assessment. Construct `assessment-config.json` with this shape; the abbreviated model objects below are placeholders for actual catalog entries:
+
+```json
+{
+  "depth": "quick",
+  "directorModels": [
+    {"modelRef": "RUNTIME::BASELINE"},
+    {"modelRef": "RUNTIME::ALTERNATIVE"}
+  ]
+}
+```
+
+Preview first, using the existing assessment admission and reuse rules:
+
+```bash
+python -c 'import json; print(json.dumps({"action":"preview","config":json.load(open("assessment-config.json"))}))' |
+  curl -fsS -H 'Content-Type: application/json' --data-binary @- "$WEBCAP_URL/app/model-lab"
+```
+
+Only if `plan.total` is positive and the user has authorized production inference, submit the same request with action `start`. Record the returned `run.id`; poll `GET /app/model-lab?run=<id>` until the run has finished. The existing shared queue coordinates GPU work. If `noWork` is true, no new journal was saved: use completed runs from the summary rather than trying to poll the returned transient ID. Do not reset evidence to force extra probes.
+
+For each candidate, use the completed local run containing its saved `language_synthesis` result. If the probe was reused, the run's `reused` references identify its source. Judge the existing output with the same independent reviewer for both candidates:
+
+```json
+{
+  "action": "judge",
+  "runId": "EXISTING_COMPLETED_RUN",
+  "modelRef": "RUNTIME::BASELINE",
+  "judgeModelRef": "RUNTIME::JUDGE"
+}
+```
+
+POST this JSON to `/app/model-lab` only when that comparable review is missing. Wait until `run.qualityReviews[modelRef].status` is terminal before starting the next review, because Model Assessment intentionally admits one active assessment/review at a time. Existing compatible reviews can be used without another judge call. A failed review is visible evidence, not a reason to invent a score. To stop an explicitly started assessment or review, use its existing `stop` or `stop_judge` action with its run ID; do not stop another user's work.
+
+Refresh the summary. Its `schemaRecommendation` is the same decision WebCap would use in the opt-in pilot; no client-side ranking is required. Record per-task scores and reasons, source run IDs, latency if available, and whether the recommendation changed. Codex should then compare actual Vocabulary Discovery outputs on representative Sets before recommending broader adoption. No setting changes are required for this read/evaluation workflow; Auto remains disabled unless explicitly enabled in Diagnostics.
+
+A fixed fixture comparison establishes a useful initial observation, not production superiority. Report mismatched, missing or failed evidence rather than treating a synthetic-fixture win as a general model-quality result.
+
 ## Validation
 
 - `tests/test_model_lab.py`, `tests/test_model_assessment_completion.py`, `tests/test_assessment_transfer.py`, `tests/test_director_model_calibration.py`, `tests/test_model_assessment_thinking_unified.py`, and `tests/test_model_lab_progress.js` run in the targeted CI.

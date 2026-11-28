@@ -20,7 +20,6 @@ Status: source discovery and initial topic notes, 2026-11-27. Titles and publica
 | P14 | [Sorscher et al. (2022), Beyond neural scaling laws: beating power law scaling via data pruning](https://arxiv.org/abs/2206.14486) |
 | P15 | [Zheng et al. (2023), Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena](https://arxiv.org/abs/2306.05685) |
 | P16 | [Hu et al. (2021), LoRA: Low-Rank Adaptation of Large Language Models](https://arxiv.org/abs/2106.09685) |
-
 | P17 | [Sclar et al. (2023; ICLR 2024), Quantifying Language Models' Sensitivity to Spurious Features in Prompt Design](https://arxiv.org/abs/2310.11324) |
 | P18 | [He et al. (2024), Does Prompt Formatting Have Any Impact on LLM Performance? (preprint)](https://arxiv.org/abs/2411.10541) |
 | P19 | [Zheng et al. (2023; Findings of EMNLP 2024), When 'A Helpful Assistant' Is Not Really Helpful: Personas in System Prompts Do Not Improve Performances of Large Language Models](https://aclanthology.org/2024.findings-emnlp.888/) |
@@ -32,6 +31,16 @@ Status: source discovery and initial topic notes, 2026-11-27. Titles and publica
 | P25 | [Ismithdeen, Khattak and Khan (Findings of EMNLP 2025), Promptception: How Sensitive Are Large Multimodal Models to Prompts?](https://aclanthology.org/2025.findings-emnlp.1302/) |
 | P26 | [Kong et al. (2023; NAACL 2024), Better Zero-Shot Reasoning with Role-Play Prompting](https://aclanthology.org/2024.naacl-long.228/) |
 | P27 | [Kim, Yang and Jung (Findings of IJCNLP 2025), Persona is a Double-Edged Sword: Rethinking the Impact of Role-play Prompts in Zero-shot Reasoning Tasks](https://aclanthology.org/2025.findings-ijcnlp.51/) |
+| P28 | [Shi et al. (ICML 2023), Large Language Models Can Be Easily Distracted by Irrelevant Context](https://proceedings.mlr.press/v202/shi23a.html) |
+| P29 | [Hsieh et al. (2024), RULER: What's the Real Context Size of Your Long-Context Language Models?](https://arxiv.org/abs/2404.06654) |
+| P30 | [Modarressi et al. (ICML 2025), NoLiMa: Long-Context Evaluation Beyond Literal Matching](https://proceedings.mlr.press/v267/modarressi25a.html) |
+| P31 | [Laban et al. (2025; ICLR 2026), LLMs Get Lost In Multi-Turn Conversation](https://arxiv.org/abs/2505.06120) |
+| P32 | [Wu et al. (ICLR 2025), LongMemEval: Benchmarking Chat Assistants on Long-Term Interactive Memory](https://proceedings.iclr.cc/paper_files/paper/2025/hash/d813d324dbf0598bbdc9c8e79740ed01-Abstract-Conference.html) |
+| P33 | [Li et al. (EMNLP Industry 2024), Retrieval Augmented Generation or Long-Context LLMs? A Comprehensive Study and Hybrid Approach](https://aclanthology.org/2024.emnlp-industry.66/) |
+| P34 | [Pan et al. (Findings of ACL 2024), LLMLingua-2: Data Distillation for Efficient and Faithful Task-Agnostic Prompt Compression](https://aclanthology.org/2024.findings-acl.57/) |
+| P35 | [Bai et al. (ACL 2025), LongBench v2: Towards Deeper Understanding and Reasoning on Realistic Long-context Multitasks](https://aclanthology.org/2025.acl-long.183/) |
+| P36 | [Amiraz et al. (ACL 2025), The Distracting Effect: Understanding Irrelevant Passages in RAG](https://aclanthology.org/2025.acl-long.892/) |
+| P37 | [Min and Song (Findings of EMNLP 2026), Don't Scroll Back: Missing-Evidence Memory for Streaming Dialogue Summarization](https://aclanthology.org/2026.findings-emnlp.1075/) |
 
 ## Open bibliography gaps
 

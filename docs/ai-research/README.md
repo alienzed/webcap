@@ -15,7 +15,7 @@ Reference IDs resolve to the [candidate bibliography](references.md). Topic IDs 
 | ID | Topic | Questions for later review | Candidate references |
 | --- | --- | --- | --- |
 | R01 | [Prompt structure and instruction hierarchy](R01-prompt-structure.md) — initial evidence notes | Role, task, specificity, formatting, positive vs negative instructions | P01 P02 P03 P17–P27 |
-| R02 | Context engineering | Selection, placement, length, interference, history, explicit grounding | P04 |
+| R02 | [Context engineering](R02-context-engineering.md) — initial evidence notes | Selection, placement, length, interference, history, explicit grounding | P04 P28–P37 |
 | R03 | Structured outputs | Schema descriptions, JSON, constrained decoding, partial results | P05 |
 | R04 | In-context learning | Examples, ordering, selection, few-shot prompting | P01 P02 |
 | R05 | Visual grounding | Hallucinations, resolution, visual evidence, video frame sampling | P06 P07 P08 |

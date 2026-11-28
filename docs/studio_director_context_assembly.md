@@ -74,3 +74,5 @@ long Read snapshots, author/assistant echo duplication, exact Scene Writes,
 context size, and subjective creative utility. Preserve the transcript and
 source positions through any later iteration. No strict rejection gate, silent
 repair call, or automatic source refresh is warranted by this change.
+
+See [R02 — Context engineering](ai-research/R02-context-engineering.md) for published evidence, limits, and applicability questions. The research note does not change this feature's contract or runtime behavior.

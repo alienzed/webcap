@@ -108,3 +108,5 @@ Static and mocked tests do not establish live-model reliability. Do not weaken a
 ## Related AI research
 
 See the [AI research index](ai-research/README.md) (R01 R02 R03 R04 R06 R08 R18) for candidate publications and future research questions. See [R01 evidence notes](ai-research/R01-prompt-structure.md) for initial findings and limitations on prompt structure and instruction hierarchy. These references do not change the feature contract or establish evidence for its current implementation.
+
+See [R02 — Context engineering](ai-research/R02-context-engineering.md) for published evidence, limits, and applicability questions. The research note does not change this feature's contract or runtime behavior.

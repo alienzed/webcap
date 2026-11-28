@@ -123,6 +123,9 @@ def resolve_packages(packages, baseline_manifest=None):
                 role, expertise = repo_default(item["profile"]), repo_default(item["toolkit"])
         else:
             role, expertise = item["role"], item["expertise"]
+        if item.get("expertise_module") == "h3.authoring":
+            # Reuse the authoritative reference, including its frozen run snapshot.
+            expertise = frozen.get("technical_reference") or repo_default("h3.authoring")
         assert isinstance(role, str) and role.strip()
         assert isinstance(expertise, str)
         addendum = item.get("authoring_addendum", "")

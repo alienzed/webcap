@@ -27,8 +27,9 @@ def test_assessment_table_is_compact_and_retains_thinking_as_context():
     assert "{key: 'quality', name: 'Quality (advisory)'}" in source
     assert "thinkingLabel = supported ? 'Yes' : 'No'" in source
     assert "thinkingCell.textContent = thinkingLabel" in source
-    assert "qualityCell.textContent = row.assessmentSort.quality.toFixed(1) + '/5 · '" in source
-    assert "row.assessmentSort.quality = qualityReview.tasks.reduce" in source
+    assert "qualityCell.textContent = qualityLabel" in source
+    assert "row.assessmentSort.quality = (synthesisReview || qualityReview.tasks[0]).score" in source
+    assert "qualityReview.tasks.reduce" not in source
     assert "tests.director_thinking" in source
     assert "' · Thinking: ' + thinkingLabel" in source
 

@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 import os
@@ -34,6 +35,14 @@ class ModelLabStopped(RuntimeError):
 
 def _now_iso():
     return datetime.now(timezone.utc).isoformat()
+
+
+def assessment_input_key(messages):
+    """Fingerprint the exact assessment input without storing another prompt copy."""
+    if not isinstance(messages, list) or not messages:
+        return ""
+    return hashlib.sha256(json.dumps(messages, ensure_ascii=False, sort_keys=True,
+                                     separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
 def _copy(value):
@@ -704,7 +713,11 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
         if not job_id:
             raise RuntimeError("Model Lab probe did not receive an LLM job ID.")
         _set_current_job(run["id"], job_id)
-        _update_attempt(run, attempt_id, jobId=job_id)
+        request = queued.get("request") or {}
+        input_key = assessment_input_key(request.get("messages")) if kind in {
+            "language_synthesis", "set_vocabulary_synthesis"
+        } else ""
+        _update_attempt(run, attempt_id, jobId=job_id, **({"inputKey": input_key} if input_key else {}))
 
         active_started = None
         last_job_status = ""
@@ -1071,6 +1084,13 @@ def _run_vision_model(run, model):
             consecutive_failures += 1
 
 
+def _synthetic_groups():
+    return [
+        {"group": "BT Shape", "terms": ["triangle", "bandeau"]},
+        {"group": "BT Connector", "terms": ["chain"]},
+    ]
+
+
 def _synthetic_analysis():
     evidence = [
         {
@@ -1235,11 +1255,7 @@ def _run_director_model(run, model):
     if not reference_vision_ref:
         # Director-only: exercise the actual Schema Assist contract with a
         # small frozen representative Sight fixture, not a generic prose test.
-        fixture_groups = [
-            {"group": "BT Shape", "terms": ["triangle", "bandeau"]},
-            {"group": "BT Connector", "terms": ["chain"]},
-        ]
-        _run_schema_pair(run, model_ref, _synthetic_analysis(), fixture_groups, "language")
+        _run_schema_pair(run, model_ref, _synthetic_analysis(), _synthetic_groups(), "language")
         return
     open_records, vocabulary_records = _vision_records(run, reference_vision_ref)
     if len(open_records) < 2:
@@ -1707,6 +1723,14 @@ def register_routes(app):
                 }
                 if summary_requested:
                     payload["capabilityRuns"] = capability_run_summaries(rows, cached_runs)
+                    from .model_lab_quality import schema_model_recommendation
+                    config = app_config.load_config_from_disk()
+                    payload["autoSchemaModel"] = config.get("auto_schema_model") is True
+                    payload["schemaRecommendation"] = schema_model_recommendation(
+                        str(config.get("director_model") or ""),
+                        (model["modelRef"] for model in payload["models"]["directors"]),
+                        rows, cached_runs,
+                    )
                 if run_id:
                     payload["run"] = get_run(run_id)
                 return jsonify(payload)
@@ -1721,6 +1745,14 @@ def register_routes(app):
             if action == "import":
                 from .assessment_transfer import import_results
                 return jsonify({"ok": True, **import_results(data.get("bundle"), data.get("runtimeMap"))})
+            if action == "set_auto_schema_model":
+                enabled = data.get("enabled")
+                if type(enabled) is not bool:
+                    raise ValueError("Choose whether to use assessed synthesis models.")
+                config = app_config.load_config_from_disk()
+                config["auto_schema_model"] = enabled
+                saved = app_config.save_config_to_disk(config)
+                return jsonify({"ok": True, "config": saved})
             if action == "judge":
                 from .model_lab_quality import start_review
                 run = start_review(data.get("runId"), data.get("modelRef"), data.get("judgeModelRef"))

@@ -406,6 +406,37 @@ function refreshUnifiedModelAssessment() {
     summary.appendChild(document.createTextNode(' · '));
     summary.appendChild(resetAll);
 
+    // Model choice is still explicit everywhere else. This pilot is opt-in
+    // for the synthesis stage of Vocabulary Discovery only.
+    var autoLabel = document.createElement('label');
+    autoLabel.className = 'app-settings-help';
+    var autoInput = document.createElement('input');
+    autoInput.type = 'checkbox';
+    autoInput.checked = values[1].autoSchemaModel === true;
+    autoLabel.appendChild(autoInput);
+    autoLabel.appendChild(document.createTextNode(' Auto-select Vocabulary Synthesis model'));
+    var recommendation = values[1].schemaRecommendation || {};
+    var recommendedModel = (labModels.directors || []).find(function (entry) {
+      return entry.modelRef === recommendation.modelRef;
+    });
+    autoLabel.title = recommendation.reason || 'Use comparable independently judged assessment results; otherwise use your selected Director.';
+    if (recommendedModel) {
+      autoLabel.appendChild(document.createTextNode(' · ' + (recommendedModel.label || recommendation.modelRef)));
+    }
+    autoInput.addEventListener('change', function () {
+      var enabled = autoInput.checked;
+      autoInput.disabled = true;
+      modelLabPost({action: 'set_auto_schema_model', enabled: enabled}).then(function (payload) {
+        diagnosticsLoadedConfig = normalizeAppConfigShape(payload.config);
+        setRuntimeAppConfig(payload.config);
+      }).catch(function (error) {
+        autoInput.checked = !enabled;
+        reportConsoleError('Model Assessment automatic model selection', error);
+      }).finally(function () { autoInput.disabled = false; });
+    });
+    summary.appendChild(document.createTextNode(' · '));
+    summary.appendChild(autoLabel);
+
     var table = document.createElement('table');
     table.className = 'model-assessment-table';
     var head = document.createElement('thead');
@@ -584,8 +615,9 @@ function refreshUnifiedModelAssessment() {
       qualityLabel = diagnosticsAssessmentReviewLabel(qualityReview);
       if (qualityReview && qualityReview.status === 'completed' && (qualityReview.tasks || []).length) {
         qualityReason = qualityReview.tasks.map(function (task) { return task.task + ': ' + task.reason; }).join(' · ');
-        row.assessmentSort.quality = qualityReview.tasks.reduce(function (total, item) { return total + item.score; }, 0) / qualityReview.tasks.length;
-        qualityCell.textContent = row.assessmentSort.quality.toFixed(1) + '/5 · ' + qualityReview.tasks.length + ' task' + (qualityReview.tasks.length === 1 ? '' : 's');
+        var synthesisReview = qualityReview.tasks.find(function (task) { return task.task === 'structured'; });
+        row.assessmentSort.quality = (synthesisReview || qualityReview.tasks[0]).score;
+        qualityCell.textContent = qualityLabel;
         var judgeModel = (labModels.directors || []).find(function (entry) { return String(entry.modelRef || '') === String(qualityReview.judgeModelRef || ''); });
         var judgeName = judgeModel ? String(judgeModel.label || judgeModel.modelId || qualityReview.judgeModelRef) : String(qualityReview.judgeModelRef || 'unknown');
         qualityCell.title = 'Advisory judgment by ' + judgeName + ' · ' + qualityReview.tasks.length + ' task(s) · Run ' + qualityRun.id + ' · ' + (qualityReview.finishedAt || 'date unknown') + '. Not a reliability or consensus measure. ' + qualityReason;
@@ -743,11 +775,21 @@ function refreshUnifiedModelAssessment() {
         raw.appendChild(failure);
       }
       panel.appendChild(raw);
+      function judgeSourceHas(saved, isCandidate) {
+        var probes = (saved.models || {})[ref] || {};
+        return saved.status === 'completed' && Object.keys(probes).some(function (kind) {
+          return isCandidate(kind) && Number((probes[kind].counts || {}).completed || 0) > 0;
+        });
+      }
+      // Prefer a saved synthesis result when choosing the review source.
+      // A newer Scene-only run should not obscure a usable synthesis probe.
       var judgeSource = capabilityRuns.find(function (saved) {
-        return saved.status === 'completed' && Object.keys((saved.models || {})[ref] || {}).some(function (kind) {
-          var item = saved.models[ref][kind];
-          return kind.indexOf('director_scene_plan_') === 0 &&
-            Number((item.counts || {}).completed || 0) > 0;
+        return !saved.importedFrom && judgeSourceHas(saved, function (kind) {
+          return kind === 'language_synthesis' || kind === 'set_vocabulary_synthesis';
+        });
+      }) || capabilityRuns.find(function (saved) {
+        return judgeSourceHas(saved, function (kind) {
+          return kind === 'language_synthesis' || kind === 'set_vocabulary_synthesis' || kind.indexOf('director_scene_plan_') === 0;
         });
       });
       if (supportsDirector && judgeSource) {

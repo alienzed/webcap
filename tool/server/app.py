@@ -1222,8 +1222,19 @@ def vision_schema_assist_route():
             if int(analysis.get("evidenceCount") or 0) < 1:
                 raise ValueError("Vocabulary discovery needs at least one usable Vision observation.")
             contract = build_vision_schema_request(analysis, existing_groups)
+            selection = None
+            if data.get("autoDirectorModel") is True:
+                from .model_lab_quality import schema_model_recommendation
+                from .storyboard_llm_runtime import list_models
+                selection = schema_model_recommendation(
+                    director_model, (model["id"] for model in list_models(reload=False))
+                )
+                director_model = selection["modelRef"]
             job = enqueue_llm("schema", director_model, contract, context={}, label="Vocabulary Synthesis")
-            return jsonify({"ok": True, "analysis": analysis, "job": job}), 202
+            response = {"ok": True, "analysis": analysis, "job": job}
+            if selection is not None:
+                response["modelSelection"] = selection
+            return jsonify(response), 202
         if operation == "challenge_vocabulary":
             director_model = str(data.get("directorModel") or "").strip()
             if not director_model:

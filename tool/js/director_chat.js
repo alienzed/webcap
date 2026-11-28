@@ -4886,11 +4886,7 @@
         var instruction = JSON.stringify({
           task:'Create the requested independently generatable H3 Scenes for this Project. ' +
             'Give each Scene a useful title, complete H3 Prompt and durationSeconds. ' +
-            'H3 can generate clips between 4 and 15 seconds. Give every Scene a ' +
-            'durationSeconds within that range, honoring the author\'s requested timing ' +
-            'when it fits. Choose each duration independently to support its action, ' +
-            'shot transitions and dialogue rather than making every Scene the same length. ' +
-            'Match the final timed H3 shot to the selected durationSeconds. ' +
+            'Duration is 15 seconds unless the author requests otherwise. ' +
             'For longer developments, use connected short Scenes with clear continuity. ' +
             'Deliver the authored Scenes now.',
           authorDirection:launch.authorRequest || launch.instruction,
@@ -5029,8 +5025,7 @@
         var instruction = JSON.stringify({
           task:'Revise the requested Scene fields in the author\'s direction. ' +
             'Return complete replacement values for requestedFields, including a standalone H3 Prompt ' +
-            'when prompt is selected. Keep saved duration when unchanged; when a new durationSeconds ' +
-            'is requested, choose within the H3-supported 4–15 seconds and align its timed shots. ' +
+            'when prompt is selected. ' +
             'Preserve all unaffected creative content and fields. ' +
             'Deliver the actual authored values in one JSON object.',
           authorDirection:launch.authorRequest || launch.instruction,

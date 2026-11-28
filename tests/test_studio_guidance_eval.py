@@ -201,7 +201,7 @@ def test_structured_candidate_offline_contract(tmp_path, monkeypatch):
         else:
             assert all(field.find(name) is not None for name in ("purpose", "contents", "quality_criteria"))
     assert root.find("scene_definition/fields/field[@name='Duration']").text == (
-        "The Scene's duration in seconds, from 4 to 15, defaulting to 15."
+        "The Scene's duration in seconds."
     )
     technical = evaluation.repo_default("h3.authoring")
     assert candidate["expertise"] == technical

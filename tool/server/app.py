@@ -67,7 +67,7 @@ from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_
 from .permissions import normalize_path_permissions, run_with_directory_repair
 from .folder_state_store import FolderStateReadError, FolderStateUnsafeWriteError, read_folder_state, reject_wholesale_state_map_clear, write_folder_state_with_owned_drafts, set_media_annotation_state, set_media_rating, write_folder_state_atomic
 from .storage_manager import clear_set_generated_sight as storage_clear_set_generated_sight, cancel_scan as storage_cancel_scan, measure as storage_measure, open_path as storage_open_path, overview as storage_overview, purge as storage_purge, trash_generate as storage_trash_generate, scan_status as storage_scan_status, start_scan as storage_start_scan
-from .studio_director import guidance as studio_director_guidance, read_story_scope as studio_read_story_scope, chat_response_schema as studio_chat_response_schema
+from .studio_director import chat_guidance as studio_director_chat_guidance, guidance as studio_director_guidance, read_story_scope as studio_read_story_scope, chat_response_schema as studio_chat_response_schema
 from .llm_guidance import text_for as llm_guidance_text, catalog as llm_guidance_catalog
 from .director_chat_history import create_chat as create_director_chat, delete_chat as delete_director_chat, list_chats as list_director_chats, open_chat as open_director_chat, save_chat as save_director_chat
 from .storyboard_store import add_tentative_scene_at as storyboard_add_tentative_scene_at, add_tentative_scenes_at as storyboard_add_tentative_scenes_at, create_studio_project as storyboard_create_studio_project, apply_studio_brief as storyboard_apply_studio_brief, undo_studio_brief as storyboard_undo_studio_brief
@@ -2343,6 +2343,10 @@ def llm_guidance_catalog_route():
 @app.route("/fs/studio/director/guidance", methods=["GET"])
 def studio_director_guidance_route():
     try:
+        if request.args.get("operation") == "studio_chat":
+            return jsonify({"ok": True, **studio_director_chat_guidance(
+                str(request.args.get("targetModel") or "minimax_h3").strip(),
+            )})
         return jsonify({"ok": True, **studio_director_guidance(
             str(request.args.get("targetModel") or "minimax_h3").strip(),
             str(request.args.get("profile") or "classic").strip(),

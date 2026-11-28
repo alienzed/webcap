@@ -30,7 +30,7 @@ test('Studio Director settings reveal its creative profile without restoring dra
   await expect(button).toHaveAttribute('aria-expanded','false');
 });
 
-test('Director settings link to the existing guidance editor and runtime settings without duplicating profile ownership',async({page})=>{
+test('Director settings open the single Chat guidance module independently of the existing Write selection',async({page})=>{
   await openDirector(page);
   const button=page.locator('#director-studio-settings-toggle');
   await button.click();
@@ -39,7 +39,7 @@ test('Director settings link to the existing guidance editor and runtime setting
   const modal=page.locator('#app-settings-modal');
   await expect(modal).toBeVisible();
   await expect(page.locator('#app-settings-tab-guidance')).toHaveAttribute('aria-selected','true');
-  await expect(page.locator('#app-settings-guidance-module')).toHaveValue('studio.render');
+  await expect(page.locator('#app-settings-guidance-module')).toHaveValue('studio.chat');
   await expect(page.locator('#app-settings-guidance-text')).not.toHaveValue('');
   await expect(page.locator('#director-studio-settings-panel')).toBeHidden();
   await page.locator('#app-settings-close-btn').click();

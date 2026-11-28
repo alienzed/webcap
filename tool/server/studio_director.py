@@ -33,6 +33,17 @@ def chat_response_schema():
         },
     }
 
+def chat_guidance(target_model="minimax_h3"):
+    """Compose the single editable Studio Chat role with its shared H3 Rulebook."""
+    if target_model != "minimax_h3":
+        raise ValueError("Studio Writer's Workshop currently supports MiniMax H3.")
+    try:
+        system = llm_guidance_text("studio.chat").strip() + "\n\n" + llm_guidance_text("h3.authoring").strip()
+    except OSError as exc:
+        raise RuntimeError("Studio production prompt guidance is unavailable.") from exc
+    return {"targetModel": target_model, "system": system, "promptContract": ""}
+
+
 def guidance(target_model="minimax_h3", profile="classic", include_prompt_contract=True):
     """Compose the selected creative role and expertise, loading H3 format only for writing."""
     if target_model != "minimax_h3":

@@ -8,7 +8,7 @@ Give the author explicit, editable ownership of creative prompts while keeping W
 
 | Path / operation | Creative guidance source | Task/technical material |
 | --- | --- | --- |
-| Studio Chat | Selected `studio.*` profile + `h3.toolkit` | Full saved conversation; concise conversational instruction; no H3 authoring reference |
+| Studio Chat | Single editable `studio.chat` + `h3.authoring` | Full saved conversation; shared Rulebook once; no empirical playbook or Write schema |
 | Studio Write Project | Selected `studio.*` profile + `h3.toolkit` | Author's selected task and Project fields, operation response schema |
 | Studio Write Scene | Selected `studio.*` profile + `h3.toolkit` | `h3.authoring`, current task and saved Scene/Project context, response schema; empirical playbook |
 | First Cut concept / Scene planning | `storyboard.director` | Operation-specific request, relevant Project context; Scene development also uses `h3.authoring` + `h3.toolkit` + empirical playbook |
@@ -22,7 +22,7 @@ The existing `generation_model_guidance` remains the empirical playbook in app c
 
 ## Ownership
 
-- `tool/server/studio_guidance_defaults.py` contains the four versioned profile defaults. Classic v3 retains D plus the [checked coherence sentence](studio-director-creative-charter-results.md); Current, Imaginative and Render-focused retain their previous wording and versions.
+- `tool/server/studio_guidance_defaults.py` contains the single structured Chat default and the four existing versioned Write profile defaults. Classic v3 retains D plus the [checked coherence sentence](studio-director-creative-charter-results.md); Current, Imaginative and Render-focused retain their previous wording and versions.
 - `tool/server/llm_guidance.py` owns the catalog, H3 creative toolkit, standalone specialist role defaults, and replacement lookup.
 - `docs/mmh3-prompt-runtime-context.txt` remains the canonical H3 prompt reference default. `docs/storyboard-director-context.txt` remains the Storyboard Director default.
 - `config.json.llm_guidance` contains only sparse text overrides, validated against known IDs.
@@ -42,7 +42,7 @@ One verified drift was reconciled: Storyboard prompt revision's 6–15s wording 
 
 ## Verification and rollout
 
-1. Test the original profile content with no overrides (parity), and the scope of the Scene-only H3 technical reference.
+1. Test the original profile content with no overrides (parity), and the independent Chat composition and unchanged Write reference scope.
 2. Test each override as a replacement, default reset by omission, validation of unknown IDs, and immediate settings persistence.
 3. Test Generate, First Cut/Storyboard, Visual Direction, Prompt Assist, Project Deep QA, Advisor, and Studio request assembly independently.
 4. Inspect real outbound Studio Model I/O and representative live LLM operations, comparing content before/after editing a module.

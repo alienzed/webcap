@@ -3379,8 +3379,11 @@
     // Creative requests need the author's task and relevant source material.
     // Navigation, available buttons, IDs and save policy remain WebCap concerns.
     // Keep the existing call signature for contextual Write callers.
-    return requestJson('/fs/studio/director/guidance?targetModel=minimax_h3&profile=' + encodeURIComponent(state.studioProfile) +
-      '&includePromptContract=' + (includePromptContract ? '1' : '0')).then(function (payload) {
+    var guidanceUrl = explicitWrite
+      ? '/fs/studio/director/guidance?targetModel=minimax_h3&profile=' + encodeURIComponent(state.studioProfile) +
+        '&includePromptContract=' + (includePromptContract ? '1' : '0')
+      : '/fs/studio/director/guidance?targetModel=minimax_h3&operation=studio_chat';
+    return requestJson(guidanceUrl).then(function (payload) {
       if (!payload.system || typeof payload.system !== 'string')
         throw new Error('Studio Director creative guidance is unavailable.');
       if (includePromptContract && (!payload.promptContract || typeof payload.promptContract !== 'string'))
@@ -4105,7 +4108,7 @@
     };
     el('director-studio-settings-guidance').onclick = function () {
       setStudioSettingsOpen(false);
-      openAppSettingsModal('guidance', 'studio.' + state.studioProfile);
+      openAppSettingsModal('guidance', 'studio.chat');
     };
     el('director-studio-settings-app').onclick = function () {
       setStudioSettingsOpen(false);

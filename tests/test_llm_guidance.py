@@ -34,6 +34,11 @@ def test_h3_authoring_default_has_structured_rules_and_literal_prompt_example():
         "action_and_pacing", "prompt_format", "dialogue_and_sound",
         "generation_context",
     ]
+    assert [node.text for node in root.findall("scene_duration/instruction")] == [
+        "Scenes default to 15 seconds.",
+        "Shot timestamps span the Scene's duration.",
+        "Preserve the saved duration when revising a Scene unless instructed otherwise.",
+    ]
     example = root.findtext("prompt_format/example")
     assert example.strip().startswith("--- BEGIN EXAMPLE PROMPT SHAPE ---")
     assert example.strip().endswith("--- END EXAMPLE PROMPT SHAPE ---")

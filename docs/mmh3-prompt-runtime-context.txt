@@ -1,24 +1,35 @@
-MINIMAX H3 GENERATION PROMPT
+<h3_rulebook title="MINIMAX H3 GENERATION PROMPT">
+  <purpose>Write a directly usable prompt for one video Scene, at most 15 seconds.</purpose>
 
-Write a directly usable prompt for one video Scene, at most 15 seconds.
+  <scene_duration>
+    <instruction>MiniMax H3 generates clips from 4 to 15 seconds.</instruction>
+    <instruction>For a new Scene, choose durationSeconds
+within this supported range to suit its particular action, pacing and dialogue.</instruction>
+    <instruction>Scenes
+may have different durations.</instruction>
+    <instruction>Make the final timed shot end at durationSeconds.</instruction>
+    <instruction>For an existing Scene, match its saved duration unless the author requests a change.</instruction>
+  </scene_duration>
 
-SCENE DURATION.
-MiniMax H3 generates clips from 4 to 15 seconds. For a new Scene, choose durationSeconds
-within this supported range to suit its particular action, pacing and dialogue. Scenes
-may have different durations. Make the final timed shot end at durationSeconds.
-For an existing Scene, match its saved duration unless the author requests a change.
+  <authoring_structure>
+    <instruction>State persistent identities and starting conditions once.</instruction>
+    <instruction>Timed shots describe actions, performance, changes in physical state, camera behavior, and synchronized dialogue or sound as they happen.</instruction>
+    <instruction>Use supplied Project Concept, Visual / atmosphere, relevant Invariants, and the saved Scene Prompt when revising; honor legacy Story Guidelines only when explicitly supplied.</instruction>
+  </authoring_structure>
 
-AUTHORING STRUCTURE.
-State persistent identities and starting conditions once. Timed shots describe actions, performance, changes in physical state, camera behavior, and synchronized dialogue or sound as they happen. Use supplied Project Concept, Visual / atmosphere, relevant Invariants, and the saved Scene Prompt when revising; honor legacy Story Guidelines only when explicitly supplied.
+  <action_and_pacing>
+    <instruction>Start with the Scene's meaningful action, interaction or dialogue, not an empty approach
+to the setting.</instruction>
+    <instruction>Include enough concrete appearance and spatial grounding to render
+the intended event; use the available seconds for meaningful progression, including multiple related beats, overlapping actions, quick reactions, economical transitions, montage or split-screen where visually appropriate.</instruction>
+    <instruction>Avoid splitting a concise introduction into multiple expensive renders merely because it contains several events.</instruction>
+    <instruction>Preserve coherent visual causality rather than imposing a low action count.</instruction>
+    <instruction>If the author
+wants an atmospheric buildup, preserve that pacing rather than forcing immediacy.</instruction>
+  </action_and_pacing>
 
-CENTRAL EVENT.
-Start with the Scene's meaningful action, interaction or dialogue, not an empty approach
-to the setting. Include enough concrete appearance and spatial grounding to render
-the intended event; use the available seconds for meaningful progression, including multiple related beats, overlapping actions, quick reactions, economical transitions, montage or split-screen where visually appropriate. Avoid splitting a concise introduction into multiple expensive renders merely because it contains several events. Preserve coherent visual causality rather than imposing a low action count. If the author
-wants an atmospheric buildup, preserve that pacing rather than forcing immediacy.
-
-H3 PROMPT SHAPE
-
+  <prompt_format>
+    <example>
 --- BEGIN EXAMPLE PROMPT SHAPE ---
 
 Subject:
@@ -45,10 +56,17 @@ non_diegetic_music:
 Audience-only score and its development.
 
 --- END EXAMPLE PROMPT SHAPE ---
+    </example>
+    <instruction>Use consecutive [Shot N] labels and actual timestamps spanning the requested duration. The author's creative direction determines the shot count and treatment.</instruction>
+  </prompt_format>
 
-Use consecutive [Shot N] labels and actual timestamps spanning the requested duration. The author's creative direction determines the shot count and treatment.
+  <dialogue_and_sound>
+    <instruction>Place synchronized dialogue and sound with their shot.</instruction>
+    <instruction>Use stable speaker IDs and MiniMax H3 dialogue notation such as <![CDATA[<d>[English] Spoken line.</d>]]>.</instruction>
+  </dialogue_and_sound>
 
-Place synchronized dialogue and sound with their shot. Use stable speaker IDs and MiniMax H3 dialogue notation such as <d>[English] Spoken line.</d>.
-
-Treat supplied Story facts, references, and invariants as established generation context. WebCap applies exact first/last-frame reference alignment separately.
-
+  <generation_context>
+    <instruction>Treat supplied Story facts, references, and invariants as established generation context.</instruction>
+    <instruction>WebCap applies exact first/last-frame reference alignment separately.</instruction>
+  </generation_context>
+</h3_rulebook>

@@ -109,7 +109,11 @@ test('ordinary chat and explicit Write pass exact Read message text in full hist
   const requests=[];
   const requestJson=async url=>{
     requests.push(url);
-    assert.equal(url,'/fs/studio/director/guidance?targetModel=minimax_h3&profile=classic&includePromptContract='+(requests.length===1?'0':'1'));
+    if(requests.length===1) {
+      assert.equal(url,'/fs/studio/director/guidance?targetModel=minimax_h3&operation=studio_chat');
+      return {system:'Structured Chat\n\nH3 Rulebook',promptContract:''};
+    }
+    assert.equal(url,'/fs/studio/director/guidance?targetModel=minimax_h3&profile=classic&includePromptContract=1');
     return {system:'Creative partner',promptContract:'H3 Scene guidance'};
   };
   const maker=new Function('requestJson','studioAttachedStoryId','state',requestSource+
@@ -131,8 +135,8 @@ test('ordinary chat and explicit Write pass exact Read message text in full hist
     assert.doesNotMatch(outbound[0].content,/Old version|AUTHOR-APPROVED SAVED CONTEXT/);
   }
   assert.equal(requests.length,2,'only guidance lookup; never re-fetch saved Projects');
-  assert.doesNotMatch(chat[0].content,/H3 Scene guidance/);
-  assert.match(write[0].content,/H3 Scene guidance/);
+  assert.equal(chat[0].content,'Structured Chat\n\nH3 Rulebook');
+  assert.equal(write[0].content,'Creative partner\n\nH3 PROMPT AUTHORING REFERENCE:\nH3 Scene guidance');
 });
 test('Read UI serializes the fetched saved snapshot once and delegates persistence; no approval state',async()=>{
   const body=section(workbench,'  function readSend(instruction) {','  function showWriteContext() {');

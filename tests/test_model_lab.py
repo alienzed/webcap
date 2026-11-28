@@ -644,3 +644,113 @@ def test_deep_judge_start_failure_is_recorded_without_losing_probe_results(monke
     assert saved["status"] == "completed"
     assert saved["qualityReviews"][_director()["modelRef"]]["status"] == "failed"
     assert "Judge runtime unavailable" in saved["qualityReviews"][_director()["modelRef"]]["error"]
+
+
+def _synthesis_review_run(ref, score, *, run_id="run", judge="local::judge",
+                          input_key="same", protocol=None, stamp="2026-11-27T12:00:00Z",
+                          seconds=None, imported=False):
+    from tool.server import model_lab_quality as quality
+
+    task = {"task": "structured", "score": score, "reason": "review",
+            "attemptId": run_id + "-probe", "probeKind": "language_synthesis",
+            "inputKey": input_key, "reviewProtocol": quality.SCHEMA_REVIEW_PROTOCOL}
+    if seconds is not None:
+        task["requestSeconds"] = seconds
+    run = {"id": run_id, "status": "completed", "startedAt": stamp,
+           "assessmentProtocol": protocol or model_lab.ASSESSMENT_PROTOCOL,
+           "qualityReviews": {ref: {"status": "completed", "judgeModelRef": judge,
+                                    "finishedAt": stamp, "tasks": [task]}}}
+    if imported:
+        run["importedFrom"] = {"host": "other"}
+    return run
+
+
+def test_selection_reuses_independent_matching_reviews_across_existing_runs():
+    from tool.server import model_lab_quality as quality
+
+    baseline = _synthesis_review_run("local::default", 3, run_id="baseline")
+    better = _synthesis_review_run("remote::better", 5, run_id="better")
+    recommendation = quality.select_schema_model(
+        "local::default", ["local::default", "remote::better"], [better, baseline])
+    assert recommendation["modelRef"] == "remote::better"
+    assert recommendation["defaultRunId"] == "baseline"
+    assert recommendation["runId"] == "better"
+    assert recommendation["score"] == 5
+    assert recommendation["defaultScore"] == 3
+
+
+@pytest.mark.parametrize("overrides", [
+    {"input_key": "different"}, {"judge": "local::different-judge"},
+    {"judge": "remote::better"}, {"imported": True}, {"protocol": "old"},
+])
+def test_selection_keeps_default_without_comparable_review(overrides):
+    from tool.server import model_lab_quality as quality
+
+    baseline = _synthesis_review_run("local::default", 3)
+    better = _synthesis_review_run("remote::better", 5, **overrides)
+    assert quality.select_schema_model(
+        "local::default", ["local::default", "remote::better"], [baseline, better]
+    )["modelRef"] == "local::default"
+
+
+def test_selection_ignores_unavailable_models_and_preserves_default_on_ties():
+    from tool.server import model_lab_quality as quality
+
+    baseline = _synthesis_review_run("local::default", 4, seconds=10)
+    tied = _synthesis_review_run("remote::tie", 4, seconds=1)
+    unavailable = _synthesis_review_run("remote::unavailable", 5)
+    assert quality.select_schema_model(
+        "local::default", ["local::default", "remote::tie"], [baseline, tied, unavailable]
+    )["modelRef"] == "local::default"
+    assert quality.select_schema_model(
+        "local::default", ["local::default", "remote::tie"], [tied]
+    )["modelRef"] == "local::default"
+
+
+def test_newer_matching_review_supersedes_older_score_and_latency_breaks_alternative_tie():
+    from tool.server import model_lab_quality as quality
+
+    baseline = _synthesis_review_run("local::default", 3)
+    slow = _synthesis_review_run("local::slow", 5, seconds=8)
+    fast = _synthesis_review_run("local::fast", 5, seconds=2)
+    refs = ["local::default", "local::slow", "local::fast"]
+    assert quality.select_schema_model("local::default", refs, [baseline, slow, fast])["modelRef"] == "local::fast"
+    revised = _synthesis_review_run("local::fast", 2, stamp="2026-11-27T13:00:00Z")
+    assert quality.select_schema_model("local::default", refs, [baseline, slow, fast, revised])["modelRef"] == "local::slow"
+
+
+def test_saved_frozen_synthesis_is_reviewed_against_actual_production_input():
+    from tool.server import model_lab_quality as quality
+    from tool.server.vision_schema_contract import build_request
+
+    run = {"id": "fixture", "assessmentProtocol": model_lab.ASSESSMENT_PROTOCOL,
+           "attempts": [{"id": "probe", "kind": "language_synthesis",
+                         "modelRef": "local::writer", "status": "completed",
+                         "result": {"schema": {"groups": []}, "requestSeconds": 2.5}}]}
+    prompt, evidence = quality._review_payload(run, "local::writer", "local::judge")
+    expected = build_request(model_lab._synthetic_analysis(), model_lab._synthetic_groups())["prompt"]
+    actual = json.loads(prompt.split("Evidence (JSON): ", 1)[1])[0]
+    assert actual["instructions"] == expected
+    assert json.loads(actual["candidate"]) == {"groups": []}
+    assert "requestSeconds" not in actual
+    assert evidence[0]["inputKey"] == model_lab.assessment_input_key(
+        [{"role": "user", "content": expected}])
+    assert evidence[0]["reviewProtocol"] == quality.SCHEMA_REVIEW_PROTOCOL
+    assert evidence[0]["requestSeconds"] == 2.5
+    parsed = quality._parse_review({"text": json.dumps({"reviews": [
+        {"task": "structured", "score": 3, "reason": "Needs corrections."}]})}, evidence)
+    assert parsed[0]["inputKey"] == evidence[0]["inputKey"]
+    assert parsed[0]["attemptId"] == "probe"
+    assert parsed[0]["score"] == 3
+
+
+def test_changed_recorded_synthesis_input_is_not_comparable():
+    from tool.server import model_lab_quality as quality
+
+    run = {"id": "fixture", "assessmentProtocol": model_lab.ASSESSMENT_PROTOCOL,
+           "attempts": [{"id": "probe", "kind": "language_synthesis",
+                         "modelRef": "local::writer", "status": "completed",
+                         "inputKey": "different", "result": {"schema": {"groups": []}}}]}
+    _, evidence = quality._review_payload(run, "local::writer", "local::judge")
+    assert "reviewProtocol" not in evidence[0]
+    assert "inputKey" not in evidence[0]

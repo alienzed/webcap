@@ -71,6 +71,12 @@
     previewSelections: [],
     requestFolder: '',
     analysis: null,
+    contextKey: '',
+    scopeKey: '',
+    contextSequence: 0,
+    snapshot: null,
+    stopRequested: false,
+    taskModelReady: false,
     activityStartedAt: 0,
     activityTimer: 0,
     activityHistory: [],
@@ -1129,14 +1135,14 @@
     wildcardDirector.modelId = getDirectorModelPreference('webcap.director.model');
     if (!wildcardDirector.available || !wildcardDirector.modelId) {
       button.disabled = true;
-      regenerate.disabled = true;
+      regenerate.disabled = wildcardDirector.modalOpen ? wildcardDirector.busy || !wildcardDirector.taskModelReady : true;
       button.classList.remove('is-working');
       button.title = 'Director unavailable';
       return;
     }
 
     button.disabled = wildcardDirector.busy;
-    regenerate.disabled = wildcardDirector.busy;
+    regenerate.disabled = wildcardDirector.busy || (wildcardDirector.modalOpen && !wildcardDirector.taskModelReady);
     button.classList.toggle('is-working', wildcardDirector.busy);
     button.title = wildcardDirector.busy
       ? 'Analyzing Set captions…'
@@ -1252,7 +1258,7 @@
     }
 
     preview.textContent = resolveWildcardPreview(value, groups, wildcardDirector.previewSelections);
-    use.disabled = !value.trim() || !groups.length;
+    use.disabled = wildcardDirector.busy || !value.trim() || !groups.length;
   }
 
   function renderWildcardAnalysis(analysis) {
@@ -1268,7 +1274,7 @@
       stable.textContent = '';
       wildcardDirector.previewSelections = [];
       use.disabled = true;
-      regenerate.textContent = 'Generate';
+      regenerate.textContent = 'Generate Draft';
       renderWildcardDimensions();
       return;
     }
@@ -1276,7 +1282,7 @@
     output.value = String(analysis.wildcard || '');
     stable.textContent = stableTerms.length ? stableTerms.join(' · ') : 'No strong stable terms identified.';
     wildcardDirector.previewSelections = [];
-    regenerate.textContent = 'Regenerate';
+    regenerate.textContent = 'Revise Draft';
     renderWildcardDimensions();
     panel.classList.remove('hidden');
   }
@@ -1317,18 +1323,20 @@
     setLabel.textContent = name
       ? 'Mining captions from ' + name + '. Focus is optional; otherwise WebCap infers the dominant concept.'
       : 'Mine concrete, composable variation from this Set\'s captions.';
-    modal.classList.remove('hidden');
-    modal.setAttribute('aria-hidden', 'false');
+    // Preserve the manually edited result when reopening.
     wildcardDirector.modalOpen = true;
-    renderWildcardAnalysis(wildcardDirector.analysis);
-    window.setTimeout(function () { focus.focus(); }, 0);
+    try {
+      openWildcardTaskConversation();
+    } catch (error) {
+      wildcardDirector.modalOpen = false;
+      throw error;
+    }
   }
 
   function closeWildcardBuilder() {
     var modal = el('test-generations-wildcard-modal');
     if (!modal) throw new Error('Wildcard Builder modal markup is missing.');
-    modal.classList.add('hidden');
-    modal.setAttribute('aria-hidden', 'true');
+    if (wildcardDirector.modalOpen) window.setDirectorChatOpen(false);
     wildcardDirector.modalOpen = false;
   }
 
@@ -1784,68 +1792,120 @@
     }).filter(function (entry) { return !!entry.group; });
   }
 
-  function generateWildcardFromSet() {
-    if (wildcardDirector.busy) return;
-    if (!wildcardDirector.modelId) throw new Error('Choose a Director model.');
-    var requestFolder = owningSetFolder(launchFolder || (state && state.folder) || '');
-    var trainingJobId = wildcardRunId();
-    var sourceWarning = '';
-    var focus = String(el('test-generations-wildcard-focus') && el('test-generations-wildcard-focus').value || '').trim();
-    wildcardDirector.busy = true;
-    wildcardDirector.requestFolder = requestFolder;
-    wildcardDirector.analysis = null;
-    el('test-generations-wildcard-status').textContent = 'Analyzing Set captions…';
-    el('test-generations-wildcard-modal-status').textContent = 'Analyzing Set captions…';
-    renderWildcardAnalysis(null);
-    renderWildcardDirector();
-    startWildcardDirectorActivity();
+  function wildcardScope() {
+    return {
+      folder: owningSetFolder(launchFolder || (state && state.folder) || ''),
+      jobId: wildcardRunId(),
+      focus: String(el('test-generations-wildcard-focus').value || '').trim()
+    };
+  }
 
-    return wildcardPostJson('/fs/test_generations/wildcard', {
-      folder: requestFolder,
-      jobId: trainingJobId,
-      directorModel: wildcardDirector.modelId,
-      focus: focus,
-      vocabulary: testPlanningVocabulary()
-    }).then(function (payload) {
-      sourceWarning = String(payload.warning || '');
-      if (sourceWarning) reportConsoleWarning('Test Generations', sourceWarning);
-      wildcardDirector.jobId = String(payload.job && payload.job.jobId || '');
-      wildcardDirector.requestDiagnostic = payload.job && payload.job.request || null;
-      trackTransientLlmJob(payload.job);
-      return waitForWildcardJob(payload.job);
-    }).then(function (result) {
-      var analysis = result && result.analysis;
-      if (!analysis || !String(analysis.wildcard || '').trim()) {
-        throw new Error('Wildcard analysis returned no wildcard caption.');
-      }
-      if (owningSetFolder(launchFolder || (state && state.folder) || '') !== requestFolder) {
-        wildcardDirector.analysis = null;
-        el('test-generations-wildcard-status').textContent = 'Wildcard finished for a different Set. Generate again here.';
-        el('test-generations-wildcard-modal-status').textContent = 'Wildcard finished for a different Set. Generate again here.';
-        return;
-      }
-      wildcardDirector.analysis = analysis;
-      renderWildcardAnalysis(analysis);
-      el('test-generations-wildcard-status').textContent = 'Wildcard generated. Review it before using it.' + (sourceWarning ? ' ' + sourceWarning : '');
-      el('test-generations-wildcard-modal-status').textContent = 'Wildcard generated. Edit it freely, preview combinations, then apply.' + (sourceWarning ? ' ' + sourceWarning : '');
-    }).catch(function (err) {
-      if (err && ['stopped', 'cancelled'].indexOf(String(err.jobStatus || '')) !== -1) {
-        el('test-generations-wildcard-status').textContent = 'Wildcard analysis stopped.';
-        el('test-generations-wildcard-modal-status').textContent = 'Wildcard analysis stopped.';
-      } else {
-        var message = String(err && err.message || 'Wildcard analysis failed.');
-        el('test-generations-wildcard-status').textContent = message;
-        el('test-generations-wildcard-modal-status').textContent = message;
-        showError(err);
-      }
-    }).then(function () {
-      wildcardDirector.busy = false;
-      wildcardDirector.jobId = '';
-      wildcardDirector.requestFolder = '';
-      renderWildcardDirector();
-      finishWildcardDirectorActivity();
+  function openWildcardTaskConversation() {
+    var scopeKey = JSON.stringify(wildcardScope());
+    if (wildcardDirector.scopeKey !== scopeKey) {
+      wildcardDirector.scopeKey = scopeKey;
+      wildcardDirector.contextKey = scopeKey + ':' + (++wildcardDirector.contextSequence);
+      wildcardDirector.snapshot = null;
+    }
+    window.openAssistant({mode:'wildcard-builder', contextKey:wildcardDirector.contextKey});
+  }
+
+  function captureWildcardContext() {
+    if (wildcardDirector.snapshot) return Promise.resolve(wildcardDirector.snapshot);
+    var scope = wildcardScope(), key = wildcardDirector.contextKey;
+    return wildcardPostJson('/fs/test_generations/wildcard', Object.assign({
+      action:'context', vocabulary:testPlanningVocabulary()
+    }, scope)).then(function (payload) {
+      if (wildcardDirector.contextKey !== key || JSON.stringify(wildcardScope()) !== JSON.stringify(scope))
+        throw new Error('Wildcard evidence scope changed during capture.');
+      if (!String(payload.snapshot || '').trim()) throw new Error('Wildcard evidence was not returned.');
+      wildcardDirector.snapshot = payload;
+      if (payload.warning) reportConsoleWarning('Test Generations', payload.warning);
+      window.refreshAssistantModes();
+      return payload;
     });
   }
+
+  function runWildcardTask(request, author) {
+    var scopeKey = wildcardDirector.contextKey;
+    var draft = String(el('test-generations-wildcard-output').value || '');
+    wildcardDirector.stopRequested = false;
+    return captureWildcardContext().then(function (snapshot) {
+      if (wildcardDirector.stopRequested) {
+        var stopped = new Error('Wildcard request stopped.');
+        stopped.jobStatus = 'stopped';
+        throw stopped;
+      }
+      if (author) return wildcardPostJson('/fs/test_generations/wildcard', {
+        action:'author', directorModel:request.modelId, snapshot:snapshot.snapshot,
+        messages:request.messages, currentWildcard:draft
+      });
+      return wildcardPostJson('/fs/director/chat', {
+        model:request.modelId, messages:[
+          {role:'system',content:'Help the user design a wildcard prompt. Discuss the captured Set evidence and the editable working prompt concisely. Propose specific variations or refinements. The Generate/Revise Draft action authors the editable result.'},
+          {role:'user',content:snapshot.snapshot+'\n\nCurrent editable wildcard: '+draft}
+        ].concat(request.messages)
+      });
+    }).then(function (payload) {
+      wildcardDirector.jobId = String(payload.job && payload.job.jobId || '');
+      wildcardDirector.requestDiagnostic = payload.job && payload.job.request || null;
+      if (request.onJob) request.onJob(payload.job);
+      if (wildcardDirector.stopRequested && wildcardDirector.jobId)
+        return resetLlmExecution().then(function () { return waitForWildcardJob(payload.job); });
+      return waitForWildcardJob(payload.job);
+    }).then(function (result) {
+      if (wildcardDirector.contextKey !== scopeKey) throw new Error('Wildcard evidence scope changed while the model was working.');
+      if (!author) return {text:String(result.text || '')};
+      var analysis = result.analysis;
+      if (!analysis || !String(analysis.wildcard || '').trim()) throw new Error('Wildcard authoring returned no draft.');
+      wildcardDirector.analysis = analysis;
+      renderWildcardAnalysis(analysis);
+      el('test-generations-wildcard-modal-status').textContent = 'Draft ready. Edit, preview combinations or discuss another refinement.';
+      return {text:'I updated the working wildcard draft. You can inspect its dimensions and preview combinations.'};
+    }).finally(function () {
+      wildcardDirector.jobId = '';
+    });
+  }
+
+  function generateWildcardFromSet() {
+    return window.runTaskConversationWrite('wildcard-builder');
+  }
+
+  window.registerAssistantMode({
+    id:'wildcard-builder', label:'Wildcard Builder', taskModal:true,
+    description:'Design and refine a wildcard prompt from captured Set evidence.',
+    emptyTitle:'Design your wildcard',
+    emptyDescription:'Discuss the variations you want, or generate a working draft.',
+    placeholder:'What should vary, stay stable or change?',
+    writeInstruction:'Author or refine the working wildcard using the Set evidence and our discussion.',
+    available:function () { return !!wildcardDirector.contextKey; },
+    resultPanel:function () { return el('test-generations-wildcard-result'); },
+    onModalClose:function () { wildcardDirector.modalOpen = false; },
+    contextSnapshot:function () {
+      var snapshot = wildcardDirector.snapshot;
+      return {title:'Set captions and variables',
+        summary:snapshot ? snapshot.captionCount+' captions · '+String(snapshot.sourceScope || '').replace('_',' ') : 'Scope selected; evidence is captured on the first message or draft request.',
+        prompt:snapshot ? snapshot.snapshot : '',
+        status:snapshot && snapshot.warning ? snapshot.warning : 'The captured evidence stays fixed for this conversation. Changing scope starts a new exchange.'};
+    },
+    execute:function (request) { return runWildcardTask(request,false); },
+    write:function (request) { return runWildcardTask(request,true); },
+    cancel:function () {
+      wildcardDirector.stopRequested = true;
+      return wildcardDirector.jobId ? resetLlmExecution() : Promise.resolve();
+    },
+    setBusy:function (busy, ready) {
+      var changed = wildcardDirector.busy !== busy;
+      wildcardDirector.busy = busy;
+      wildcardDirector.taskModelReady = ready;
+      el('test-generations-wildcard-run').disabled = busy;
+      el('test-generations-wildcard-focus').disabled = busy;
+      el('test-generations-wildcard-output').disabled = busy;
+      el('test-generations-wildcard-regenerate').disabled = busy || !ready;
+      if (changed) renderWildcardDimensions();
+      if (busy) el('test-generations-wildcard-use-btn').disabled = true;
+    }
+  });
 
   function pane() { return el('test-generations-pane'); }
 
@@ -5717,6 +5777,9 @@
     wildcardDirector.previewSelections = [];
     wildcardIntent = null;
     if (wildcardDirector.modalOpen) closeWildcardBuilder();
+    wildcardDirector.contextKey = '';
+    wildcardDirector.scopeKey = '';
+    wildcardDirector.snapshot = null;
     el('test-generations-wildcard-focus').value = '';
     renderWildcardAnalysis(null);
     el('test-generations-wildcard-status').textContent = '';
@@ -6140,8 +6203,13 @@
       try { useGeneratedWildcard(); } catch (err) { showError(err); }
     };
     el('test-generations-wildcard-regenerate').onclick = function () {
-      generateWildcardFromSet().catch(showError);
+      try { generateWildcardFromSet(); } catch (error) { showError(error); }
     };
+    ['test-generations-wildcard-run','test-generations-wildcard-focus'].forEach(function (id) {
+      el(id).addEventListener('change', function () {
+        if (wildcardDirector.modalOpen) openWildcardTaskConversation();
+      });
+    });
     el('test-generations-wildcard-close').onclick = closeWildcardBuilder;
     el('test-generations-wildcard-dismiss').onclick = closeWildcardBuilder;
     el('test-generations-wildcard-modal').addEventListener('click', function (event) {

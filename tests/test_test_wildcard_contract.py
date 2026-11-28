@@ -228,3 +228,42 @@ def test_wildcard_schema_does_not_require_every_phrase_to_be_a_set_tag():
     fields = schema["properties"]["variationGroups"]["items"]
     assert "annotationGroup" in fields["properties"]
     assert "annotationGroup" not in fields["required"]
+
+
+def test_defined_variables_override_incidental_defaults_and_report_scoped_coverage():
+    request = build_request(
+        ["standing with black trim", "sitting with white trim", "detail view"],
+        annotations=[
+            {"Position": ["standing"], "Trim": ["black", "white"]},
+            {"Position": ["sitting"], "Trim": ["white"]},
+            {},
+        ],
+        training_focus="garment construction",
+        set_variables=[
+            {"group": "Position", "terms": ["standing", "sitting", "kneeling"], "exclusive": True},
+            {"group": "Trim", "terms": ["black", "white"], "exclusive": False},
+        ],
+    )
+    prompt = request["prompt"]
+    line = next(line for line in prompt.splitlines() if line.startswith("User-defined Set Variables"))
+    rows = json.loads(line.split(": ", 1)[1])
+    assert rows[0] == {
+        "group": "Position", "exclusive": True,
+        "terms": [{"term": "standing", "count": 1}, {"term": "sitting", "count": 1},
+                  {"term": "kneeling", "count": 0}],
+        "mediaWithSelectedTerms": 2, "observedCooccurrences": [], "scopeMediaCount": 3,
+    }
+    assert rows[1]["observedCooccurrences"] == [{"terms": ["black", "white"], "count": 1}]
+    assert "Saved Set training focus: garment construction" in prompt
+    assert "primary variation plan" in prompt
+    assert "Zero observed count does not establish training exposure" in prompt
+
+def test_wildcard_followup_reuses_snapshot_and_preserves_schema():
+    from tool.server.test_wildcard_contract import build_followup_request
+    base = build_request(["standing in bright light"], set_name="original")
+    snapshot = base["prompt"].rsplit("\n\n[OUTPUT]\n", 1)[0]
+    next_request = build_followup_request(snapshot, [{"role": "user", "content": "Keep lighting fixed"}], "{standing|seated}, bright light")
+    assert next_request["response_schema"] == base["response_schema"]
+    assert next_request["prompt"].startswith(snapshot)
+    assert "Keep lighting fixed" in next_request["prompt"]
+    assert "{standing|seated}, bright light" in next_request["prompt"]

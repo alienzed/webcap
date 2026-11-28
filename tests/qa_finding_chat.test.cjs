@@ -223,3 +223,42 @@ test('QA context has an inspectable snapshot and clearly temporary controls', ()
   assert.match(assistant, /el\('director-chat-history-toggle'\)\.classList\.toggle\('hidden', contextual\)/);
   assert.match(assistant, /el\('director-chat-input'\)\.value = ''/);
 });
+
+test('Ask QA uses the task modal without replacing the conversation DOM', () => {
+  const assistant = read('director_chat.js');
+  const review = read('review_assistant.js');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'tool/tool.html'), 'utf8');
+  assert.match(review, /id: 'qa-finding',[\s\S]*?taskModal: true/);
+  assert.match(html, /<dialog id="task-conversation-modal"/);
+  assert.match(assistant, /!mode\.taskModal && modeAvailable\(mode\)/);
+  const start = assistant.indexOf('  function syncTaskConversationSurface() {');
+  const end = assistant.indexOf('  function storyboardContextPresets()', start);
+  assert.ok(start >= 0 && end > start);
+  const state = {open:true};
+  const drawer = {parentNode:null};
+  const home = {};
+  drawer.parentNode = home;
+  const dialog = {
+    open:false,
+    classList:{toggle(){},remove(){}},
+    appendChild(node) { node.parentNode = this; },
+    after(node) { node.parentNode = home; },
+    showModal() { this.open = true; },
+    close() { this.open = false; }
+  };
+  const nodes = {'task-conversation-modal':dialog,'director-chat-drawer':drawer};
+  let mode = {taskModal:true};
+  const context = {state,el:id=>nodes[id],activeContextMode:()=>mode,taskConversationPresentation:null};
+  vm.runInNewContext(assistant.slice(start,end), context);
+  assert.equal(context.syncTaskConversationSurface(), true);
+  assert.equal(drawer.parentNode, dialog);
+  assert.equal(dialog.open, true);
+  state.open = false;
+  assert.equal(context.syncTaskConversationSurface(), false);
+  assert.equal(drawer.parentNode, home);
+  assert.equal(dialog.open, false);
+  state.open = true;
+  mode = null;
+  assert.equal(context.syncTaskConversationSurface(), false);
+  assert.equal(drawer.parentNode, home);
+});

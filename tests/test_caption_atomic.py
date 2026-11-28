@@ -100,7 +100,7 @@ def test_caption_assist_prompt_uses_set_template_not_annotation_order():
     assert "groupOrder" not in payload
     assert "order of groupedAnnotations also does not define caption order" in messages[0]["content"]
     assert "captionTemplate is the Set's caption-writing template" in messages[0]["content"]
-    assert "renderedPrimer demonstrates its populated structure, preferred order" in messages[0]["content"]
+    assert "renderedPrimer demonstrates its populated structure, desired order" in messages[0]["content"]
     assert "Do not use annotation group order as caption order." in messages[1]["content"]
     assert "Do not use annotation group order or captionTemplate placeholder order" not in messages[1]["content"]
     assert "include it verbatim exactly once" in messages[0]["content"]

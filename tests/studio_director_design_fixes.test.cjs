@@ -29,7 +29,7 @@ test('Chat and Director mode initialization use controls present in the app shel
     availableModes:()=>[],activeContextMode:()=>null,modeAvailable:()=>true,
     persistentMode:()=>true,studioWorkingStoryLabel:()=>'Test Project',
     storyboardContextPresets:()=>[],currentMessages:()=>[],syncStudioRevisionUi(){},renderStoryboardAttachmentViewer(){},
-    renderStudioStoryAccess(){},renderStudioOperations(){},renderMessages(){},syncControls(){}
+    renderStudioStoryAccess(){},renderStudioOperations(){},renderMessages(){},syncControls(){},syncTaskConversationSurface(){},syncPinnedUi(){}
   });
   vm.runInContext(section(chat,'  function syncModeUi() {',
     '  function studioWorkspaceVisible() {'),scope);

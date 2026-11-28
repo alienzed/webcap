@@ -106,59 +106,41 @@ def _sample_caption_examples(rows, max_items=24, max_chars=7200):
     return examples, len(captions)
 
 
-def build_request(captions, set_name="", focus="", vocabulary=None, annotations=None):
-    if annotations is not None and len(annotations) != len(captions):
-        raise ValueError("Wildcard annotations must align with Set captions.")
-    cleaned = [_clean_caption(value) for value in (captions or [])]
-    if not any(cleaned):
-        raise ValueError("This Set has no captions to analyze.")
+def _defined_variable_evidence(set_variables, annotations):
+    """Keep user-defined dimensions distinct from observed, run-scoped coverage."""
+    result = []
+    for raw in set_variables if isinstance(set_variables, list) else []:
+        if not isinstance(raw, dict):
+            continue
+        group = _clean_context(raw.get("group"))
+        terms = list(dict.fromkeys(_clean_context(term) for term in raw.get("terms", [])
+                                  if isinstance(term, str) and term.strip())) if isinstance(raw.get("terms"), list) else []
+        if not group or not terms:
+            continue
+        counts = {term: 0 for term in terms}
+        combinations = Counter()
+        for entry in annotations or []:
+            observed = {_clean_context(value).casefold() for value in entry.get(group, [])}
+            selected = tuple(term for term in terms if term.casefold() in observed)
+            for term in selected:
+                counts[term] += 1
+            if selected:
+                combinations[selected] += 1
+        result.append({
+            "group": group, "exclusive": raw.get("exclusive") is True,
+            "terms": [{"term": term, "count": counts[term]} for term in terms],
+            "mediaWithSelectedTerms": sum(combinations.values()),
+            "observedCooccurrences": [
+                {"terms": list(values), "count": count}
+                for values, count in combinations.most_common() if len(values) > 1
+            ],
+            "scopeMediaCount": len(annotations or []),
+        })
+    return result
 
-    set_name = _clean_context(set_name)
-    focus = _clean_context(focus)
-    if annotations is None:
-        # Epoch Finder and other unannotated callers retain the existing request.
-        groups = []
-        for raw in vocabulary if isinstance(vocabulary, list) else []:
-            if not isinstance(raw, dict):
-                continue
-            group = _clean_context(raw.get("group"))
-            if not group:
-                continue
-            terms = ([_clean_context(term) for term in raw.get("terms", [])
-                      if str(term or "").strip()]
-                     if isinstance(raw.get("terms"), list) else [])
-            groups.append({"group": group, "alias": _clean_context(raw.get("alias")),
-                           "terms": terms})
-        corpus, unique_count = _spread_caption_examples([text for text in cleaned if text])
-        inventory_context = "Annotation groups and terms: " + (
-            json.dumps(groups, ensure_ascii=False) if groups else "(none supplied)"
-        )
-    else:
-        scoped = [_concept_tags(entry, focus) for entry in annotations]
-        frequencies = Counter(tag for tags in scoped for tag in tags)
-        aliases = {
-            _clean_context(entry.get("group")): _clean_context(entry.get("alias"))
-            for entry in vocabulary or [] if isinstance(entry, dict) and
-            _clean_context(entry.get("group"))
-        }
-        groups = []
-        for group in sorted({name for name, _ in frequencies}):
-            terms = sorted(
-                ((term, count) for (name, term), count in frequencies.items()
-                 if name == group),
-                key=lambda item: (-item[1], item[0]),
-            )
-            groups.append({
-                "group": group, "alias": aliases.get(group, ""),
-                "terms": [{"term": term, "count": count} for term, count in terms],
-            })
-        corpus, unique_count = _sample_caption_examples(list(zip(cleaned, scoped)))
-        inventory_context = "Observed concept tags (selected run; counts are annotated media): " + (
-            json.dumps(groups, ensure_ascii=False, separators=(",", ":"))
-            if groups else "(no scoped concept tags)"
-        )
 
-    schema = {
+def wildcard_response_schema():
+    return {
         "type": "object",
         "additionalProperties": False,
         "required": ["wildcard", "stableTerms", "variationGroups"],
@@ -194,6 +176,84 @@ def build_request(captions, set_name="", focus="", vocabulary=None, annotations=
         },
     }
 
+
+def build_followup_request(snapshot, messages, current_wildcard=""):
+    """Author from the same captured evidence; a discussion never changes the draft."""
+    snapshot = str(snapshot or "").strip()
+    if not snapshot:
+        raise ValueError("Wildcard evidence must be captured before authoring.")
+    return {
+        "operation": "analyze_caption_wildcard",
+        "output": "json",
+        "prompt": (
+            snapshot
+            + "\n\n[CURRENT EDITABLE WILDCARD]\n" + str(current_wildcard or "")
+            + "\n\n[USER AND ASSISTANT DISCUSSION]\n" + json.dumps(messages or [], ensure_ascii=False)
+            + "\n\n[OUTPUT]\nAuthor the requested wildcard draft from the captured evidence, current "
+            "editable prompt and the user's decisions in the conversation. Preserve useful choices and "
+            "unrelated details when revising. Return only the structured result requested by the schema."
+        ),
+        "response_schema": wildcard_response_schema(),
+    }
+
+
+def build_request(captions, set_name="", focus="", vocabulary=None, annotations=None,
+                  set_variables=None, training_focus=""):
+    if annotations is not None and len(annotations) != len(captions):
+        raise ValueError("Wildcard annotations must align with Set captions.")
+    cleaned = [_clean_caption(value) for value in (captions or [])]
+    if not any(cleaned):
+        raise ValueError("This Set has no captions to analyze.")
+
+    set_name = _clean_context(set_name)
+    focus = _clean_context(focus)
+    training_focus = _clean_context(training_focus)
+    effective_focus = focus or training_focus
+    if annotations is None:
+        # Epoch Finder and other unannotated callers retain the existing request.
+        groups = []
+        for raw in vocabulary if isinstance(vocabulary, list) else []:
+            if not isinstance(raw, dict):
+                continue
+            group = _clean_context(raw.get("group"))
+            if not group:
+                continue
+            terms = ([_clean_context(term) for term in raw.get("terms", [])
+                      if str(term or "").strip()]
+                     if isinstance(raw.get("terms"), list) else [])
+            groups.append({"group": group, "alias": _clean_context(raw.get("alias")),
+                           "terms": terms})
+        corpus, unique_count = _spread_caption_examples([text for text in cleaned if text])
+        inventory_context = "Annotation groups and terms: " + (
+            json.dumps(groups, ensure_ascii=False) if groups else "(none supplied)"
+        )
+    else:
+        scoped = [_concept_tags(entry, effective_focus) for entry in annotations]
+        frequencies = Counter(tag for tags in scoped for tag in tags)
+        aliases = {
+            _clean_context(entry.get("group")): _clean_context(entry.get("alias"))
+            for entry in vocabulary or [] if isinstance(entry, dict) and
+            _clean_context(entry.get("group"))
+        }
+        groups = []
+        for group in sorted({name for name, _ in frequencies}):
+            terms = sorted(
+                ((term, count) for (name, term), count in frequencies.items()
+                 if name == group),
+                key=lambda item: (-item[1], item[0]),
+            )
+            groups.append({
+                "group": group, "alias": aliases.get(group, ""),
+                "terms": [{"term": term, "count": count} for term, count in terms],
+            })
+        corpus, unique_count = _sample_caption_examples(list(zip(cleaned, scoped)))
+        inventory_context = "Observed concept tags (selected run; counts are annotated media): " + (
+            json.dumps(groups, ensure_ascii=False, separators=(",", ":"))
+            if groups else "(no scoped concept tags)"
+        )
+
+    schema = wildcard_response_schema()
+
     context_lines = [
         "Set name: " + (set_name or "(not supplied)"),
         "Explicit focus: " + (focus or "(auto - infer from Set name and repeated caption language)"),
@@ -201,6 +261,23 @@ def build_request(captions, set_name="", focus="", vocabulary=None, annotations=
         "Caption sampling: " + str(len(corpus)) + " representative examples from " +
         str(unique_count) + " distinct captions. [count=N] indicates exact duplicates.",
     ]
+
+    defined_variables = _defined_variable_evidence(set_variables, annotations)
+    if training_focus:
+        context_lines.append("Saved Set training focus: " + training_focus)
+    if defined_variables:
+        context_lines.append("User-defined Set Variables (observed counts in the current evidence scope): " +
+                             json.dumps(defined_variables, ensure_ascii=False, separators=(",", ":")))
+        context_lines.append(
+            "Use these user-defined dimensions as the primary variation plan, ahead of the generic dimension defaults "
+            "and incidental frequency. Respect mutually exclusive values as alternatives; coexisting terms can be "
+            "composed where their meaning and observed evidence support it. An item with no selected term can simply "
+            "be outside the group's visible scope. Zero observed count does not establish training exposure. "
+            "Use observed captions and tags to establish supported wording, combinations and useful secondary variation. "
+            "Keep exact group identity even when different groups share identical terms."
+        )
+    if training_focus and not focus:
+        context_lines.append("Use the saved Set training focus as the primary concept before inferring from the Set name.")
 
     prompt = (
         "[ROLE]\n"
@@ -220,11 +297,11 @@ def build_request(captions, set_name="", focus="", vocabulary=None, annotations=
         "- Keep every dimension's exact annotationGroup when using tags; shared tag text across top and bottom groups does NOT merge their meanings.\n\n"
         "[FOCUS PRIORITY]\n"
         "- If Explicit focus is provided, treat it as the primary concept to mine deeply.\n"
-        "- Otherwise infer the primary concept from the Set name first, then from repeated caption language and frequency.\n"
+        "- Otherwise use saved Set training focus when supplied, then infer the primary concept from the Set name and repeated caption language and frequency.\n"
         "- Prioritize the trained subject's construction, distinct components, shape, material, and color. "
         "A description may mention both a top and a bottom with identically named strap types: "
         "treat those as different attributes tied to their respective components.\n"
-        "- Pose, hair, setting, lighting and camera are context. Keep them stable or, at most, "
+        "- Pose, hair, setting, lighting and camera are context unless explicitly focused or defined as Set Variables. Keep incidental dimensions stable or, at most, "
         "include one or two useful secondary variations; do not build a wildcard around every detail.\n\n"
         "[COMPOSITION RULES]\n"
         "- Each wildcard group must vary exactly one attribute, even when captions combine several. "

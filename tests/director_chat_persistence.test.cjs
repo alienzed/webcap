@@ -115,7 +115,7 @@ test('global Assistant opens Chat, never stale Studio Director outside Studio', 
     el: id => ({'director-chat-drawer': drawer, 'director-chat-rail-btn': toggle,
       'app-frame':{classList:{toggle(name,on){if(name==='studio-director-active')properties.studio=on;}}},
       'director-chat-input': {focus() {}}})[id],
-    syncPinnedUi: () => {}, syncModeUi: () => {},
+    syncPinnedUi: () => {}, syncModeUi: () => {}, syncTaskConversationSurface: () => {},
     setStudioSettingsOpen: () => { properties.settingsDismissed = true; },
     loadModels: async () => {}, maybeOpenNewStudioConversation: () => {
       throw Error('Studio startup must not happen outside Studio.');

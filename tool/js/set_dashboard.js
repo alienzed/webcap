@@ -532,6 +532,14 @@
     };
     Object.keys(destinations).forEach(function (id) { el(id).onclick = function (event) { if (id === 'set-dashboard-curate' && event) { event.preventDefault(); event.stopPropagation(); } run(destinations[id]); }; });
     el('set-dashboard-template-draft').addEventListener('input', function () { templateDirty = true; renderTemplatePlaceholders(); });
+    el('set-dashboard-template-design').onclick = function () {
+      try {
+        openPrimerTemplateDesigner({draft:el('set-dashboard-template-draft').value,onWrite:function () {
+          templateDirty = false;
+          renderStage();
+        }});
+      } catch(error) { reportConsoleError('Caption Template',error); setStatus(String(error.message || error)); }
+    };
     el('set-dashboard-template-save').onclick = function () {
       setPrimerTemplateFromDashboard(el('set-dashboard-template-draft').value);
       templateDirty = false;

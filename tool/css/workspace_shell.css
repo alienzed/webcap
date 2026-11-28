@@ -4665,3 +4665,107 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
     display: none;
   }
 }
+
+/* Bounded conversations reuse the Assistant-owned controls in a native modal. */
+.task-conversation-modal {
+  width: min(1100px, calc(100vw - 48px));
+  height: min(860px, calc(100dvh - 48px));
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  margin: auto;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: inherit;
+  background: var(--panel);
+}
+.task-conversation-modal::backdrop { background: rgba(0,0,0,.55); }
+.task-conversation-modal > .director-chat-drawer {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: inherit;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.task-conversation-modal #director-chat-pin,
+.task-conversation-modal #studio-director-resizer { display: none; }
+.task-conversation-modal .director-chat-header-copy strong { font-size: 26px; }
+.task-conversation-modal .director-chat-header-copy span { font-size: 14px; white-space: normal; }
+.task-conversation-modal .director-chat-message-body,
+.task-conversation-modal #director-chat-input,
+.task-conversation-modal .director-chat-model-row select,
+.task-conversation-modal .review-captions-btn { font-size: 16px; }
+.task-conversation-modal .director-chat-context-summary,
+.task-conversation-modal .director-chat-context-status,
+.task-conversation-modal .director-chat-temporary-note { font-size: 14px; }
+.task-conversation-modal #director-chat-send { font-size: 18px; }
+
+.task-conversation-modal.has-task-result { width: min(1450px, calc(100vw - 48px)); }
+.task-conversation-modal.has-task-result[open] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.task-conversation-modal > .task-conversation-result {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  overflow: hidden;
+  border: 0;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--panel);
+  box-shadow: none;
+}
+.task-conversation-result > .keep-lora-header h2 { font-size: 20px; }
+.task-conversation-result #test-generations-wildcard-close,
+.task-conversation-result #test-generations-wildcard-dismiss,
+.task-conversation-result #test-generations-director-activity { display: none; }
+.task-conversation-result .keep-lora-source,
+.task-conversation-result .test-generations-wildcard-focus > small { font-size: 14px; }
+.task-conversation-result textarea,
+.task-conversation-result input,
+.task-conversation-result select,
+.task-conversation-result button,
+.task-conversation-result .test-generations-wildcard-focus > span,
+.task-conversation-result .test-generations-wildcard-output > span { font-size: 16px; }
+.task-conversation-result #test-generations-wildcard-use-btn { font-size: 18px; }
+@media (max-width: 880px) {
+  .task-conversation-modal.has-task-result[open] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .task-conversation-modal > .task-conversation-result { border-left: 0; border-top: 1px solid var(--border); }
+}
+
+.primer-task-body {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  padding: 18px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+.primer-task-body label { display: grid; gap: 8px; font-weight: 600; }
+.primer-task-body textarea { width: 100%; resize: vertical; font-weight: 400; }
+.primer-task-body h3 { font-size: 18px; margin: 0 0 10px; }
+.primer-task-examples { display: grid; gap: 10px; overflow-wrap: anywhere; }
+.primer-task-examples > div { border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+.primer-task-examples strong { font-size: 14px; color: var(--muted); }
+.primer-task-examples p { margin: 6px 0; white-space: pre-wrap; font-size: 16px; }
+.primer-task-reference-controls { display: flex; gap: 8px; margin-bottom: 10px; }
+.primer-task-reference-controls select { flex: 1; min-width: 0; }
+.primer-task-footer { display: flex; justify-content: space-between; gap: 12px; padding: 14px; border-top: 1px solid var(--border); }
+.primer-task-footer #primer-task-write { font-size: 18px; }
+#primer-task-status { font-size: 16px; margin: 0; }
+
+/* The global model picker is outside the native modal's interactive scope. */
+.task-conversation-modal .director-chat-model-tools { display: grid !important; }

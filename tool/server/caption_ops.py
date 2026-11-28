@@ -165,9 +165,9 @@ CAPTION_ASSIST_SYSTEM_PROMPT = (
     "the caption, because the draft lacks it, or because Sight does not independently repeat it. "
     "Prefer compact visual phrases over prose padding: do not add phrases "
     "such as 'the photo shows', 'can be seen', or 'the photo was taken' when they add no visual fact. "
-    "When a draft already contains a complete meaningful description, preserve its established wording and order unless a factual correction or missing selected tag requires a specific edit. "
+    "Use the current draft as a factual and wording baseline. Preserve valid distinctive phrases; adjust their order and connective language to match the saved caption template when authoring the caption. "
     "Keep distinctive user-authored phrases intact, including combinations describing censorship or blur (for example, 'face censored and blurred'); never split, invert, or paraphrase them merely for style. "
-    "For mature captions, perform targeted corrections rather than a general rewrite. "
+    "For mature captions, retain the valid descriptive content and make only useful factual or structural edits. For a targeted repair, preserve the existing structure except where the requested correction requires a change. "
     "The existing draft is not more authoritative than deliberate selected tags. "
     "Use Context Sight to preserve visible relationships, including which person's attributes, garments, "
     "and actions belong to which person; do not flatten those relationships into generic shared traits. "
@@ -177,15 +177,17 @@ CAPTION_ASSIST_SYSTEM_PROMPT = (
     "or other visual facts absent from Open Sight, Context Sight, selected annotations, required phrase, or draft, apart from an "
     "explicit subject description authored in captionTemplate. If a required phrase is provided, include it verbatim "
     "exactly once. captionTemplate is the Set's caption-writing template. renderedPrimer demonstrates its "
-    "populated structure, preferred order, and wording conventions. Use both as guidance, not as mandatory "
-    "factual content. The order of groupedAnnotations also does not define caption order. "
+    "populated structure, desired order, and wording conventions. The order of groupedAnnotations also does not define caption order. Follow the saved template's order, density, "
+    "punctuation and phrase style for ordinary caption authoring; omit unpopulated sections. "
+    "approvedStyleExamples, when supplied, demonstrate expression and structure only. Use their style, not their visual facts. "
+    "The template, rendered Primer and examples establish form; the current item's evidence establishes content. "
     "Omit unpopulated facts and never invent content to fill a group. Keep each action and trait clearly "
     "attached to its subject. Preserve distinctive multiword tag phrases verbatim where they already read naturally. "
     "Treat concise camera and viewpoint wording as a preferred surface form: compose supplied angle and orientation "
     "facts into compact photographic phrases such as 'front view', 'low-angle side view', or "
     "'high-angle three-quarter rear view'. Do not rewrite these as 'viewed from the front', 'from a front view', "
-    "'seen from the side', or similar verbose variants. Write complete, natural sentences using only the connective "
-    "language needed for grammatical and semantic clarity. Interpret each selected value through its annotation group: "
+    "'seen from the side', or similar verbose variants. Use the concise phrases or sentence form demonstrated by the saved template and approved examples, with only "
+    "the connective language needed for meaning and clarity. Interpret each selected value through its annotation group: "
     "use the group meaning to understand what the value modifies or describes, and when the group meanings establish "
     "a clear relationship among supplied details, express those details together as a coherent phrase or clause. "
     "Keep the caption concise and information-dense while preserving the supplied visual facts and distinctive tag wording. "
@@ -255,6 +257,18 @@ def build_caption_enrichment_messages(
          json.dumps(payload, ensure_ascii=False, separators=(",", ":"))},
     ]
 
+def _caption_reference_examples(rows):
+    """Explicit, fixed style examples; never new facts about the current item."""
+    result = []
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict):
+            continue
+        text = str(row.get("caption") or "").strip()
+        if text and text not in result:
+            result.append(text)
+    return result
+
+
 def build_caption_assist_messages(
     assignments=None,
     tags=None,
@@ -267,6 +281,7 @@ def build_caption_assist_messages(
     open_sight=None,
     context_sight=None,
     sight_led=False,
+    reference_captions=None,
 ):
     grouped = []
     seen_grouped = set()
@@ -348,6 +363,9 @@ def build_caption_assist_messages(
         "openSight": open_sight if isinstance(open_sight, dict) else None,
         "contextSight": context_sight if isinstance(context_sight, dict) else None,
     }
+    references = _caption_reference_examples(reference_captions)
+    if references:
+        payload["approvedStyleExamples"] = references
     if mismatch_hints and not repair_corrections:
         payload["tagMismatches"] = mismatch_hints
     repair_instruction = ""
@@ -365,8 +383,8 @@ def build_caption_assist_messages(
     ) if mismatch_hints and not repair_corrections else ""
     sight_guidance = (
         "This item has no user-selected tags or authored draft. Compose a substantive new training caption "
-        "from the specific, visually supported facts in openSight, treating captionTemplate and renderedPrimer "
-        "as optional style and ordering guidance, not content to copy or fill with empty placeholders. "
+        "from the specific, visually supported facts in openSight, following captionTemplate, renderedPrimer and "
+        "approvedStyleExamples for style and ordering while drawing factual content from this item's evidence. "
         "Include distinctive subject, position, clothing, construction and scene details when actually observed. "
         "Relate clear Sight facts to familiar annotation-group concepts where natural; do not assign tags or "
         "invent missing group values. Preserve any requiredPhrase. "
@@ -443,8 +461,7 @@ Design requirements:
   items with no action annotations. Preserve the vocabulary's wording rather than substituting synonyms.
 - Design for arbitrary subsets of groups being populated. A template that reads well only when every group is present
   is not good enough.
-- Prefer concise natural training-caption prose over a raw comma-separated tag dump, while retaining deterministic
-  behavior.
+- Match the user's desired expression, ordering, punctuation and density as demonstrated by approved reference captions and the conversation. Use concise visual phrases and connective language only where needed, while retaining deterministic behavior.
 - Prefer compact compositional photographic wording for camera/view groups. When the schema supplies angle and
   orientation fragments, combine them as an "[angle] [orientation] view" phrase where that matches the vocabulary,
   such as "front view", "low-angle side view", or "high-angle three-quarter rear view". Keep the supplied vocabulary
@@ -458,7 +475,9 @@ Design requirements:
 """.strip()
 
 
-def build_caption_template_assist_messages(groups=None, mappings=None, current_template="", default_template=""):
+def build_caption_template_assist_messages(groups=None, mappings=None, current_template="", default_template="",
+                                           training_focus="", set_variables=None, required_phrase="",
+                                           reference_captions=None, conversation=None, discuss=False):
     clean_groups = []
     available_keys = []
     seen_keys = set()
@@ -528,16 +547,43 @@ def build_caption_template_assist_messages(groups=None, mappings=None, current_t
         "customMappings": clean_mappings,
         "currentTemplate": str(current_template or ""),
     }
-    return [
-        {"role": "system", "content": CAPTION_TEMPLATE_ASSIST_SYSTEM_PROMPT},
+    if str(training_focus or "").strip():
+        payload["trainingFocus"] = str(training_focus).strip()
+    if isinstance(set_variables, list) and set_variables:
+        payload["setVariables"] = set_variables
+    if str(required_phrase or "").strip():
+        payload["requiredPhrase"] = str(required_phrase).strip()
+    references = _caption_reference_examples(reference_captions)
+    if references:
+        payload["approvedStyleExamples"] = references
+    system = CAPTION_TEMPLATE_ASSIST_SYSTEM_PROMPT
+    if discuss:
+        system = system.rsplit("Return only the template text.", 1)[0].rstrip()
+        system += ("\nDiscuss the template with the user, propose concrete structure and illustrative examples, "
+                   "and respond concisely. The editable draft is authored through the Generate/Revise Draft action. "
+                   "Use approved examples for structure and wording conventions, not new visual facts.")
+    messages = [
+        {"role": "system", "content": system},
         {
             "role": "user",
             "content": (
-                "Create one improved WebCap Caption Primer template from this exact schema. "
-                "Use defaultCaptionTemplate as the starting structure for a new template, and preserve useful "
-                "structure already present in currentTemplate. Treat groups as an unordered inventory of "
-                "available placeholders. Place them by meaning with natural conditional glue.\n\n"
-                + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+                ("Discuss the desired caption structure from this Set context." if discuss else
+                 "Create one improved WebCap Caption Primer template from this exact schema. "
+                 "Use defaultCaptionTemplate as the starting structure for a new template, and preserve useful "
+                 "structure already present in currentTemplate. Treat groups as an unordered inventory of "
+                 "available placeholders. Place them by meaning with natural conditional glue.")
+                + "\n\n" + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
             ),
         },
     ]
+    for message in conversation if isinstance(conversation, list) else []:
+        if isinstance(message, dict) and message.get("role") in {"user", "assistant"}:
+            text = str(message.get("content") or "").strip()
+            if text:
+                messages.append({"role": message["role"], "content": text})
+    if conversation and not discuss:
+        messages.append({"role": "user", "content": (
+            "Author the working template using the Set schema, current editable draft, approved style examples "
+            "and the user's decisions in our discussion. Return only the template text."
+        )})
+    return messages

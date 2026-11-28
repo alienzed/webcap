@@ -140,3 +140,62 @@ test('Set Definition renders group-only intent and persists a scoped change in t
   await page.waitForFunction(folder=>state.folder===folder&&state.folderStateWritable&&state.setVariables.some(variable=>variable.group==='Viewpoint'&&variable.terms.includes('rear')),folder);
   expect(await page.evaluate(()=>state.setVariables)).toEqual(saved.set_variables);
 });
+
+test('Caption Template discusses and authors a working draft, then writes only on explicit action',async({page,request})=>{
+  const fsRoot=fs.readFileSync(path.resolve(__dirname,'../../test-results/studio-temp-root.txt'),'utf8').trim();
+  const folder='Caption Template Acceptance';
+  const root=path.join(fsRoot,'sets',folder);
+  fs.mkdirSync(root,{recursive:true});
+  fs.writeFileSync(path.join(root,'example.png'),Buffer.from('iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAALUlEQVR4nGN0TKlloCVgoqnpoxaMWjBqwagFoxaMWjBqARUBAErBAWK46tBKAAAAAElFTkSuQmCC','base64'));
+  fs.writeFileSync(path.join(root,'example.txt'),'bright lighting, front view');
+  const statePath=path.join(root,'.webcap_state.json');
+  const original='{viewpoint}, {lighting}';
+  const revised='{lighting, }{viewpoint}';
+  fs.writeFileSync(statePath,JSON.stringify({
+    primer:{template:original},
+    set_training_focus:'Viewpoint',
+    set_variables:[{group:'Viewpoint',terms:['front','rear'],exclusive:true}],
+    caption_requirements:['Viewpoint','Lighting'],
+    caption_requirement_keywords:{Viewpoint:'front, rear',Lighting:'bright, dim'},
+    caption_group_tags_by_media:{'example.png':{Viewpoint:['front'],Lighting:['bright']}}
+  }));
+  const modelUrl='http://127.0.0.1:4211';
+  expect((await request.post(modelUrl+'/__acceptance/reset')).ok()).toBeTruthy();
+  expect((await request.post(modelUrl+'/__acceptance/queue',{data:{value:'Use compact phrases with lighting before viewpoint.'}})).ok()).toBeTruthy();
+  expect((await request.post(modelUrl+'/__acceptance/queue',{data:{value:revised}})).ok()).toBeTruthy();
+  await page.goto('/');
+  await page.waitForFunction(()=>state.dirStack&&state.dirStack.length&&state.folderStateWritable);
+  await page.evaluate(folder=>setApplicationSetContext(folder),folder);
+  await page.waitForFunction(folder=>state.folder===folder&&state.folderStateWritable&&state.items.length===1,folder);
+  await page.evaluate(()=>window.openSetDashboard());
+  const definition=page.locator('#set-dashboard-definition');
+  if(!await definition.evaluate(node=>node.open)) await definition.locator(':scope > summary').click();
+  await page.locator('#set-dashboard-template-design').click();
+  const modal=page.locator('#task-conversation-modal');
+  await expect(modal).toBeVisible();
+  await expect(modal.locator('#director-chat-title')).toHaveText('Caption Template');
+  const model=page.locator('#director-chat-model');
+  await expect(model.locator('option[value="acceptance::acceptance-model"]')).toHaveCount(1);
+  await model.selectOption('acceptance::acceptance-model');
+  await modal.locator('#primer-task-reference-select').selectOption({index:1});
+  await modal.locator('#primer-task-reference-add').click();
+  await expect(modal.locator('#primer-task-references')).toContainText('bright lighting, front view');
+  await modal.locator('#director-chat-input').fill('Use lighting before viewpoint with compact phrases.');
+  await modal.locator('#director-chat-send').click();
+  await expect(modal.locator('#director-chat-messages')).toContainText('Use compact phrases with lighting before viewpoint.');
+  await expect(modal.locator('#primer-task-draft')).toHaveValue(original);
+  await modal.locator('#primer-task-generate').click();
+  await expect(modal.locator('#primer-task-draft')).toHaveValue(revised);
+  await expect(modal.locator('#primer-task-examples')).toContainText('bright');
+  expect(JSON.parse(fs.readFileSync(statePath,'utf8')).primer.template).toBe(original);
+  const calls=await request.get(modelUrl+'/__acceptance/calls').then(r=>r.json());
+  expect(calls.calls).toHaveLength(2);
+  expect(calls.calls[1].messages.some(item=>String(item.content).includes('Use lighting before viewpoint'))).toBeTruthy();
+  expect(calls.calls[1].messages.some(item=>String(item.content).includes('bright lighting, front view'))).toBeTruthy();
+  await modal.locator('#primer-task-write').click();
+  await expect(modal).toBeHidden();
+  const saved=JSON.parse(fs.readFileSync(statePath,'utf8')).primer;
+  expect(saved.template).toBe(revised);
+  expect(saved.referenceCaptions).toEqual([{fileName:'example.png',caption:'bright lighting, front view'}]);
+  await expect(page.locator('#set-dashboard-template-draft')).toHaveValue(revised);
+});

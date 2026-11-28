@@ -37,6 +37,20 @@ function setRequirementGroupAlias(label, alias) {
 function setVariableKey(variable) {
   return variable.group;
 }
+// Style references are deliberate caption snapshots, not pointers to mutable
+// media text. Editing a source caption never silently changes this standard.
+function normalizePrimerReferenceCaptions(rows) {
+  var seen = new Set();
+  return (Array.isArray(rows) ? rows : []).reduce(function (out, row) {
+    if (!row || typeof row !== 'object') return out;
+    var caption = String(row.caption || '').trim();
+    if (!caption || seen.has(caption)) return out;
+    seen.add(caption);
+    out.push({fileName:String(row.fileName || '').trim(),caption:caption});
+    return out;
+  }, []);
+}
+
 function normalizeSetVariables(rows) {
   var seen = new Set();
   return (Array.isArray(rows) ? rows : []).reduce(function (out, row) {
@@ -322,6 +336,7 @@ function sanitizeFolderState(data) {
     },
     primer: {
       template: String(primer.template || ''),
+      referenceCaptions: normalizePrimerReferenceCaptions(primer.referenceCaptions),
       mappings: primerMappingsValue,
       keyAliases: keyAliases
     },
@@ -685,6 +700,7 @@ function applyFolderStateToDom(folderState) {
     Object.prototype.hasOwnProperty.call(folderState.primer, 'template')
   );
   state.folderHasSavedPrimerTemplate = hasSavedPrimerTemplate;
+  state.primerReferenceCaptions = clean.primer.referenceCaptions;
   // Restore reviewedSet from reviewedKeys for persistence
   if (Array.isArray(clean.reviewedKeys)) {
     state.reviewedSet = new Set(clean.reviewedKeys);

@@ -104,6 +104,7 @@ function statsGetPrimerOptionsFromDom() {
   var templateEl = document.getElementById('primer-template');
   return {
     template: templateEl ? templateEl.value : '',
+    referenceCaptions: normalizePrimerReferenceCaptions(state.primerReferenceCaptions),
     mappings: []
   };
 }
@@ -171,7 +172,6 @@ function restoreCaptionAssistCandidate(mediaItem) {
   return true;
 }
 var captionAssistPresentationMediaKey = '';
-var primerTemplateAssistPendingJobId = '';
 
 function isCaptionAssistRunning() {
   return !!captionAssistPendingJobId;
@@ -316,13 +316,22 @@ function dismissCaptionAssistCandidate() {
   return Promise.resolve(true);
 }
 
-var primerTemplateAssistCandidate = '';
+var primerTemplateTask = null;
+var primerTemplateTaskSequence = 0;
+var primerTemplateModeRegistered = false;
 
 // The existing template field remains the single saved template owner.
-function setPrimerTemplateFromDashboard(value) {
+function setPrimerTemplateFromDashboard(value, referenceCaptions, alreadySaved) {
+  if (Array.isArray(referenceCaptions)) state.primerReferenceCaptions = normalizePrimerReferenceCaptions(referenceCaptions);
   var field = document.getElementById('primer-template');
   field.value = String(value || '');
-  field.dispatchEvent(new Event('input', {bubbles: true}));
+  if (alreadySaved) {
+    state.folderHasSavedPrimerTemplate = true;
+    refreshPrimerPreviewForCurrentItem();
+    if (typeof updatePrimerCaptionResetUi === 'function') updatePrimerCaptionResetUi();
+  } else {
+    field.dispatchEvent(new Event('input', {bubbles: true}));
+  }
 }
 
 function wireStatsPrimerAutoSave() {
@@ -1353,123 +1362,246 @@ function validatePrimerTemplateCandidate(template, request) {
   return text;
 }
 
-function syncPrimerTemplateAssistCandidateUi() {
-  var panel = document.getElementById('primer-template-candidate');
-  var textEl = document.getElementById('primer-template-candidate-text');
-  if (!panel || !textEl) return;
-  panel.classList.toggle('hidden', !primerTemplateAssistCandidate);
-  textEl.textContent = primerTemplateAssistCandidate || '';
+function primerTemplateTaskEl(id) {
+  return document.getElementById('primer-task-' + id);
 }
 
-function dismissPrimerTemplateAssistCandidate() {
-  if (!primerTemplateAssistCandidate) return;
-  primerTemplateAssistCandidate = '';
-  syncPrimerTemplateAssistCandidateUi();
-  setStatus('AI Caption Template candidate dismissed.');
+function renderPrimerTemplateTaskExamples() {
+  var task = primerTemplateTask;
+  var host = primerTemplateTaskEl('examples');
+  var draft = String(primerTemplateTaskEl('draft').value || '');
+  host.replaceChildren();
+  task.previewItems.forEach(function (item) {
+    var row = document.createElement('div');
+    var title = document.createElement('strong');
+    var example = document.createElement('p');
+    title.textContent = item.fileName;
+    example.textContent = buildPrimerFromConfig(item.fileName, item.key, {template:draft}) || '(No populated template values)';
+    row.append(title,example);
+    host.appendChild(row);
+  });
+  if (!task.previewItems.length) host.textContent = 'No Set media available to preview.';
+}
+
+function renderPrimerTemplateTaskReferences() {
+  var task = primerTemplateTask;
+  var host = primerTemplateTaskEl('references');
+  host.replaceChildren();
+  task.references.forEach(function (reference, index) {
+    var row = document.createElement('div');
+    var label = document.createElement('strong');
+    var text = document.createElement('p');
+    var remove = document.createElement('button');
+    label.textContent = reference.fileName || 'Approved example';
+    text.textContent = reference.caption;
+    remove.type = 'button';
+    remove.className = 'review-captions-btn';
+    remove.textContent = 'Remove';
+    remove.disabled = task.busy;
+    remove.onclick = function () {
+      task.references.splice(index,1);
+      renderPrimerTemplateTaskReferences();
+      window.refreshAssistantModes();
+    };
+    row.append(label,text,remove);
+    host.appendChild(row);
+  });
+  if (!task.references.length) host.textContent = 'No approved examples selected.';
+}
+
+function setPrimerTemplateTaskBusy(busy, ready) {
+  if (!primerTemplateTask) return;
+  primerTemplateTask.modelReady = ready;
+  busy = !!(busy || primerTemplateTask.saving);
+  primerTemplateTask.busy = busy;
+  primerTemplateTaskEl('draft').disabled = busy;
+  primerTemplateTaskEl('reference-select').disabled = busy;
+  primerTemplateTaskEl('reference-add').disabled = busy || !primerTemplateTaskEl('reference-select').value;
+  primerTemplateTaskEl('generate').disabled = busy || !ready;
+  primerTemplateTaskEl('write').disabled = busy;
+  primerTemplateTaskEl('references').querySelectorAll('button').forEach(function (button) { button.disabled = busy; });
+}
+
+function executePrimerTemplateTask(request, author) {
+  var task = primerTemplateTask;
+  if (task.saving) throw new Error('Wait for the current template write to finish.');
+  task.stopRequested = false;
+  var draft = String(primerTemplateTaskEl('draft').value || '');
+  var payload = Object.assign({},task.request,{
+    model:request.modelId, action:author ? 'author' : 'discuss',
+    currentTemplate:draft, referenceCaptions:task.references.slice(),
+    conversation:request.messages
+  });
+  return captionAssistRequestJson('/caption/template-assist',{
+    method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)
+  }).then(function (response) {
+    if (!response.job || !response.job.jobId) throw new Error('Caption Template did not return a queued job.');
+    task.jobId = String(response.job.jobId);
+    if (request.onJob) request.onJob(response.job);
+    if (task.stopRequested) return cancelCaptionAssistJob(task.jobId).then(function () {
+      return waitForCaptionAssistJob(response.job);
+    });
+    return waitForCaptionAssistJob(response.job);
+  }).then(function (job) {
+    if (primerTemplateTask !== task || String(state.folder || '') !== task.folder)
+      throw new Error('Caption Template belongs to a different Set.');
+    var text = String(job.result && job.result.text || '').trim();
+    if (!text) throw new Error('Caption Template returned an empty response.');
+    if (!author) return {text:text};
+    // Keep useful material even if the model missed a grammar convention.
+    // Show the editable draft and a warning rather than discarding it.
+    var warning = '';
+    try { text = validatePrimerTemplateCandidate(text,task.request); }
+    catch (error) { warning = String(error.message || error); }
+    primerTemplateTaskEl('draft').value = text;
+    primerTemplateTaskEl('status').textContent = warning || 'Draft ready.';
+    primerTemplateTaskEl('generate').textContent = 'Revise Draft';
+    renderPrimerTemplateTaskExamples();
+    return {text:'I updated the working template. Review the rendered examples or refine it further.'};
+  }).finally(function () {
+    task.jobId = '';
+  });
+}
+
+function registerPrimerTemplateMode() {
+  if (primerTemplateModeRegistered) return;
+  window.registerAssistantMode({
+    id:'caption-template',label:'Caption Template',taskModal:true,
+    description:'Design the Set captioning standard.',
+    emptyTitle:'Design your caption template',
+    emptyDescription:'Discuss the desired structure, or generate a draft from the Set Definition.',
+    placeholder:'How should your captions be ordered and expressed?',
+    writeInstruction:'Author or refine the working template using the Set Definition, approved style examples and our discussion.',
+    available:function () { return !!primerTemplateTask; },
+    resultPanel:function () { return primerTemplateTaskEl('result'); },
+    contextSnapshot:function () {
+      var task = primerTemplateTask;
+      return {title:'Set Definition and approved examples',
+        summary:task.request.groups.length+' groups · '+task.references.length+' approved examples',
+        prompt:JSON.stringify(Object.assign({},task.request,{referenceCaptions:task.references}),null,2),
+        status:'Set schema captured at opening. Reference changes here are explicit.'};
+    },
+    execute:function (request) { return executePrimerTemplateTask(request,false); },
+    write:function (request) { return executePrimerTemplateTask(request,true); },
+    cancel:function () {
+      primerTemplateTask.stopRequested = true;
+      return primerTemplateTask.jobId ? cancelCaptionAssistJob(primerTemplateTask.jobId) : Promise.resolve();
+    },
+    setBusy:setPrimerTemplateTaskBusy
+  });
+  primerTemplateModeRegistered = true;
+}
+
+function openPrimerTemplateDesigner(options) {
+  if (primerTemplateTask && primerTemplateTask.busy) throw new Error('Finish the current Caption Template operation first.');
+  options = options || {};
+  var folder = String(state.folder || '');
+  var request = buildPrimerTemplateAssistRequest();
+  var startingDraft = options.draft == null ? request.currentTemplate : String(options.draft);
+  var saved = statsGetPrimerOptionsFromDom();
+  var schema = Object.assign({},request,{
+    trainingFocus:String(state.setTrainingFocus || ''),
+    setVariables:JSON.parse(JSON.stringify(state.setVariables || [])),
+    requiredPhrase:String(document.getElementById('stats-required-phrase').value || '')
+  });
+  var signature = JSON.stringify([folder,startingDraft,schema.groups,schema.mappings,schema.trainingFocus,schema.setVariables,schema.requiredPhrase,saved.referenceCaptions]);
+  registerPrimerTemplateMode();
+  if (!primerTemplateTask || primerTemplateTask.signature !== signature || primerTemplateTask.applied) {
+    var items = (state.items || []).filter(function (item) { return item && item.key && item.fileName; });
+    var referenceOptions = items.filter(function (item) { return String(item.caption || '').trim(); }).map(function (item) {
+      return {key:item.key,fileName:item.fileName,caption:String(item.caption).trim()};
+    });
+    var sample = [];
+    [state.currentItem,items[0],items[Math.floor(items.length/2)],items[items.length-1]].forEach(function (item) {
+      if (item && item.key && item.fileName && sample.length < 3 && !sample.some(function (row) { return row.key === item.key; }))
+        sample.push({key:item.key,fileName:item.fileName});
+    });
+    primerTemplateTask = {
+      folder:folder,signature:signature,key:'caption-template:'+ (++primerTemplateTaskSequence),
+      request:schema,references:normalizePrimerReferenceCaptions(saved.referenceCaptions),
+      referenceOptions:referenceOptions,previewItems:sample,busy:false,jobId:'',stopRequested:false,applied:false
+    };
+    primerTemplateTaskEl('draft').value = startingDraft;
+    primerTemplateTaskEl('generate').textContent = startingDraft.trim() ? 'Revise Draft' : 'Generate Draft';
+    primerTemplateTaskEl('status').textContent = '';
+    var selector = primerTemplateTaskEl('reference-select');
+    selector.replaceChildren(new Option('Select a saved caption',''));
+    referenceOptions.forEach(function (reference) {
+      selector.appendChild(new Option(reference.fileName+' · '+reference.caption.slice(0,100),reference.key));
+    });
+    renderPrimerTemplateTaskReferences();
+    renderPrimerTemplateTaskExamples();
+  }
+  primerTemplateTask.onWrite = options.onWrite || null;
+  window.openAssistant({mode:'caption-template',contextKey:primerTemplateTask.key});
 }
 
 function runPrimerTemplateAssist() {
-  if (primerTemplateAssistPendingJobId) {
-    setStatus('Caption Template Assist is already running.');
-    return Promise.resolve(false);
-  }
-  var request = buildPrimerTemplateAssistRequest();
-  if (!request.model) {
-    setStatus('Select a Director model before generating a Caption Template.');
-    return Promise.resolve(false);
-  }
-  if (!request.groups.length && !request.mappings.length) {
-    setStatus('Configure at least one tag group or Primer mapping first.');
-    return Promise.resolve(false);
-  }
-
-  primerTemplateAssistPendingJobId = 'submitting';
-  var wand = document.getElementById('primer-template-wand-btn');
-  if (wand) wand.disabled = true;
-  setStatus('Caption Template Assist queued...');
-  return captionAssistRequestJson('/caption/template-assist', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request)
-  }).then(function (payload) {
-    if (!payload.job || !payload.job.jobId) throw new Error('Caption Template Assist did not return a queued job.');
-    primerTemplateAssistPendingJobId = String(payload.job.jobId);
-    trackTransientLlmJob(payload.job);
-    setStatus(payload.job.status === 'queued' ? 'Caption Template Assist waiting in the LLM queue...' : 'Caption Template Assist writing...');
-    return waitForCaptionAssistJob(payload.job);
-  }).then(function (job) {
-    var result = job.result && typeof job.result === 'object' ? job.result : {};
-    primerTemplateAssistCandidate = validatePrimerTemplateCandidate(result.text, request);
-    syncPrimerTemplateAssistCandidateUi();
-    setStatus('AI Caption Template candidate ready.');
-    return true;
-  }).catch(function (err) {
-    setStatus('Caption Template Assist failed: ' + String(err && err.message ? err.message : err));
-    return false;
-  }).then(function (result) {
-    primerTemplateAssistPendingJobId = '';
-    if (wand) wand.disabled = false;
-    return result;
-  }, function (err) {
-    primerTemplateAssistPendingJobId = '';
-    if (wand) wand.disabled = false;
-    throw err;
-  });
+  openPrimerTemplateDesigner();
 }
 
 function wirePrimerTemplateAssistUi() {
   var wand = document.getElementById('primer-template-wand-btn');
-  var use = document.getElementById('primer-template-candidate-use');
-  var regenerate = document.getElementById('primer-template-candidate-regenerate');
-  var dismiss = document.getElementById('primer-template-candidate-dismiss');
-  var panel = document.getElementById('primer-template-candidate');
-  var templateEl = document.getElementById('primer-template');
-  if (!wand || !use || !regenerate || !dismiss || !panel || !templateEl) return;
-
-  if (!wand.__primerTemplateAssistBound) {
-    wand.__primerTemplateAssistBound = true;
-    wand.addEventListener('click', runPrimerTemplateAssist);
+  if (wand.__primerTemplateAssistBound) return;
+  wand.__primerTemplateAssistBound = true;
+  function report(error) {
+    reportConsoleError('Caption Template',error);
+    setStatus(String(error.message || error));
   }
-  if (!use.__primerTemplateAssistBound) {
-    use.__primerTemplateAssistBound = true;
-    use.addEventListener('click', function () {
-      if (!primerTemplateAssistCandidate) return;
-      templateEl.value = primerTemplateAssistCandidate;
-      primerTemplateAssistCandidate = '';
-      if (state) state.folderHasSavedPrimerTemplate = true;
-      templateEl.dispatchEvent(new Event('input', { bubbles: true }));
-      syncPrimerTemplateAssistCandidateUi();
-      templateEl.focus();
-      setStatus('AI Caption Template moved into the editor.');
-    });
-  }
-  if (!regenerate.__primerTemplateAssistBound) {
-    regenerate.__primerTemplateAssistBound = true;
-    regenerate.addEventListener('click', function () {
-      primerTemplateAssistCandidate = '';
-      syncPrimerTemplateAssistCandidateUi();
-      runPrimerTemplateAssist();
-    });
-  }
-  if (!dismiss.__primerTemplateAssistBound) {
-    dismiss.__primerTemplateAssistBound = true;
-    dismiss.addEventListener('click', dismissPrimerTemplateAssistCandidate);
-  }
-  if (!panel.__primerTemplateAssistBackdropBound) {
-    panel.__primerTemplateAssistBackdropBound = true;
-    panel.addEventListener('click', function (event) {
-      if (event.target === panel) dismissPrimerTemplateAssistCandidate();
-    });
-  }
-  if (!document.__primerTemplateAssistEscapeBound) {
-    document.__primerTemplateAssistEscapeBound = true;
-    document.addEventListener('keydown', function (event) {
-      if (event.key !== 'Escape' || !primerTemplateAssistCandidate) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      dismissPrimerTemplateAssistCandidate();
-    });
-  }
+  wand.addEventListener('click',function () {
+    try { runPrimerTemplateAssist(); } catch(error) { report(error); }
+  });
+  primerTemplateTaskEl('draft').addEventListener('input',function () {
+    primerTemplateTaskEl('status').textContent = '';
+    renderPrimerTemplateTaskExamples();
+  });
+  primerTemplateTaskEl('reference-select').addEventListener('change',function () {
+    primerTemplateTaskEl('reference-add').disabled = !this.value || primerTemplateTask.busy;
+  });
+  primerTemplateTaskEl('reference-add').onclick = function () {
+    var task = primerTemplateTask;
+    var reference = task.referenceOptions.find(function (row) { return row.key === primerTemplateTaskEl('reference-select').value; });
+    if (!reference) return;
+    task.references = normalizePrimerReferenceCaptions(task.references.concat([reference]));
+    renderPrimerTemplateTaskReferences();
+    window.refreshAssistantModes();
+  };
+  primerTemplateTaskEl('generate').onclick = function () {
+    try { window.runTaskConversationWrite('caption-template'); } catch(error) { report(error); }
+  };
+  primerTemplateTaskEl('write').onclick = async function () {
+    var task = primerTemplateTask;
+    if (!task || task.busy) return;
+    try {
+      if (task.folder !== String(state.folder || '')) throw new Error('The template belongs to a different Set.');
+      var draft = primerTemplateTaskEl('draft').value;
+      var references = normalizePrimerReferenceCaptions(task.references);
+      var captured = captureCurrentFolderStateSave();
+      if (!captured) throw new Error('The Set is not available for saving.');
+      // Persist the explicit draft with the existing Set snapshot writer.
+      // Until its receipt succeeds, the saved template and references remain unchanged.
+      captured.snapshot.primer.template = draft;
+      captured.snapshot.primer.referenceCaptions = references;
+      task.saving = true;
+      setPrimerTemplateTaskBusy(false,task.modelReady);
+      primerTemplateTaskEl('status').textContent = 'Writing template…';
+      cancelPendingFolderStateSave(captured.folderPath);
+      if (!await writeCapturedFolderState(captured)) throw new Error('Caption Template could not be saved. Your draft is retained.');
+      task.applied = true;
+      if (task.folder === String(state.folder || '') && primerTemplateTask === task) {
+        setPrimerTemplateFromDashboard(draft,references,true);
+        if (task.onWrite) task.onWrite();
+        if (document.getElementById('task-conversation-modal').contains(primerTemplateTaskEl('result'))) window.setDirectorChatOpen(false);
+      }
+      setStatus('Caption Template saved.');
+    } catch(error) {
+      primerTemplateTaskEl('status').textContent = String(error.message || error);
+      report(error);
+    } finally {
+      task.saving = false;
+      if (primerTemplateTask === task) setPrimerTemplateTaskBusy(false,task.modelReady);
+    }
+  };
 }
 
 function getCaptionAssistMissingGroups(mediaKey) {
@@ -1596,6 +1728,7 @@ function buildCaptionAssistRequest(mediaItem) {
     tags: getUnscopedTagsForMediaKey(mediaKey),
     requiredPhrase: requiredPhraseEl ? String(requiredPhraseEl.value || '').trim() : '',
     template: primer.template,
+    referenceCaptions: primer.referenceCaptions,
     renderedPrimer: buildPrimerFromConfig(mediaItem.fileName, mediaKey, primer),
     draft: getCaptionAssistDraftForMediaItem(mediaItem),
     openSight: mediaItem.metadata && mediaItem.metadata.vision_sight || null

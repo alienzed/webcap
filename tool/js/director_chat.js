@@ -110,7 +110,39 @@
   function availableModes() {
     return Object.keys(contextualModes).map(function (id) {
       return contextualModes[id];
-    }).filter(modeAvailable);
+    }).filter(function (mode) { return !mode.taskModal && modeAvailable(mode); });
+  }
+
+  // The Assistant owns its conversation DOM. Temporarily host it in a native
+  // modal for bounded tasks, without creating a second chat state or renderer.
+  var taskConversationPresentation = null;
+
+  function syncTaskConversationSurface() {
+    var dialog = el('task-conversation-modal');
+    var drawer = el('director-chat-drawer');
+    var mode = activeContextMode();
+    var modal = !!(state.open && mode && mode.taskModal);
+    if (taskConversationPresentation && (!modal || taskConversationPresentation.mode !== mode)) {
+      var previous = taskConversationPresentation;
+      if (previous.panel) previous.home.appendChild(previous.panel);
+      taskConversationPresentation = null;
+      if (previous.mode.onModalClose) previous.mode.onModalClose();
+    }
+    if (modal) {
+      if (drawer.parentNode !== dialog) dialog.appendChild(drawer);
+      if (!taskConversationPresentation) {
+        var panel = mode.resultPanel ? mode.resultPanel() : null;
+        taskConversationPresentation = {mode:mode, panel:panel, home:panel && panel.parentNode};
+        if (panel) dialog.appendChild(panel);
+      }
+      dialog.classList.toggle('has-task-result', !!taskConversationPresentation.panel);
+      if (!dialog.open) dialog.showModal();
+    } else if (drawer.parentNode === dialog) {
+      if (dialog.open) dialog.close();
+      dialog.classList.remove('has-task-result');
+      dialog.after(drawer);
+    }
+    return modal;
   }
 
   function storyboardContextPresets() {
@@ -516,7 +548,7 @@
       refreshContext.disabled = state.pending;
       el('director-chat-context-status').textContent = context.hasUpdate
         ? 'Updated evidence detected. Keep discussing this snapshot or start a new chat with the updated context.'
-        : 'Snapshot only · changes to the Set are not included until you reopen Ask QA.';
+        : (context.status || 'Snapshot only · changes to the Set are not included until you reopen Ask QA.');
     }
     el('director-chat-temporary-note').classList.toggle('hidden', !contextual);
     el('director-chat-history-toggle').classList.toggle('hidden', contextual);
@@ -525,7 +557,8 @@
       el('director-chat-history-toggle').setAttribute('aria-expanded', 'false');
       if (el('director-chat-history-panel').open) el('director-chat-history-panel').close();
     }
-    var newConversationLabel = context ? 'New QA chat' : studio ? 'New conversation' : 'New chat';
+    var taskModal = !!(active && active.taskModal);
+    var newConversationLabel = taskModal ? 'New chat' : context ? 'New QA chat' : studio ? 'New conversation' : 'New chat';
     el('director-chat-clear').querySelector('.director-header-button-label').textContent = studio ? 'New' : newConversationLabel;
     el('director-chat-clear').setAttribute('aria-label', newConversationLabel);
     el('director-chat-clear').title = newConversationLabel;
@@ -534,16 +567,16 @@
     el('app-frame').classList.toggle('studio-director-active', studio && state.open);
     drawer.setAttribute('aria-label', studio ? 'Projects Director' : 'Assistant');
     el('director-chat-title').textContent = studio ? studioWorkingStoryLabel() :
-      (context ? 'Ask QA' : 'Assistant');
+      (taskModal ? active.label : context ? 'Ask QA' : 'Assistant');
     el('director-chat-close').textContent = '×';
     el('director-chat-close').setAttribute('aria-label', studio ? 'Close Director' : 'Close Assistant');
     el('director-chat-empty-title').textContent = studio ? "Let's make something" :
-      (context ? 'Discuss this recommendation' : 'Your conversation');
+      (active && active.emptyTitle ? active.emptyTitle : context ? 'Discuss this recommendation' : 'Your conversation');
     el('director-chat-empty-description').textContent = studio
       ? 'Start with an idea or question. Approve saved Project details in Context when useful.'
-      : (context ? 'Ask why this recommendation matters, challenge its evidence, or discuss a better correction.'
+      : (active && active.emptyDescription ? active.emptyDescription : context ? 'Ask why this recommendation matters, challenge its evidence, or discuss a better correction.'
         : 'Start a conversation with the selected model.');
-    if (row) row.classList.toggle('hidden', studio || !modes.length);
+    if (row) row.classList.toggle('hidden', studio || taskModal || !modes.length);
     if (host) {
       host.innerHTML = '<button type="button" class="review-captions-btn' + (state.activeMode === 'chat' ? ' active' : '') + '" data-assistant-mode="chat">Chat</button>' +
         modes.map(function (mode) {
@@ -596,6 +629,8 @@
     syncStudioRevisionUi();
     renderMessages();
     syncControls();
+    syncTaskConversationSurface();
+    syncPinnedUi();
   }
 
   function studioWorkspaceVisible() {
@@ -1935,6 +1970,8 @@
     if (state.activeMode === 'storyboard' && window.studioDirectorWorkbench) {
       window.studioDirectorWorkbench.updateContext();
     }
+    var taskMode = activeContextMode();
+    if (taskMode && taskMode.setBusy) taskMode.setBusy(state.pending, !!state.modelId && state.modelsLoaded);
     var prepare = el('director-chat-workshop-prepare');
     if (prepare) {
       prepare.disabled = state.pending || !state.modelId || !!(state.workshop && state.workshop.shotError) || !currentMessages().some(function (message) { return message.role === 'user'; });
@@ -3685,9 +3722,12 @@
   }
 
   function sendMessage() {
+    var options = arguments[0];
     var input = el('director-chat-input');
     if (!input || state.pending || state.attachmentPending) return;
+    var writeMode = options && options.taskWrite === true ? activeContextMode() : null;
     var content = String(input.value || '').trim();
+    if (writeMode && !content) content = String(writeMode.writeInstruction || 'Author the working draft using our discussion.');
     if (!content || !state.modelId) return;
     var activeChatMode = state.activeMode;
     if (persistentMode(activeChatMode) && !state.sessionReady) {
@@ -3750,10 +3790,17 @@
     var saved = persistentMode(activeChatMode) ? persistSession(activeChatMode) : Promise.resolve();
     var requestPromise = saved.then(function () {
       if (mode) {
-        return Promise.resolve(mode.execute({
+        var execute = writeMode ? mode.write : mode.execute;
+        return Promise.resolve(execute.call(mode, {
           instruction: content,
           modelId: state.modelId,
-          messages: messages.slice()
+          messages: messages.slice(),
+          onJob: function (job) {
+            if (!job || !job.jobId) return;
+            state.jobId = String(job.jobId);
+            state.requestDiagnostic = job.request || null;
+            renderProgress({phase:job.status === 'queued' ? 'queued' : 'preparing',jobStatus:job.status,model:job.modelId});
+          }
         })).then(function (result) {
           result = result && typeof result === 'object' ? result : {};
           messages.push({
@@ -3849,7 +3896,8 @@
     var pin = el('director-chat-pin');
     if (!frame || !pin) return;
 
-    frame.classList.toggle('director-chat-pinned', state.pinned && state.open);
+    var mode = activeContextMode();
+    frame.classList.toggle('director-chat-pinned', state.pinned && state.open && !(mode && mode.taskModal));
     pin.classList.toggle('active', state.pinned);
     pin.setAttribute('aria-pressed', state.pinned ? 'true' : 'false');
     pin.setAttribute('aria-label', state.pinned ? 'Unpin Assistant' : 'Pin Assistant');
@@ -3886,6 +3934,7 @@
     drawer.setAttribute('aria-hidden', state.open ? 'false' : 'true');
     toggle.classList.toggle('active', state.open);
     toggle.setAttribute('aria-expanded', state.open ? 'true' : 'false');
+    syncTaskConversationSurface();
     syncPinnedUi();
 
     if (state.open) {
@@ -4083,6 +4132,10 @@
       setOpen(false);
       if (studio) toggle.focus();
     };
+    el('task-conversation-modal').addEventListener('cancel', function (event) {
+      event.preventDefault();
+      setOpen(false);
+    });
     clear.onclick = newChat;
     contextRefresh.onclick = function () {
       var mode = activeContextMode();
@@ -5154,7 +5207,7 @@
     target = target && typeof target === 'object' ? target : {};
     var modeId = String(target.mode || 'chat');
     if (target.contextKey) {
-      if (state.pending) throw new Error('Finish the current Assistant response before opening a different QA finding.');
+      if (state.pending) throw new Error('Finish the current Assistant response before opening a different task conversation.');
       var key = String(target.contextKey);
       if (state.modeContextKeys[modeId] !== key) {
         // Contextual conversations are transient, scoped to the evidence snapshot
@@ -5176,6 +5229,12 @@
     setOpen(true, modeId);
   };
   window.setDirectorChatOpen = setOpen;
+  window.runTaskConversationWrite = function (modeId) {
+    var mode = activeContextMode();
+    if (!state.open || !mode || mode.id !== modeId || !mode.taskModal || !mode.write)
+      throw new Error('Open the matching task conversation before authoring its draft.');
+    return sendMessage({taskWrite:true});
+  };
   window.openDirectorChatActivity = function (target) {
     if (target && target.modelId) state.modelId = String(target.modelId);
     if (target && target.jobId) state.jobId = String(target.jobId);

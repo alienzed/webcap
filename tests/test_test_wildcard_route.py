@@ -16,6 +16,8 @@ def test_test_wildcard_route_queues_frozen_caption_analysis(tmp_path, monkeypatc
     monkeypatch.setattr(app_module.app_config, "FS_ROOT", tmp_path)
     monkeypatch.setattr("tool.server.epoch_reference.training_wildcard_members", lambda folder, job_id: {"one.png", "two.jpg"})
     (set_root / ".webcap_state.json").write_text(json.dumps({
+        "set_training_focus": "shirt construction",
+        "set_variables": [{"group": "Shirt Shape", "terms": ["fitted", "loose"], "exclusive": True}],
         "caption_group_tags_by_media": {
             "one.png": {"Shirt Shape": ["fitted"], "Clothing": ["shirt"]},
             "two.jpg": {"Shirt Shape": ["loose"], "Background": ["studio"]},
@@ -55,6 +57,9 @@ def test_test_wildcard_route_queues_frozen_caption_analysis(tmp_path, monkeypatc
     assert "subject standing in a kitchen" in seen["contract"]["prompt"]
     assert "subject sitting on a couch" in seen["contract"]["prompt"]
     assert "Explicit focus: shirt" in seen["contract"]["prompt"]
+    assert "Saved Set training focus: shirt construction" in seen["contract"]["prompt"]
+    assert "User-defined Set Variables" in seen["contract"]["prompt"]
+    assert '"exclusive":true' in seen["contract"]["prompt"]
     assert '"group":"Shirt Shape"' in seen["contract"]["prompt"]
     assert '"alias":"Shirt construction"' in seen["contract"]["prompt"]
     assert '"group":"Clothing"' not in seen["contract"]["prompt"]
@@ -126,14 +131,49 @@ def test_wildcard_excludes_media_not_in_training_run(tmp_path, monkeypatch):
     assert "excluded purple dress" not in seen["contract"]["prompt"]
 
 
-def test_wildcard_rejects_missing_training_run(tmp_path, monkeypatch):
+def test_wildcard_uses_all_set_media_when_no_training_run_selected(tmp_path, monkeypatch):
     set_root = tmp_path / "set"
     set_root.mkdir()
     (set_root / "one.png").write_bytes(b"media")
+    (set_root / "one.txt").write_text("standing in bright light", encoding="utf-8")
     monkeypatch.setattr(app_module.app_config, "FS_ROOT", tmp_path)
     monkeypatch.setattr("tool.server.epoch_reference.training_wildcard_members",
-                        lambda folder, job_id: (_ for _ in ()).throw(ValueError("Choose a training run")) if not job_id else {"one.png"})
+                        lambda folder, job_id: pytest.fail("No training run filter should be applied"))
+    calls = []
+    monkeypatch.setattr(app_module, "enqueue_llm",
+                        lambda client, model, contract, **kwargs: calls.append(contract) or {"jobId": "job"})
     response = app_module.app.test_client().post("/fs/test_generations/wildcard",
                                                   json={"folder": "set", "directorModel": "director.gguf"})
-    assert response.status_code == 400
-    assert "Choose a training run" in response.get_json()["error"]
+    assert response.status_code == 202
+    assert response.get_json()["sourceScope"] == "set"
+    assert response.get_json()["trainingMediaCount"] == 1
+    assert response.get_json()["warning"] == ""
+    assert len(calls) == 1
+    assert "standing in bright light" in calls[0]["prompt"]
+
+
+def test_wildcard_snapshot_is_read_only_and_followup_does_not_reread_set(tmp_path, monkeypatch):
+    set_root = tmp_path / "set"
+    set_root.mkdir()
+    (set_root / "one.png").write_bytes(b"image")
+    (set_root / "one.txt").write_text("captured original", encoding="utf-8")
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", tmp_path)
+    calls = []
+    monkeypatch.setattr(app_module, "enqueue_llm",
+                        lambda client, model, contract, **kwargs: calls.append(contract) or {"jobId": "job"})
+    client = app_module.app.test_client()
+    result = client.post("/fs/test_generations/wildcard", json={"action": "context", "folder": "set"})
+    assert result.status_code == 200
+    assert calls == []
+    snapshot = result.get_json()["snapshot"]
+    assert "captured original" in snapshot
+    (set_root / "one.txt").write_text("changed source", encoding="utf-8")
+    result = client.post("/fs/test_generations/wildcard", json={
+        "action": "author", "snapshot": snapshot, "directorModel": "model",
+        "messages": [{"role": "user", "content": "Change pose"}], "currentWildcard": "{standing|sitting}",
+    })
+    assert result.status_code == 202
+    assert len(calls) == 1
+    assert "captured original" in calls[0]["prompt"]
+    assert "changed source" not in calls[0]["prompt"]
+    assert "Change pose" in calls[0]["prompt"]

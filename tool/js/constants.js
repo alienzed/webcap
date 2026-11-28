@@ -44,6 +44,7 @@ state = {
   supersetSourceFolder: '',
   supersetSearchDirty: false,
   folderHasSavedPrimerTemplate: false,
+  primerReferenceCaptions: [],
   flags: {}, // key: file or folder name, value: color string (red/yellow/orange/green)
   ratings: {}, // key: media file name, value: integer 1..5
   folderStateWritable: false,

@@ -196,22 +196,28 @@ def test_structured_candidate_offline_contract(tmp_path, monkeypatch):
         "Title", "Concept / overview", "Visual / atmosphere", "Invariants"
     ]
     for field in root.findall(".//field"):
-        assert all(field.find(name) is not None for name in ("purpose", "contents", "quality_criteria"))
-    assert ET.fromstring(candidate["expertise"]).find("prompt_knowledge/example") is not None
+        if field.attrib["name"] in {"Title", "Duration"}:
+            assert field.text and not list(field)
+        else:
+            assert all(field.find(name) is not None for name in ("purpose", "contents", "quality_criteria"))
+    assert root.find("scene_definition/fields/field[@name='Duration']").text == (
+        "The Scene's duration in seconds, from 4 to 15, defaulting to 15."
+    )
+    technical = evaluation.repo_default("h3.authoring")
+    assert candidate["expertise"] == technical
+    assert evaluation.resolve_packages(packages, {
+        "packages": resolved, "technical_reference": "Frozen H3 reference"
+    })["structured-v1"]["expertise"] == "Frozen H3 reference"
     assert len(cases) == 11
     for case in cases:
-        for invariant in case.get("project", {}).get("invariants", []):
-            assert set(invariant) == {"kind", "title", "text"}
-            assert invariant["kind"] in {"visual", "character", "location", "world", "sound", "custom"}
-            assert invariant["title"] and invariant["text"]
-        technical = evaluation.repo_default("h3.authoring")
+        assert case["operation"] == "studio_chat"
         control, treatment = (evaluation.make_messages(case, resolved[key], technical)
                               for key in resolved)
-        assert control[1:] == treatment[1:]
-        for messages in (control, treatment):
-            assert ("H3 PROMPT AUTHORING REFERENCE:" in messages[0]["content"]) == (
-                case["operation"] == "studio_scenes_draft"
-            )
+        assert control[1:] == treatment[1:] == case["history"]
+        assert treatment[0]["content"].count(technical) == 1
+        assert "H3 PROMPT AUTHORING REFERENCE:" not in treatment[0]["content"]
+        assert treatment == evaluation.make_messages(case, candidate, "")
+        assert technical not in control[0]["content"]
 
     def deny(*args, **kwargs):
         raise AssertionError("Offline planning made an LLM call")

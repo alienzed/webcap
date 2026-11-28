@@ -9,8 +9,7 @@
 
   <authoring_structure>
     <instruction>State persistent identities and starting conditions once.</instruction>
-    <instruction>Timed shots describe actions, performance, changes in physical state, camera behavior, and synchronized dialogue or sound as they happen.</instruction>
-    <instruction>Use supplied Project Concept, Visual / atmosphere, relevant Invariants, and the saved Scene Prompt when revising; honor legacy Story Guidelines only when explicitly supplied.</instruction>
+    <instruction>Timed shots describe actions, performance, changes in physical state and camera behavior as they happen.</instruction>
   </authoring_structure>
 
   <action_and_pacing>
@@ -53,7 +52,7 @@ Audience-only score and its development.
 
 --- END EXAMPLE PROMPT SHAPE ---
     </example>
-    <instruction>Use consecutive [Shot N] labels and actual timestamps spanning the requested duration. The author's creative direction determines the shot count and treatment.</instruction>
+    <instruction>Use consecutive [Shot N] labels. The author's creative direction determines the shot count and treatment.</instruction>
   </prompt_format>
 
   <dialogue_and_sound>
@@ -62,7 +61,7 @@ Audience-only score and its development.
   </dialogue_and_sound>
 
   <generation_context>
-    <instruction>Treat supplied Story facts, references, and invariants as established generation context.</instruction>
+    <instruction>Use supplied Project Concept, Visual / atmosphere, relevant Invariants, Story facts and references as established generation context. Use the saved Scene Prompt when revising; honor legacy Story Guidelines only when explicitly supplied.</instruction>
     <instruction>WebCap applies exact first/last-frame reference alignment separately.</instruction>
   </generation_context>
 </h3_rulebook>

@@ -406,6 +406,37 @@ function refreshUnifiedModelAssessment() {
     summary.appendChild(document.createTextNode(' · '));
     summary.appendChild(resetAll);
 
+    // Model choice is still explicit everywhere else. This pilot is opt-in
+    // for the synthesis stage of Vocabulary Discovery only.
+    var autoLabel = document.createElement('label');
+    autoLabel.className = 'app-settings-help';
+    var autoInput = document.createElement('input');
+    autoInput.type = 'checkbox';
+    autoInput.checked = values[1].autoSchemaModel === true;
+    autoLabel.appendChild(autoInput);
+    autoLabel.appendChild(document.createTextNode(' Auto-select Vocabulary Synthesis model'));
+    var recommendation = values[1].schemaRecommendation || {};
+    var recommendedModel = (labModels.directors || []).find(function (entry) {
+      return entry.modelRef === recommendation.modelRef;
+    });
+    autoLabel.title = recommendation.reason || 'Use comparable independently judged assessment results; otherwise use your selected Director.';
+    if (recommendedModel) {
+      autoLabel.appendChild(document.createTextNode(' · ' + (recommendedModel.label || recommendation.modelRef)));
+    }
+    autoInput.addEventListener('change', function () {
+      var enabled = autoInput.checked;
+      autoInput.disabled = true;
+      modelLabPost({action: 'set_auto_schema_model', enabled: enabled}).then(function (payload) {
+        diagnosticsLoadedConfig = normalizeAppConfigShape(payload.config);
+        setRuntimeAppConfig(payload.config);
+      }).catch(function (error) {
+        autoInput.checked = !enabled;
+        reportConsoleError('Model Assessment automatic model selection', error);
+      }).finally(function () { autoInput.disabled = false; });
+    });
+    summary.appendChild(document.createTextNode(' · '));
+    summary.appendChild(autoLabel);
+
     var table = document.createElement('table');
     table.className = 'model-assessment-table';
     var head = document.createElement('thead');

@@ -316,6 +316,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
                 "finishReason": llm_result.get("finishReason"),
                 "usage": llm_result.get("usage"),
                 "timings": llm_result.get("timings"),
+                "requestSeconds": llm_result.get("requestSeconds"),
             }
         if operation == "vision_schema_challenge":
             from .vision_schema_contract import normalize_result

@@ -40,7 +40,19 @@ test('cross-Project Reads are ordinary user messages, not auto-refreshed context
   const result=await scope.studioDirectorChatRequestMessages(history,null,{projectId:'c'},{});
   history.forEach((entry,index)=>assert.equal(result[index+1].content,entry.content));
   assert.doesNotMatch(result[0].content,/old pacing|blue coat/);
-  assert.deepEqual(calls,['/fs/studio/director/guidance?targetModel=minimax_h3&profile=classic&includePromptContract=0']);
+  assert.deepEqual(calls,['/fs/studio/director/guidance?targetModel=minimax_h3&operation=studio_chat']);
+  const projectWrite=await scope.studioDirectorRequestMessages(history,false,true);
+  const sceneWrite=await scope.studioDirectorRequestMessages(history,true,true);
+  assert.deepEqual(calls.slice(1),[
+    '/fs/studio/director/guidance?targetModel=minimax_h3&profile=classic&includePromptContract=0',
+    '/fs/studio/director/guidance?targetModel=minimax_h3&profile=classic&includePromptContract=1'
+  ]);
+  assert.equal(projectWrite[0].content,'Director');
+  assert.equal(sceneWrite[0].content,'Director\n\nH3 PROMPT AUTHORING REFERENCE:\nH3');
+  history.forEach((entry,index)=>{
+    assert.equal(projectWrite[index+1].content,entry.content);
+    assert.equal(sceneWrite[index+1].content,entry.content);
+  });
 });
 
 test('a single character Invariant can be supplied without the rest of its Overview',()=>{

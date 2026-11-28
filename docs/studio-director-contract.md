@@ -11,7 +11,7 @@ Studio Director is an imaginative, capable creative partner. The author can disc
 - Open Studio Director as a normal, continuous conversation. Answer questions, challenge ideas constructively, and make useful recommendations. Match response depth to the author's request: a brief remark or straightforward question usually warrants one or two short paragraphs, while a requested detailed critique or complete Scene can be shown in full. This is guidance for proportional dialogue, **not** a hard word/token limit or an excuse to withhold requested material.
 - Read is a one-time user action, not an LLM call. The complete snapshot visible in chat is byte-for-byte the user-message content delivered to subsequent LLM requests; a reload preserves it. Chat **does not author application fields, invoke Write, offer structured draft captures, or save**. Any proposed Project or Scene work is discussion until the author clicks an explicit Write function.
 - New Read snapshots group selected values under `project` and `scenes`, with direct keys such as `prompt` and `durationSeconds` and the saved Scene `number`. Storage IDs and selection paths stay in application targeting, outside the submitted content. Existing conversation snapshots remain unchanged.
-- Chat receives the selected concise creative-partner role, the shared H3 creative-medium toolkit, and the complete persisted conversation, including past explicit Read snapshots. **Detailed H3 prompt format, empirical playbook, Project/Scene writing schema, and WebCap action catalog are excluded from Chat.** The frontend adds no separate hidden conversational instruction.
+- Chat receives the single editable structured `studio.chat` guidance, the shared `h3.authoring` Rulebook once, and the complete persisted conversation, including past explicit Read snapshots. The empirical playbook, Project/Scene writing schemas and WebCap action catalog remain outside ordinary Chat. The frontend adds no separate hidden conversational instruction.
 - WebCap does not infer the author's intent from prose to choose a function. Ordinary Chat Director cannot stage, initiate or authorize Writes or perform hidden readiness/repair steps. The optional independent Action Advisor may recommend and prefill manual controls, never execute them.
 - The original model output, including malformed or unexpected responses, and outbound request remain inspectable in I/O. No hidden rewrite, semantic grading, recovery or automatic retry.
 
@@ -23,7 +23,7 @@ Concept captures the premise, core appeal, broad structure and relationships bet
 
 ### Creative guidance profiles
 
-Director offers four editable defaults in Settings → LLM Guidance, selected from the compact model row in Studio. **Classic** is the balanced default; **Current** adds proactive creative editing; **Imaginative** broadens inventive exploration; **Render-focused** gives extra attention to production precision. Every profile shares the same creative foundation, Project/Scene knowledge and medium expertise. The profiles are stylistic emphases, not different creative capabilities or technical contracts.
+Director Chat has one editable structured role in Settings → LLM Guidance (`studio.chat`), opened directly by Edit Chat guidance. The existing Write profile selection is independent of Chat; Classic, Current, Imaginative and Render-focused retain their original defaults and behavior.
 
 Profile IDs remain stable, and versions document revised defaults. Saved user overrides take precedence over later built-in defaults. The browser remembers the selected profile; new requests use the selected version without rewriting previous messages. Studio Model I/O displays the actual outbound system message and conversation.
 
@@ -45,7 +45,7 @@ Unless disabled in Settings → Director, a completed, saved Studio conversation
 
 New/existing and one/many are operation parameters, not additional LLM roles or workflows. Multiple selected Scenes can be written in focused per-Scene calls. Preserve independently saved work and report actual results.
 
-**Detailed H3 formatting and empirical production playbook are supplied only with Write → Scene(s)** and relevant specialist prompt-writing operations. The shared, shorter H3 creative toolkit informs Studio Chat and Project Write too. Full authoring guidance is fetched on demand, never as part of an ordinary Chat request. No keyword heuristics determine this scope.
+Write → Scene(s) and relevant specialist prompt-writing operations retain their existing technical H3 reference and empirical playbook. Project Write retains the shared H3 creative toolkit. Director Chat receives the Rulebook through its own explicit operation, without the empirical playbook. No keyword heuristics determine this scope.
 
 **Full conversation passthrough** means the entire available stored user/assistant conversation is sent, in order, without last-N slicing, character clipping, summarization, contraction, or curated excerpts. The system role and the targeted task payload are separate additions; they do not replace or shorten conversational messages. If a provider reports a real context limit, expose the actual error to the user. Do not preemptively shorten history.
 

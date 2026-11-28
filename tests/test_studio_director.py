@@ -450,3 +450,54 @@ def test_studio_creative_profile_endpoint_and_unknown_id():
     unknown = client.get("/fs/studio/director/guidance?profile=nonexistent")
     assert unknown.status_code == 400
     assert "Unknown Studio Director creative profile" in unknown.json["error"]
+
+
+def test_structured_chat_uses_reviewed_xml_and_shared_rulebook_once(monkeypatch):
+    import json
+    import xml.etree.ElementTree as ET
+    from pathlib import Path
+    from tool.server.studio_director import chat_guidance
+
+    monkeypatch.setattr(app_config, "config", {})
+    packages = json.loads((Path(__file__).resolve().parents[1] /
+        "experiments/studio_guidance/structured_director/packages.json").read_text(encoding="utf-8"))["packages"]
+    original = next(p["role"] for p in packages if p["id"] == "structured-v1")
+    expected = original.replace(
+        "Audio: spoken words, speakers, language, vocal delivery, synchronized sounds, ambience and music.",
+        "Audio: synchronized sounds, ambience and music. When dialogue matters, give the exact spoken words, speakers, language, vocal identity, emotional delivery and timing attention.",
+    ).replace(
+        "Preserve established creative decisions and applicable invariants. Explicitly associate actions, interactions and dialogue with their respective subjects.",
+        "Preserve established creative decisions, explicitly supplied dialogue verbatim, and applicable invariants. Explicitly associate actions, interactions and dialogue with their respective subjects.",
+    )
+    role = llm_guidance_text("studio.chat")
+    reference = llm_guidance_text("h3.authoring")
+    assert role == expected
+    assert ET.fromstring(role).tag == "director_guidance"
+    payload = chat_guidance()
+    assert payload["system"] == expected.strip() + "\n\n" + reference.strip()
+    assert payload["system"].count(reference) == 1
+    assert payload["promptContract"] == ""
+
+
+def test_chat_guidance_is_independent_of_existing_write_selection(monkeypatch):
+    from tool.server.app import app
+    monkeypatch.setattr(app_config, "config", {
+        "llm_guidance": {
+            "studio.chat": "Custom Chat.",
+            "h3.authoring": "Custom Rulebook.",
+            "studio.classic": "Custom Classic.",
+            "h3.toolkit": "Custom toolkit.",
+        },
+        "generation_model_guidance": {"minimax_h3": "Write playbook."},
+    })
+    client = app.test_client()
+    for profile in ("classic", "current", "imaginative", "render"):
+        response = client.get("/fs/studio/director/guidance?operation=studio_chat&profile=" + profile)
+        assert response.status_code == 200
+        assert response.json["system"] == "Custom Chat.\n\nCustom Rulebook."
+        assert response.json["promptContract"] == ""
+    project = client.get("/fs/studio/director/guidance?profile=classic&includePromptContract=0").json
+    scene = client.get("/fs/studio/director/guidance?profile=classic&includePromptContract=1").json
+    assert project["system"] == scene["system"] == "Custom Classic.\n\nCustom toolkit."
+    assert project["promptContract"] == ""
+    assert scene["promptContract"] == "Custom Rulebook.\n\nUSER'S H3 PRODUCTION PLAYBOOK (empirical methods):\nWrite playbook."

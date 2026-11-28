@@ -6,7 +6,7 @@ arguments remain owned by each operation. No hidden model calls or routing.
 
 from pathlib import Path
 
-from .studio_guidance_defaults import _CLASSIC, _WORKSHOP, _IMAGINATIVE, _RENDER
+from .studio_guidance_defaults import _CHAT, _CLASSIC, _WORKSHOP, _IMAGINATIVE, _RENDER
 
 DOCS_ROOT = Path(__file__).resolve().parents[2] / "docs"
 
@@ -24,12 +24,13 @@ SPECIALIST_DEFAULTS = {
 }
 
 MODULES = (
+    ("studio.chat", "Director Chat", "Studio Director", "Structured creative collaboration and Project/Scene guidance for ordinary Studio Chat."),
     ("studio.classic", "Classic", "Studio profiles", "Original creative producer profile."),
     ("studio.current", "Current", "Studio profiles", "Current creative partner profile."),
     ("studio.imaginative", "Imaginative", "Studio profiles", "Current role with imaginative emphasis."),
     ("studio.render", "Render-focused", "Studio profiles", "Current role with renderability emphasis."),
     ("h3.toolkit", "H3 creative toolkit", "Model expertise", "Audiovisual capabilities and possible techniques. Included in H3 creative authoring."),
-    ("h3.authoring", "H3 prompt reference", "Model expertise", "Technical H3 prompt structure and dialogue notation; only for Scene/prompt writing."),
+    ("h3.authoring", "H3 prompt reference", "Model expertise", "Technical H3 prompt structure and dialogue notation; used by Director Chat and Scene/prompt writing."),
     ("storyboard.director", "Storyboard Director context", "Specialist roles", "Shared context for Storyboard planning and Scene development."),
     ("task.visual_direction", "Visual Direction", "Specialist roles", "Scene-focused visual completeness pass."),
     ("task.prompt_assist", "Prompt Assist", "Specialist roles", "Text-only targeted Scene suggestions."),
@@ -45,6 +46,8 @@ MODULE_IDS = frozenset(row[0] for row in MODULES)
 
 def default_for(module_id):
     """Resolve one default, without loading unrelated prompt documents."""
+    if module_id == "studio.chat":
+        return _CHAT
     if module_id == "studio.classic":
         return _CLASSIC
     if module_id == "studio.current":

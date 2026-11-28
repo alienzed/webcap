@@ -20,6 +20,13 @@ test('Flow 4 checkpoint — Director displays a plain-text Read response through
   const {calls,remaining}=await observed.json();
   expect(calls).toHaveLength(1);
   expect(remaining).toBe(0);
+  const guidance=await page.request.get('/fs/studio/director/guidance?operation=studio_chat');
+  expect(guidance.ok()).toBeTruthy();
+  const {system}=await guidance.json();
+  expect(system).toContain('<director_guidance>');
+  expect(system).toContain('<h3_rulebook');
+  expect(system.match(/<h3_rulebook\b/g)).toHaveLength(1);
+  expect(calls[0].messages[0]).toEqual({role:'system',content:system});
   expect(calls[0].messages.some(item=>item.role==='user' && String(item.content).includes('What color are the windows?'))).toBeTruthy();
   const after=await page.request.get('/fs/storyboard').then(r=>r.json()).then(r=>r.stories);
   expect(after.map(x=>x.id).sort()).toEqual(before.map(x=>x.id).sort());

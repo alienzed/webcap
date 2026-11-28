@@ -22,6 +22,30 @@ def test_guidance_catalog_has_unique_named_sources_and_the_four_studio_presets(m
     assert "overall_soundscape:" in llm_guidance.default_texts()["h3.authoring"]
 
 
+
+def test_h3_authoring_default_has_structured_rules_and_literal_prompt_example():
+    import xml.etree.ElementTree as ET
+
+    reference = llm_guidance.default_for("h3.authoring")
+    root = ET.fromstring(reference)
+    assert root.tag == "h3_rulebook"
+    assert [node.tag for node in root] == [
+        "purpose", "scene_duration", "authoring_structure",
+        "action_and_pacing", "prompt_format", "dialogue_and_sound",
+        "generation_context",
+    ]
+    example = root.findtext("prompt_format/example")
+    assert example.strip().startswith("--- BEGIN EXAMPLE PROMPT SHAPE ---")
+    assert example.strip().endswith("--- END EXAMPLE PROMPT SHAPE ---")
+    for heading in ("Subject:", "Environment / Continuity Anchors:",
+                    "Style / Visual Treatment:", "integrated_multimodal_description:",
+                    "[Shot 1]", "[Shot 2]", "overall_soundscape:", "non_diegetic_music:"):
+        assert heading in example
+    notation = "<d>[English] Spoken line.</d>"
+    assert notation in reference
+    assert notation in "".join(root.find("dialogue_and_sound").itertext())
+
+
 def test_overrides_replace_named_defaults_and_reset_by_absence(monkeypatch):
     monkeypatch.setattr(app_config, "config", {
         "llm_guidance": {
